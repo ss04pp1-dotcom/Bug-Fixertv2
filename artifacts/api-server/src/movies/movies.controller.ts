@@ -51,6 +51,18 @@ export class MoviesController {
     return this.moviesService.findOne(id);
   }
 
+  @Public() @Get(':id/related') @ApiOperation({ summary: 'Get related movies by genre/category' })
+  async findRelated(@Param('id') id: string, @Req() req: Request, @Query('limit') limit?: string) {
+    await this.enforceGeoBlock(req);
+    return this.moviesService.findRelated(id, limit ? parseInt(limit, 10) : 10);
+  }
+
+  @Get(':id/stream') @ApiBearerAuth() @ApiOperation({ summary: 'Get stream URL for a movie' })
+  async getStreamUrl(@Param('id') id: string, @Req() req: Request) {
+    await this.enforceGeoBlock(req);
+    return this.moviesService.getStreamUrl(id);
+  }
+
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin', 'editor') @ApiOperation({ summary: 'Create movie' })
   create(@Body() dto: CreateMovieDto) { return this.moviesService.create(dto); }
 

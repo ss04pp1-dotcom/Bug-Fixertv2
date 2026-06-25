@@ -181,4 +181,110 @@ export class NotificationsService {
     await this.prisma.notification.delete({ where: { id } });
     return { message: 'Notification deleted' };
   }
+
+  // ─── User-facing endpoints ────────────────────────────────────────────────
+
+  async getUserNotifications(userId: string, query: PaginationDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, country: true, language: true, isPremium: true },
+    });
+
+    const where: Prisma.NotificationWhereInput = {
+      isActive: true,
+      OR: [
+        { targetAll: true },
+        { targetUsers: { has: userId } },
+        ...(user?.role ? [{ targetRoles: { has: user.role as string } }] : []),
+      ],
+      AND: [
+        ...(user?.country  ? [{ OR: [{ country: null }, { country: user.country }] }] : [{ country: null }]),
+        ...(user?.language ? [{ OR: [{ language: null }, { language: user.language }] }] : [{ language: null }]),
+      ],
+    };
+
+    const reads = await this.prisma.notificationRead.findMany({
+      where: { userId },
+      select: { notificationId: true },
+    });
+    const readIds = new Set(reads.map(r => r.notificationId));
+
+    const [data, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        skip: query.skip,
+        take: query.limit || 20,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+
+    return {
+      data: data.map(n => ({ ...n, isRead: readIds.has(n.id) })),
+      meta: paginate(total, query.page || 1, query.limit || 20),
+    };
+  }
+
+  async markAsRead(userId: string, notificationId: string) {
+    await this.findOne(notificationId);
+    await this.prisma.notificationRead.upsert({
+      where: { userId_notificationId: { userId, notificationId } },
+      create: { userId, notificationId },
+      update: { readAt: new Date() },
+    });
+    return { message: 'Notification marked as read' };
+  }
+
+  async markAllAsRead(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, country: true, language: true },
+    });
+
+    const where: Prisma.NotificationWhereInput = {
+      isActive: true,
+      OR: [
+        { targetAll: true },
+        { targetUsers: { has: userId } },
+        ...(user?.role ? [{ targetRoles: { has: user.role as string } }] : []),
+      ],
+    };
+
+    const notifications = await this.prisma.notification.findMany({
+      where,
+      select: { id: true },
+    });
+
+    await Promise.all(
+      notifications.map(n =>
+        this.prisma.notificationRead.upsert({
+          where: { userId_notificationId: { userId, notificationId: n.id } },
+          create: { userId, notificationId: n.id },
+          update: { readAt: new Date() },
+        }),
+      ),
+    );
+
+    return { message: `${notifications.length} notifications marked as read` };
+  }
+
+  async getUnreadCount(userId: string): Promise<{ count: number }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, country: true, language: true },
+    });
+
+    const where: Prisma.NotificationWhereInput = {
+      isActive: true,
+      OR: [
+        { targetAll: true },
+        { targetUsers: { has: userId } },
+        ...(user?.role ? [{ targetRoles: { has: user.role as string } }] : []),
+      ],
+      readReceipts: { none: { userId } },
+    };
+
+    const count = await this.prisma.notification.count({ where });
+    return { count };
+  }
 }

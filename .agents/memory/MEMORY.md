@@ -1,0 +1,3 @@
+- [Notification user endpoints](notification-user-endpoints.md) — NotificationRead table added to Prisma+Drizzle; user endpoints live at /notifications/user (not /notifications which is admin-only)
+- [Orphaned Express files](orphaned-express-files.md) — src/app.ts, src/index.ts, src/lib/, src/routes/ were stale template files in the NestJS api-server; deleted to fix tsc
+- [Subscription path alias](subscription-alias.md) — Mobile calls /subscriptions/me; API has /subscriptions/my; added /me alias

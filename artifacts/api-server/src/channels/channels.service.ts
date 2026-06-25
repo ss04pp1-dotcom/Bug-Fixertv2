@@ -50,6 +50,23 @@ export class ChannelsService {
     return channel;
   }
 
+  async getStreamUrl(id: string) {
+    const channel = await this.prisma.channel.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
+      select: { id: true, name: true, primaryStreamUrl: true, backupStreamUrl: true, streamType: true, isPremium: true },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+    if (!channel.primaryStreamUrl) throw new NotFoundException('Stream URL not available for this channel');
+    return {
+      streamUrl: channel.primaryStreamUrl,
+      backupUrl: channel.backupStreamUrl ?? null,
+      streamType: channel.streamType,
+      id: channel.id,
+      name: channel.name,
+      isPremium: channel.isPremium,
+    };
+  }
+
   async create(dto: CreateChannelDto) {
     const existing = await this.prisma.channel.findUnique({ where: { slug: dto.slug } });
     if (existing) throw new ConflictException('Slug already exists');

@@ -103,11 +103,9 @@ export const useStreamUrl = (type: 'movie' | 'channel', id: string) => useQuery(
 });
 
 // Related content
-// FIX 12: /movies/{id}/related endpoint নেই API তে।
-// Fallback: trending movies দেখাই (same genre filter নেই API তে)
 export const useRelatedMovies = (id: string) => useQuery({
   queryKey: ['related', 'movies', id],
-  queryFn: () => apiClient.get('/movies', { params: { limit: 12 } }).then(unwrapList),
+  queryFn: () => apiClient.get(`/movies/${id}/related`, { params: { limit: 12 } }).then(unwrapList),
   enabled: !!id,
   retry: 1,
 });

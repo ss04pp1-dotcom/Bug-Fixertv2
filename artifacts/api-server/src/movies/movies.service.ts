@@ -72,4 +72,48 @@ export class MoviesService {
       take: 20,
     });
   }
+
+  async getStreamUrl(id: string) {
+    const movie = await this.prisma.movie.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      select: { id: true, title: true, streamUrl: true, isPremium: true, isActive: true },
+    });
+    if (!movie) throw new NotFoundException('Movie not found');
+    if (!movie.streamUrl) throw new NotFoundException('Stream URL not available for this movie');
+    return { streamUrl: movie.streamUrl, id: movie.id, title: movie.title, isPremium: movie.isPremium };
+  }
+
+  async findRelated(id: string, limit = 10) {
+    const movie = await this.findOne(id);
+
+    const where: Prisma.MovieWhereInput = {
+      id: { not: movie.id },
+      isActive: true,
+      deletedAt: null,
+      OR: [
+        ...(movie.categoryId ? [{ categoryId: movie.categoryId }] : []),
+        ...(movie.genres?.length ? [{ genres: { hasSome: movie.genres } }] : []),
+      ],
+    };
+
+    const related = await this.prisma.movie.findMany({
+      where,
+      include: { category: { select: { id: true, name: true } } },
+      orderBy: { viewCount: 'desc' },
+      take: limit,
+    });
+
+    if (related.length < limit) {
+      const existingIds = [movie.id, ...related.map(r => r.id)];
+      const fallback = await this.prisma.movie.findMany({
+        where: { id: { notIn: existingIds }, isActive: true, deletedAt: null },
+        include: { category: { select: { id: true, name: true } } },
+        orderBy: { viewCount: 'desc' },
+        take: limit - related.length,
+      });
+      return [...related, ...fallback];
+    }
+
+    return related;
+  }
 }

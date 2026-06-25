@@ -148,19 +148,20 @@ model User {
   updatedAt          DateTime  @updatedAt @map("updated_at")
   deletedAt          DateTime? @map("deleted_at")
 
-  sessions        Session[]
-  otps            Otp[]
-  favorites       Favorite[]
-  watchHistory    WatchHistory[]
-  searchHistory   SearchHistory[]
-  subscription    Subscription?
-  auditLogs       AuditLog[]
-  parentalSetting ParentalSetting?
-  payments        Payment[]
-  matchAlerts     MatchAlert[]
-  favoriteTeams   UserFavoriteTeam[]
-  downloads       Download[]
-  reviews         Review[]
+  sessions              Session[]
+  otps                  Otp[]
+  favorites             Favorite[]
+  watchHistory          WatchHistory[]
+  searchHistory         SearchHistory[]
+  subscription          Subscription?
+  auditLogs             AuditLog[]
+  parentalSetting       ParentalSetting?
+  payments              Payment[]
+  matchAlerts           MatchAlert[]
+  favoriteTeams         UserFavoriteTeam[]
+  downloads             Download[]
+  reviews               Review[]
+  notificationReads     NotificationRead[]
 
   @@map("users")
 }
@@ -505,7 +506,23 @@ model Notification {
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
+  readReceipts NotificationRead[]
+
   @@map("notifications")
+}
+
+model NotificationRead {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  notificationId String   @map("notification_id") @db.Uuid
+  readAt         DateTime @default(now()) @map("read_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationId])
+  @@index([userId])
+  @@map("notification_reads")
 }
 
 model Announcement {

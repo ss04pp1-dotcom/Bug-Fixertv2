@@ -87,6 +87,14 @@ export class ChannelsController {
     return this.channelsService.findOne(id);
   }
 
+  @Get(':id/stream')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get stream URL for a channel' })
+  async getStreamUrl(@Param('id') id: string, @Req() req: Request) {
+    await this.enforceGeoBlock(req);
+    return this.channelsService.getStreamUrl(id);
+  }
+
   @Post()
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')

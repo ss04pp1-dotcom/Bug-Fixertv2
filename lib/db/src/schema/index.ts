@@ -1,6 +1,6 @@
 import {
   pgTable, pgEnum, uuid, text, boolean, integer,
-  real, timestamp, json, uniqueIndex, index, unique,
+  real, timestamp, date, json, index, unique,
 } from 'drizzle-orm/pg-core';
 
 // ─── Enums ───────────────────────────────────────────────────
@@ -353,6 +353,16 @@ export const notifications = pgTable('notifications', {
   updatedAt:   timestamp('updated_at').defaultNow().notNull(),
 });
 
+export const notificationReads = pgTable('notification_reads', {
+  id:             uuid('id').primaryKey().defaultRandom(),
+  userId:         uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  notificationId: uuid('notification_id').notNull().references(() => notifications.id, { onDelete: 'cascade' }),
+  readAt:         timestamp('read_at').defaultNow().notNull(),
+}, (t) => [
+  unique().on(t.userId, t.notificationId),
+  index('notification_reads_user_id_idx').on(t.userId),
+]);
+
 export const announcements = pgTable('announcements', {
   id:            uuid('id').primaryKey().defaultRandom(),
   title:         text('title').notNull(),
@@ -468,7 +478,7 @@ export const adEvents = pgTable('ad_events', {
 
 export const adRevenue = pgTable('ad_revenue', {
   id:          uuid('id').primaryKey().defaultRandom(),
-  date:        timestamp('date').notNull(),
+  date:        date('date').notNull(),
   providerId:  uuid('provider_id'),
   placement:   text('placement'),
   country:     text('country'),
