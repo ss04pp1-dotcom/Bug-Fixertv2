@@ -12,28 +12,28 @@ import { SupportService } from './support.service';
 export class SupportController {
   constructor(private readonly supportService: SupportService) {}
 
-  @Get('stats') @Roles('admin', 'moderator') @ApiOperation({ summary: 'Ticket stats (admin)' })
+  @Get('stats') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Ticket stats (admin)' })
   getStats() { return this.supportService.getStats(); }
 
-  @Get() @Roles('admin', 'moderator') @ApiOperation({ summary: 'List tickets (admin)' })
+  @Get() @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'List tickets (admin)' })
   findAll(@Query('status') status?: string, @Query('priority') priority?: string,
           @Query('page') page?: string, @Query('limit') limit?: string) {
     return this.supportService.findAll({ status, priority, page: Number(page) || 1, limit: Number(limit) || 20 });
   }
 
-  @Get(':id') @Roles('admin', 'moderator') @ApiOperation({ summary: 'Get ticket (admin)' })
+  @Get(':id') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Get ticket (admin)' })
   findOne(@Param('id') id: string) { return this.supportService.findOne(id); }
 
-  @Post() @Roles('user', 'premium', 'moderator', 'admin') @ApiOperation({ summary: 'Create ticket' })
+  @Post() @Roles('user', 'premium', 'moderator', 'admin', 'super_admin') @ApiOperation({ summary: 'Create ticket' })
   create(@Body() dto: { userEmail: string; subject: string; description?: string; priority?: string }) {
     return this.supportService.create(dto);
   }
 
-  @Put(':id') @Roles('admin', 'moderator') @ApiOperation({ summary: 'Update ticket (admin)' })
+  @Put(':id') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Update ticket (admin)' })
   update(@Param('id') id: string, @Body() dto: { status?: string; priority?: string; assignedTo?: string }) {
     return this.supportService.update(id, dto);
   }
 
-  @Delete(':id') @Roles('admin') @ApiOperation({ summary: 'Delete ticket (admin)' })
+  @Delete(':id') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete ticket (admin)' })
   remove(@Param('id') id: string) { return this.supportService.remove(id); }
 }

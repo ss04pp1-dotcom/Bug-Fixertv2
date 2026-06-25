@@ -142,6 +142,18 @@ export class SportsController {
   }
 
   @Public()
+  @Get('sports')
+  @ApiOperation({ summary: 'List all sport types/categories' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false })
+  findAllSports(
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.sportsService.findAllSports({ limit: limit ? Number(limit) : 200, search });
+  }
+
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get match by ID' })
   findOne(@Param('id') id: string) {

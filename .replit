@@ -48,5 +48,10 @@ EXPO_PUBLIC_DOMAIN = "bug-fixertv2.onrender.com"
 EXPO_PUBLIC_API_URL = "https://bug-fixertv2.onrender.com"
 NEXT_PUBLIC_WS_URL = "wss://bug-fixertv2.onrender.com"
 
+[userenv.development]
+JWT_ACCESS_SECRET = "4ca54bb6cf4973173178842cdbbed0fa8521b5d61c4e2abbdc3dcd65bb0d290b"
+JWT_REFRESH_SECRET = "e54cc6d647b56f987cc5b03a2324bcf8e73149fc26619b7ccaee29065ab585de"
+JWT_SECRET = "4ca54bb6cf4973173178842cdbbed0fa8521b5d61c4e2abbdc3dcd65bb0d290b"
+
 [nix]
 channel = "stable-25_05"

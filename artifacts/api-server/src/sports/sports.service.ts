@@ -11,6 +11,19 @@ import { AddCommentaryDto } from './dto/add-commentary.dto';
 export class SportsService {
   constructor(private prisma: PrismaService) {}
 
+  // ──────────────── Sport Types ────────────────
+
+  async findAllSports(query: { limit?: number; search?: string }) {
+    const where: Prisma.SportWhereInput = {};
+    if (query.search) where.name = { contains: query.search, mode: 'insensitive' };
+    const data = await this.prisma.sport.findMany({
+      where,
+      take: query.limit || 200,
+      orderBy: { name: 'asc' },
+    });
+    return { data };
+  }
+
   // ──────────────── Matches ────────────────
 
   async findAllMatches(query: PaginationDto & { sportId?: string; status?: string; tournamentId?: string }) {
