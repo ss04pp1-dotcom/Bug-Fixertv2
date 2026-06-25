@@ -113,7 +113,8 @@ export default function HomeScreen() {
       year: b.year || '',
       duration: b.duration || '',
       genre: b.genre || b.genres?.[0] || '',
-      poster: b.posterUrl || b.poster || b.thumbnail || '',
+      poster: b.imageUrl || b.posterUrl || b.poster || b.thumbnailUrl || b.thumbnail || '',
+      link: b.link || '',
     }));
   }, [bannersData]);
 
@@ -302,17 +303,15 @@ export default function HomeScreen() {
               viewabilityConfig={viewabilityConfig}
               renderItem={({ item }) => (
                 <View style={s.heroCardWrap}>
-                  <Pressable style={s.heroCard} onPress={() => router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`)}>
+                  <Pressable style={s.heroCard} onPress={() => {
+                    if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
+                    else router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`);
+                  }}>
                     <LinearGradient colors={['#3D1A5C', '#1a0535']} style={s.heroBg}>
                       {item.poster ? (
                         <Image source={{ uri: Config.imageUrl(item.poster) }} style={s.heroPosterOverlay} resizeMode="cover" />
                       ) : null}
                       <LinearGradient colors={['transparent', 'rgba(10,10,15,1)']} style={s.heroOverlay}>
-                        <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.originalBadgeWrap}>
-                           <View style={s.originalBadgeInner}>
-                             <Text style={s.originalText}>ORIGINAL</Text>
-                           </View>
-                        </LinearGradient>
                         <Text style={s.heroTitle} numberOfLines={2}>{item.title}</Text>
                         <View style={s.heroMeta}>
                           {item.rating ? <><Ionicons name="star" size={14} color={C.gold} /><Text style={s.heroMetaText}>{item.rating}</Text></> : null}
@@ -320,8 +319,10 @@ export default function HomeScreen() {
                           {item.duration ? <Text style={s.heroMetaText}>{item.duration}</Text> : null}
                         </View>
                         <View style={s.heroBtns}>
-                          <Pressable style={s.heroPlayBtn}
-                            onPress={() => router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`)}>
+                          <Pressable style={s.heroPlayBtn} onPress={() => {
+                            if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
+                            else router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`);
+                          }}>
                             <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.heroPlayGrad}>
                               <Ionicons name="play" size={18} color="#fff" />
                               <Text style={s.heroPlayTxt}>Play</Text>

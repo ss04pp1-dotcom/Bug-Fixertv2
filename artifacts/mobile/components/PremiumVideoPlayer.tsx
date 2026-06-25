@@ -271,7 +271,23 @@ function WebVideoPlayer({ url, paused, rate, onReady, onError, onTimeUpdate, vid
     if (fmt === 'HLS') {
       loadHlsFromCdn().then((Hls: any) => {
         if (Hls.isSupported()) {
-          hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+          hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            maxBufferSize: 60 * 1000 * 1000,
+            maxBufferHole: 0.5,
+            highBufferWatchdogPeriod: 2,
+            nudgeMaxRetry: 5,
+            nudgeOffset: 0.2,
+            startFragPrefetch: true,
+            testBandwidth: true,
+            progressive: true,
+            xhrSetup: (xhr: any) => {
+              xhr.setRequestHeader('User-Agent', 'Mozilla/5.0');
+            },
+          });
           hls.loadSource(url);
           hls.attachMedia(v);
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -281,7 +297,13 @@ function WebVideoPlayer({ url, paused, rate, onReady, onError, onTimeUpdate, vid
           });
           hls.on(Hls.Events.ERROR, (_: any, d: any) => {
             VideoLog.error('WEB_HLS', `Error: ${d.type}/${d.details}`, { fatal: d.fatal });
-            if (d.fatal) onError?.(d);
+            if (d.fatal) {
+              if (d.type === (Hls as any).ErrorTypes?.NETWORK_ERROR) {
+                hls.startLoad();
+              } else {
+                onError?.(d);
+              }
+            }
           });
         } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
           v.src = url; v.play().catch(() => {});
@@ -1188,10 +1210,12 @@ export default function PremiumVideoPlayer({
               </View>
 
               <View style={p.topRight}>
-                {/* Cast placeholder */}
-                <TouchableOpacity style={p.iconBtn} onPress={() => Alert.alert('Chromecast', 'Cast requires a dev build with react-native-google-cast installed.')}>
-                  <MaterialIcons name="cast" size={22} color="rgba(255,255,255,0.6)" />
-                </TouchableOpacity>
+                {/* Cast — native only */}
+                {!IS_WEB && (
+                  <TouchableOpacity style={p.iconBtn} onPress={() => Alert.alert('Chromecast', 'Cast requires a dev build with react-native-google-cast installed.')}>
+                    <MaterialIcons name="cast" size={22} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                )}
                 {/* PiP */}
                 {Platform.OS !== 'web' && (
                   <TouchableOpacity style={p.iconBtn} onPress={() => setPip(v => !v)}>
@@ -1317,10 +1341,12 @@ export default function PremiumVideoPlayer({
                   <Text style={p.speedTxt}>{speed}×</Text>
                 </TouchableOpacity>
 
-                {/* Quality (only if tracks available) */}
-                <TouchableOpacity onPress={() => { setSheet('quality'); bumpCtrl(); }} style={p.toolBtn}>
-                  <MaterialIcons name="hd" size={22} color={selectedVidIdx !== -1 ? C.primary : '#fff'} />
-                </TouchableOpacity>
+                {/* Quality — native only (no video tracks in web) */}
+                {!IS_WEB && (
+                  <TouchableOpacity onPress={() => { setSheet('quality'); bumpCtrl(); }} style={p.toolBtn}>
+                    <MaterialIcons name="hd" size={22} color={selectedVidIdx !== -1 ? C.primary : '#fff'} />
+                  </TouchableOpacity>
+                )}
 
                 {/* Audio */}
                 <TouchableOpacity onPress={() => { setSheet('audio'); bumpCtrl(); }} style={p.toolBtn}>
@@ -1343,7 +1369,20 @@ export default function PremiumVideoPlayer({
                 </TouchableOpacity>
 
                 {/* Fullscreen */}
-                <TouchableOpacity onPress={() => { setFullscreen(v => !v); bumpCtrl(); }} style={p.toolBtn}>
+                <TouchableOpacity onPress={() => {
+                  if (IS_WEB && typeof document !== 'undefined') {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen?.().catch(() => {});
+                      setFullscreen(true);
+                    } else {
+                      document.exitFullscreen?.().catch(() => {});
+                      setFullscreen(false);
+                    }
+                  } else {
+                    setFullscreen(v => !v);
+                  }
+                  bumpCtrl();
+                }} style={p.toolBtn}>
                   <Ionicons name={fullscreen ? 'contract' : 'expand'} size={22} color="#fff" />
                 </TouchableOpacity>
               </View>
