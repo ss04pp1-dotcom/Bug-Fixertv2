@@ -399,7 +399,7 @@ export default function HomeScreen() {
                   <LinearGradient colors={[C.primary, C.accent]} style={s.channelLogoRing}>
                     <View style={s.channelLogoInner}>
                       {ch.logo ? (
-                        <Image source={{ uri: Config.imageUrl(ch.logo) }} style={s.channelLogo} />
+                        <Image source={{ uri: Config.imageUrl(ch.logo) }} style={s.channelLogo} resizeMode="contain" />
                       ) : (
                         <LinearGradient colors={ch.color} style={s.channelLogo}>
                           <Text style={s.channelLetter}>{ch.letter}</Text>
@@ -585,7 +585,7 @@ const s = StyleSheet.create({
   channelLogoWrap: { position: 'relative', alignItems: 'center' },
   channelLogoRing: { width: 72, height: 72, borderRadius: 36, padding: 2, justifyContent: 'center', alignItems: 'center' },
   channelLogoInner: { width: '100%', height: '100%', borderRadius: 34, backgroundColor: C.card, overflow: 'hidden' },
-  channelLogo: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+  channelLogo: { width: '80%', height: '80%', alignSelf: 'center', marginTop: '10%' },
   channelLetter: { color: '#fff', fontSize: 24, fontWeight: '900', fontFamily: 'Outfit' },
   livePillFloat: { position: 'absolute', bottom: -6, backgroundColor: C.live, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 2, borderColor: C.bg },
   livePillTxt: { color: '#fff', fontSize: 9, fontWeight: '800', fontFamily: 'Inter' },
