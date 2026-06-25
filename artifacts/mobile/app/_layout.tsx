@@ -40,7 +40,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
 
   const { data: forceUpdate } = useQuery({
     queryKey: ['force-update'],
-    queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: 'ios' } }).then(unwrap),
+    queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: Platform.OS === 'ios' ? 'ios' : 'android' } }).then(unwrap),
     retry: false,
     staleTime: 1000 * 60 * 10,
   });
