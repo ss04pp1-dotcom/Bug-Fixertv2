@@ -22,8 +22,8 @@ const unwrapList = (r: any) => {
 export const useProfile = () => useQuery({ queryKey: ['profile'], queryFn: () => apiClient.get('/auth/profile').then(unwrap) });
 
 // Home
-export const useBanners = () => useQuery({ queryKey: ['banners'], queryFn: () => apiClient.get('/banners').then(unwrapList) });
-export const useContinueWatching = () => useQuery({ queryKey: ['watch-history'], queryFn: () => apiClient.get('/watch-history').then(unwrapList) });
+export const useBanners = () => useQuery({ queryKey: ['banners'], queryFn: () => apiClient.get('/banners/active').then(unwrapList) });
+export const useContinueWatching = () => useQuery({ queryKey: ['continue-watching'], queryFn: () => apiClient.get('/watch-history/continue-watching').then(unwrapList) });
 export const useTrending = () => useQuery({ queryKey: ['trending'], queryFn: () => apiClient.get('/movies/trending').then(unwrapList) });
 export const useLiveChannels = (params?: object) => useQuery({ queryKey: ['channels', params], queryFn: () => apiClient.get('/channels', { params: { limit: 200, ...params as any } }).then(unwrapList) });
 
@@ -69,10 +69,10 @@ export const useMarkNotificationRead = () => {
 };
 
 // Announcements
-export const useAnnouncements = () => useQuery({ queryKey: ['announcements'], queryFn: () => apiClient.get('/announcements').then(unwrapList) });
+export const useAnnouncements = () => useQuery({ queryKey: ['announcements'], queryFn: () => apiClient.get('/announcements/active').then(unwrapList) });
 
 // Settings
-export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/settings').then(unwrap) });
+export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/settings/public').then(unwrap) });
 export const useUpdateSetting = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -93,7 +93,7 @@ export const useGeoCheck = () => useQuery({ queryKey: ['geo-check'], queryFn: ()
 export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: 'ios' } }).then(unwrap), retry: false });
 
 // Feature flags
-export const useFeatureFlags = () => useQuery({ queryKey: ['feature-flags'], queryFn: () => apiClient.get('/feature-flags').then(unwrap) });
+export const useFeatureFlags = () => useQuery({ queryKey: ['feature-flags'], queryFn: () => apiClient.get('/feature-flags/enabled').then(unwrapList) });
 
 // Stream URL — with full source/server list
 export const useStreamUrl = (type: 'movie' | 'channel', id: string) => useQuery({

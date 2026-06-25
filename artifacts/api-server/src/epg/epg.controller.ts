@@ -12,6 +12,12 @@ import { Public } from '../common/decorators/public.decorator';
 export class EpgController {
   constructor(private epgService: EpgService) {}
 
+  @Public() @Get() @ApiOperation({ summary: 'Get all EPG grouped by channel for a date' })
+  async getAll(@Query('date') date?: string) {
+    const data = await this.epgService.getAllByDate(date);
+    return { data };
+  }
+
   @Public() @Get('channels/:channelId') @ApiOperation({ summary: 'Get EPG for channel' })
   async getForChannel(@Param('channelId') id: string, @Query('date') date?: string) {
     const data = await this.epgService.getForChannel(id, date);

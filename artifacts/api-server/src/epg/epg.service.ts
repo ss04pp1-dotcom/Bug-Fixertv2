@@ -16,6 +16,28 @@ export class CreateEpgDto {
 export class EpgService {
   constructor(private prisma: PrismaService) {}
 
+  async getAllByDate(date?: string) {
+    const start = date ? new Date(date) : new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const programs = await this.prisma.epgProgram.findMany({
+      where: { startTime: { gte: start }, endTime: { lte: end } },
+      orderBy: { startTime: 'asc' },
+      include: { channel: { select: { id: true, name: true, logo: true } } },
+    });
+
+    type ProgramWithChannel = (typeof programs)[number];
+    const grouped: Record<string, { channel: ProgramWithChannel['channel']; programs: ProgramWithChannel[] }> = {};
+    for (const p of programs) {
+      const cid = p.channelId;
+      if (!grouped[cid]) grouped[cid] = { channel: p.channel, programs: [] };
+      grouped[cid].programs.push(p);
+    }
+    return Object.values(grouped);
+  }
+
   async getForChannel(channelId: string, date?: string) {
     const start = date ? new Date(date) : new Date();
     start.setHours(0, 0, 0, 0);
