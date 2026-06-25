@@ -49,7 +49,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
       try {
         const Localization = await import('expo-localization');
         const locales = Localization.getLocales ? Localization.getLocales() : [];
-        const country = (locales[0]?.regionCode || Localization.region || 'US').toUpperCase();
+        const country = (locales[0]?.regionCode || 'US').toUpperCase();
         return apiClient.get(`/geo-block/check/${country}`).then(unwrap);
       } catch {
         return apiClient.get('/geo-block/check/US').then(unwrap);
