@@ -11,7 +11,7 @@ import { useApi, useApiCallState } from "@/lib/use-api";
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 
 interface Sport { id: string; name: string }
-interface Tournament { id: string; name: string; sportId?: string; country?: string; isActive?: boolean }
+interface Tournament { id: string; name: string; sportId?: string; country?: string; isActive?: boolean; startDate?: string; endDate?: string; description?: string }
 interface Team { id: string; name: string; shortName?: string; abbr?: string; logo?: string; country?: string; tournamentId?: string; tournament?: { name: string } | null }
 
 interface Match {

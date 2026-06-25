@@ -100,4 +100,44 @@ export class SeriesService {
       take: 20,
     });
   }
+
+  async findRelated(id: string, limit = 10) {
+    const series = await this.findOne(id);
+
+    const where: Prisma.SeriesWhereInput = {
+      id: { not: series.id },
+      isActive: true,
+      deletedAt: null,
+      OR: [
+        ...(series.categoryId ? [{ categoryId: series.categoryId }] : []),
+        ...(series.genres?.length ? [{ genres: { hasSome: series.genres } }] : []),
+      ],
+    };
+
+    const related = await this.prisma.series.findMany({
+      where,
+      include: {
+        category: { select: { id: true, name: true } },
+        _count: { select: { seasons: true } },
+      },
+      orderBy: { viewCount: 'desc' },
+      take: limit,
+    });
+
+    if (related.length < limit) {
+      const existingIds = [series.id, ...related.map(r => r.id)];
+      const fallback = await this.prisma.series.findMany({
+        where: { id: { notIn: existingIds }, isActive: true, deletedAt: null },
+        include: {
+          category: { select: { id: true, name: true } },
+          _count: { select: { seasons: true } },
+        },
+        orderBy: { viewCount: 'desc' },
+        take: limit - related.length,
+      });
+      return [...related, ...fallback];
+    }
+
+    return related;
+  }
 }

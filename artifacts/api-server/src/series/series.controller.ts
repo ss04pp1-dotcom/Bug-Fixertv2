@@ -44,6 +44,18 @@ export class SeriesController {
     return this.seriesService.findOne(id);
   }
 
+  @Public() @Get(':id/related') @ApiOperation({ summary: 'Get related series by genre/category' })
+  async findRelated(@Param('id') id: string, @Req() req: Request, @Query('limit') limit?: string) {
+    await this.enforceGeoBlock(req);
+    return this.seriesService.findRelated(id, limit ? parseInt(limit, 10) : 10);
+  }
+
+  @Public() @Get(':id/recommendations') @ApiOperation({ summary: 'Get series recommendations (alias for /related)' })
+  async getRecommendations(@Param('id') id: string, @Req() req: Request, @Query('limit') limit?: string) {
+    await this.enforceGeoBlock(req);
+    return this.seriesService.findRelated(id, limit ? parseInt(limit, 10) : 10);
+  }
+
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin', 'editor') @ApiOperation({ summary: 'Create series' })
   create(@Body() dto: CreateSeriesDto) { return this.seriesService.create(dto); }
 

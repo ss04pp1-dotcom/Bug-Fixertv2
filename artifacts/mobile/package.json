@@ -69,6 +69,7 @@
   },
   "dependencies": {
     "expo-keep-awake": "^15.0.8",
+    "expo-localization": "^56.0.6",
     "expo-screen-orientation": "^9.0.9",
     "hls.js": "^1.6.16"
   }

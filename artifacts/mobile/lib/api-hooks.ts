@@ -86,11 +86,11 @@ export const useCreateTicket = () => useMutation({
   mutationFn: (data: { subject: string; message: string }) => apiClient.post('/support/tickets', data),
 });
 
-// Geo-check
-export const useGeoCheck = () => useQuery({ queryKey: ['geo-check'], queryFn: () => apiClient.get('/geo-block/check').then(unwrap), retry: false });
+// Geo-check — server reads CF-IPCountry header; falls back to unblocked if header absent
+export const useGeoCheck = () => useQuery({ queryKey: ['geo-check'], queryFn: () => apiClient.get('/geo-block/check/auto').then(unwrap), retry: false });
 
-// Force update
-export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update', { params: { version: '2.4.1', platform: 'ios' } }).then(unwrap), retry: false });
+// Force update — correct path is /force-update/check
+export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: 'ios' } }).then(unwrap), retry: false });
 
 // Feature flags
 export const useFeatureFlags = () => useQuery({ queryKey: ['feature-flags'], queryFn: () => apiClient.get('/feature-flags').then(unwrap) });
@@ -112,7 +112,7 @@ export const useRelatedMovies = (id: string) => useQuery({
 
 export const useRecommendations = (type: 'movie' | 'series', id: string) => useQuery({
   queryKey: ['recommendations', type, id],
-  queryFn: () => apiClient.get(`/${type === 'movie' ? 'movies' : 'series'}/${id}/recommendations`).then(unwrapList),
+  queryFn: () => apiClient.get(`/${type === 'movie' ? 'movies' : 'series'}/${id}/related`, { params: { limit: 12 } }).then(unwrapList),
   enabled: !!id,
   retry: 1,
 });

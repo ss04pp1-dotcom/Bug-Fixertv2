@@ -273,7 +273,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={saveMaintenance} disabled={mutating}
+                <button onClick={() => saveMaintenance()} disabled={mutating}
                   className={cn("flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-60",
                     saved ? "bg-green-600 text-white" : maintEnabled ? "bg-orange-600 text-white hover:bg-orange-500" : "gradient-primary text-white hover:opacity-90"
                   )}>
