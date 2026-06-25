@@ -26,6 +26,11 @@ export class DownloadsController {
     return this.downloadsService.getAdminStats();
   }
 
+  @Get('stats') @ApiOperation({ summary: 'Get download stats' })
+  getStats(@CurrentUser('id') userId: string) {
+    return this.downloadsService.getStats(userId);
+  }
+
   @Get() @ApiOperation({ summary: 'Get user downloads' })
   findAll(
     @CurrentUser('id') userId: string,
@@ -34,28 +39,9 @@ export class DownloadsController {
     return this.downloadsService.findAll(userId, query);
   }
 
-  @Get('stats') @ApiOperation({ summary: 'Get download stats' })
-  getStats(@CurrentUser('id') userId: string) {
-    return this.downloadsService.getStats(userId);
-  }
-
   @Post() @ApiOperation({ summary: 'Create a new download request' })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateDownloadDto) {
     return this.downloadsService.create(userId, dto);
-  }
-
-  @Put(':id') @ApiOperation({ summary: 'Update download progress/status' })
-  update(
-    @CurrentUser('id') userId: string,
-    @Param('id') id: string,
-    @Body() dto: UpdateDownloadDto,
-  ) {
-    return this.downloadsService.update(userId, id, dto);
-  }
-
-  @Delete(':id') @ApiOperation({ summary: 'Delete a download' })
-  remove(@CurrentUser('id') userId: string, @Param('id') id: string) {
-    return this.downloadsService.remove(userId, id);
   }
 
   @Post(':id/pause') @ApiOperation({ summary: 'Pause a download' })
@@ -71,5 +57,19 @@ export class DownloadsController {
   @Delete('clear-completed') @ApiOperation({ summary: 'Clear all completed downloads' })
   clearCompleted(@CurrentUser('id') userId: string) {
     return this.downloadsService.clearCompleted(userId);
+  }
+
+  @Put(':id') @ApiOperation({ summary: 'Update download progress/status' })
+  update(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateDownloadDto,
+  ) {
+    return this.downloadsService.update(userId, id, dto);
+  }
+
+  @Delete(':id') @ApiOperation({ summary: 'Delete a download' })
+  remove(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.downloadsService.remove(userId, id);
   }
 }

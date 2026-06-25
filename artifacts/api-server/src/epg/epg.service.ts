@@ -19,13 +19,13 @@ export class CreateEpgDto {
   @IsString()
   description?: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: '2024-01-01T20:00:00.000Z' })
   @IsDateString()
-  startTime: Date;
+  startTime: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: '2024-01-01T21:00:00.000Z' })
   @IsDateString()
-  endTime: Date;
+  endTime: string;
 
   @ApiPropertyOptional()
   @IsOptional()
