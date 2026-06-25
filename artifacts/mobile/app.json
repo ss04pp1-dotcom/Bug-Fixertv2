@@ -65,7 +65,13 @@
       "expo-screen-orientation"
     ],
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "url": "https://u.expo.dev/72c6cc56-c04f-44cb-a241-fd9d3deead8e",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_ERROR_RECOVERY"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "experiments": {
       "typedRoutes": true
