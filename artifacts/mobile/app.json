@@ -62,8 +62,7 @@
           "enableBackgroundPlayback": false
         }
       ],
-      "expo-screen-orientation",
-      "expo-keep-awake"
+      "expo-screen-orientation"
     ],
     "experiments": {
       "typedRoutes": true
