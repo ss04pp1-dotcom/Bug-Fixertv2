@@ -1,14 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsString, IsOptional, IsDateString, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class CreateEpgDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   channelId: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   title: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @ApiProperty()
+  @IsDateString()
   startTime: Date;
+
+  @ApiProperty()
+  @IsDateString()
   endTime: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   category?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   poster?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   rating?: string;
 }
 

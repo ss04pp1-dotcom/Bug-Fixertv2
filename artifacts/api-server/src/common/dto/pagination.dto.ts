@@ -54,6 +54,41 @@ export class PaginationDto {
   @IsString()
   isActive?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by sport ID (sports module)' })
+  @IsOptional()
+  @IsString()
+  sportId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tournament ID (sports module)' })
+  @IsOptional()
+  @IsString()
+  tournamentId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by match ID (sports module)' })
+  @IsOptional()
+  @IsString()
+  matchId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by country code' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by device type' })
+  @IsOptional()
+  @IsString()
+  device?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by priority' })
+  @IsOptional()
+  @IsString()
+  priority?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by type' })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
   get skip(): number {
     return ((this.page || 1) - 1) * (this.limit || 20);
   }

@@ -19,11 +19,25 @@
  * The Role model records are display metadata only.
  */
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { IsString, IsOptional, IsArray, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class CreateRoleDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   name: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   permissions?: string[];
 }
 

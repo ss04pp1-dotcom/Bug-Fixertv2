@@ -1,21 +1,80 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsString, IsOptional, IsBoolean, IsInt, IsDateString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 
 export class CreateAnnouncementDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   title: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   message: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   type?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   priority?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   imageUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   deepLink?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   isDismissible?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   targetAll?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   country?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   language?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   isPremium?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
   startsAt?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
   expiresAt?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 }
 

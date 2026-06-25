@@ -1,15 +1,50 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsString, IsOptional, IsBoolean, IsInt, IsDateString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 
 export class CreateBannerDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
   title: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   imageUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   link?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   position?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   priority?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
   startsAt?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
   expiresAt?: Date;
 }
 
