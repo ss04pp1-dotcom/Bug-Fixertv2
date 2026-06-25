@@ -197,7 +197,7 @@ export default function MovieDetailsScreen() {
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => router.push(`/player/${id}`)}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => router.push(`/player/${id}?type=movie&title=${encodeURIComponent(movie?.title || '')}`)}>
               <LinearGradient
                 colors={['#8B5CF6', '#EC4899']}
                 start={{ x: 0, y: 0 }}
