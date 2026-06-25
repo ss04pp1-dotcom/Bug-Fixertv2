@@ -120,4 +120,43 @@ export class DownloadsService {
     });
     return { message: 'Completed downloads cleared', deleted: result.count };
   }
+
+  async findAllAdmin(query: PaginationDto & { contentType?: string; status?: string; search?: string }) {
+    const where: Prisma.DownloadWhereInput = {};
+    if (query.contentType) where.contentType = query.contentType;
+    if (query.status) where.status = query.status as DownloadStatus;
+    if (query.search) {
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { user: { email: { contains: query.search, mode: 'insensitive' } } },
+      ];
+    }
+    const { skip, limit = 20, page = 1 } = query;
+    const [data, total] = await Promise.all([
+      this.prisma.download.findMany({
+        where, skip, take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      }),
+      this.prisma.download.count({ where }),
+    ]);
+    return { data, meta: paginate(total, page, limit) };
+  }
+
+  async getAdminStats() {
+    const [total, completed, inProgress, failed, sizeAgg] = await Promise.all([
+      this.prisma.download.count(),
+      this.prisma.download.count({ where: { status: 'completed' } }),
+      this.prisma.download.count({ where: { status: { in: ['downloading', 'pending'] } } }),
+      this.prisma.download.count({ where: { status: 'failed' } }),
+      this.prisma.download.aggregate({ _sum: { fileSize: true }, where: { status: 'completed' } }),
+    ]);
+    const bytes = sizeAgg._sum.fileSize ?? 0;
+    const storageUsed = bytes > 1_073_741_824
+      ? `${(bytes / 1_073_741_824).toFixed(1)} GB`
+      : bytes > 1_048_576
+        ? `${(bytes / 1_048_576).toFixed(1)} MB`
+        : `${(bytes / 1024).toFixed(1)} KB`;
+    return { totalDownloads: total, completed, inProgress, failed, storageUsed };
+  }
 }

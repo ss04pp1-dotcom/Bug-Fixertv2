@@ -185,17 +185,20 @@ export default function Advertisements() {
   const handleSaveProvider = async () => {
     if (!editingProvider) return;
     setProviderSaving(true);
-    const clean: Partial<AdProvider> = {};
-    for (const k of Object.keys(editForm) as (keyof AdProvider)[]) {
-      const v = editForm[k];
-      if (typeof v === "string") clean[k] = (v.trim() || undefined) as never;
-      else clean[k] = v as never;
+    try {
+      const clean: Partial<AdProvider> = {};
+      for (const k of Object.keys(editForm) as (keyof AdProvider)[]) {
+        const v = editForm[k];
+        if (typeof v === "string") clean[k] = (v.trim() || undefined) as never;
+        else clean[k] = v as never;
+      }
+      await call("put", `/v1/advertisements/providers/${editingProvider.id}`, clean);
+      setProviderSaved(true);
+      refetchProviders();
+      setTimeout(() => setProviderSaved(false), 2500);
+    } finally {
+      setProviderSaving(false);
     }
-    await call("put", `/v1/advertisements/providers/${editingProvider.id}`, clean);
-    setProviderSaving(false);
-    setProviderSaved(true);
-    refetchProviders();
-    setTimeout(() => setProviderSaved(false), 2500);
   };
 
   const handleActivateProvider = async (id: string) => {

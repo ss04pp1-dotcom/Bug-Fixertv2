@@ -35,6 +35,11 @@ export class ReviewsController {
     return this.reviewsService.upsert(userId, dto);
   }
 
+  @ApiBearerAuth() @Roles('super_admin', 'admin', 'moderator') @Get('admin/stats') @ApiOperation({ summary: 'Admin: review stats' })
+  getAdminStats() {
+    return this.reviewsService.getAdminStats();
+  }
+
   @ApiBearerAuth() @Roles('super_admin', 'admin', 'moderator') @Get('admin') @ApiOperation({ summary: 'Admin: list all reviews' })
   findAllAdmin(@Query() query: PaginationDto & { isApproved?: string; contentType?: string; search?: string }) {
     return this.reviewsService.findAllAdmin(query);

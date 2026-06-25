@@ -164,4 +164,21 @@ export class ReviewsService {
     await this.prisma.review.delete({ where: { id } });
     return { message: 'Review deleted' };
   }
+
+  async getAdminStats() {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const [totalReviews, pendingApproval, thisWeek, avgResult] = await Promise.all([
+      this.prisma.review.count(),
+      this.prisma.review.count({ where: { isApproved: false } }),
+      this.prisma.review.count({ where: { createdAt: { gte: weekAgo } } }),
+      this.prisma.review.aggregate({ _avg: { rating: true } }),
+    ]);
+    return {
+      totalReviews,
+      pendingApproval,
+      avgRating: avgResult._avg.rating ? Math.round(avgResult._avg.rating * 100) / 100 : 0,
+      thisWeek,
+    };
+  }
 }

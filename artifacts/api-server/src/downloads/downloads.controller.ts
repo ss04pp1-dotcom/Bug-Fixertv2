@@ -3,16 +3,28 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { DownloadsService } from './downloads.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateDownloadDto } from './dto/create-download.dto';
 import { UpdateDownloadDto } from './dto/update-download.dto';
 
 @ApiTags('Downloads')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller({ path: 'downloads', version: '1' })
 export class DownloadsController {
   constructor(private downloadsService: DownloadsService) {}
+
+  @Get('admin') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Admin: list all downloads' })
+  findAllAdmin(@Query() query: PaginationDto & { contentType?: string }) {
+    return this.downloadsService.findAllAdmin(query);
+  }
+
+  @Get('admin/stats') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Admin: download stats' })
+  getAdminStats() {
+    return this.downloadsService.getAdminStats();
+  }
 
   @Get() @ApiOperation({ summary: 'Get user downloads' })
   findAll(

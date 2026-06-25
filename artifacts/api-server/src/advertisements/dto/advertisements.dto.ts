@@ -34,7 +34,20 @@ export class CreateAdProviderDto {
   @ApiPropertyOptional() @IsOptional() config?: Record<string, unknown>;
 }
 
-export class UpdateAdProviderDto extends CreateAdProviderDto {}
+export class UpdateAdProviderDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() slug?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() apiKey?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() appId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() adUnitBanner?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() adUnitInterstitial?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() adUnitRewarded?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() adUnitNative?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() adUnitAppOpen?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isTestMode?: boolean;
+  @ApiPropertyOptional() @IsOptional() config?: Record<string, unknown>;
+}
 
 export class CreateAdPlacementDto {
   @ApiProperty() @IsString() name: string;
