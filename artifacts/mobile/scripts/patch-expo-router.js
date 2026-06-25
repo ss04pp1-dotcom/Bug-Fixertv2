@@ -2,10 +2,25 @@
 /**
  * Patches expo-router context files to hardcode the app directory path.
  * EXPO_ROUTER_APP_ROOT env var is not resolved at bundler time in this env.
+ *
+ * Also creates a stub for react-native/Libraries/Core/InitializeCore which was
+ * removed in React Native 0.77+ but is still referenced by @expo/metro-config.
  */
 const fs   = require('fs');
 const path = require('path');
 
+// --- Patch 1: Create InitializeCore stub for RN 0.77+ compatibility ---
+const initCorePath = path.join(__dirname, '..', 'node_modules', 'react-native', 'Libraries', 'Core');
+const initCoreFile = path.join(initCorePath, 'InitializeCore.js');
+if (!fs.existsSync(initCoreFile)) {
+  fs.mkdirSync(initCorePath, { recursive: true });
+  fs.writeFileSync(initCoreFile, '// Stub for React Native 0.77+ compatibility (InitializeCore was removed)\n');
+  console.log('[patch-rn] created InitializeCore stub');
+} else {
+  console.log('[patch-rn] InitializeCore stub already exists');
+}
+
+// --- Patch 2: expo-router context files ---
 const base = path.join(__dirname, '..', 'node_modules', 'expo-router');
 
 const patches = [
