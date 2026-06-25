@@ -1,0 +1,440 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, Library, Menu, RefreshCw, Layers } from "lucide-react";
+import { useApi, useApiCallState } from "@/lib/use-api";
+import { ImageUpload } from "@/components/ui/image-upload";
+import SeriesManagerModal from "@/components/series/series-manager-modal";
+
+interface Series {
+  id: string;
+  title: string;
+  status: string;
+  category?: { name: string } | null;
+  poster?: string | null;
+  banner?: string | null;
+  _count?: { seasons?: number; episodes?: number };
+}
+
+interface SeriesResponse {
+  data: Series[];
+  meta: { total: number; totalPages: number; page: number };
+}
+
+const gradients = [
+  "gradient-primary","gradient-blue","gradient-green",
+  "gradient-orange","gradient-pink","gradient-primary",
+];
+
+export default function SeriesPage() {
+  const [search, setSearch]       = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage]         = useState(1);
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const [showModal, setModal] = useState(false);
+  const [submitting, setSub]  = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [editItem, setEditItem]   = useState<Series | null>(null);
+  const [manageItem, setManageItem] = useState<Series | null>(null);
+
+  const [newPoster,  setNewPoster]  = useState("");
+  const [newBanner,  setNewBanner]  = useState("");
+  const [editPoster, setEditPoster] = useState("");
+  const [editBanner, setEditBanner] = useState("");
+
+  const titleRef    = useRef<HTMLInputElement>(null);
+  const yearRef     = useRef<HTMLInputElement>(null);
+  const eTitleRef   = useRef<HTMLInputElement>(null);
+  const eYearRef    = useRef<HTMLInputElement>(null);
+
+  const params = new URLSearchParams({ page: String(page), limit: "20" });
+  if (debouncedSearch) params.set("search", debouncedSearch);
+
+  const { data, isLoading: loading, error, refetch } = useApi<SeriesResponse>(`/v1/series?${params}`);
+  const { call, loading: actionLoading } = useApiCallState();
+
+  const seriesList = data?.data ?? [];
+  const meta       = data?.meta;
+  const total      = meta?.total ?? 0;
+  const pages      = meta?.totalPages ?? 1;
+
+  const handleUpdate = async () => {
+    if (!editItem) return;
+    const title = eTitleRef.current?.value?.trim();
+    if (!title) return;
+    setSub(true);
+    try {
+      await call("put", `/v1/series/${editItem.id}`, {
+        title,
+        year: eYearRef.current?.value ? Number(eYearRef.current.value) : undefined,
+        poster: editPoster || undefined,
+        banner: editBanner || undefined,
+      });
+      setEditItem(null);
+      setEditPoster("");
+      setEditBanner("");
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update series";
+      alert(typeof msg === "string" ? msg : "Failed to update series");
+    } finally { setSub(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this series and all its seasons/episodes?")) return;
+    try {
+      await call("delete", `/v1/series/${id}`);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete series";
+      alert(typeof msg === "string" ? msg : "Failed to delete series");
+    }
+  };
+
+  const handleSave = async () => {
+    const title = titleRef.current?.value?.trim();
+    if (!title) return;
+    setSub(true);
+    setMutationError(null);
+    try {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      await call("post", "/v1/series", {
+        title,
+        slug,
+        year: yearRef.current?.value ? Number(yearRef.current.value) : undefined,
+        poster: newPoster || undefined,
+        banner: newBanner || undefined,
+      });
+      setModal(false);
+      setNewPoster("");
+      setNewBanner("");
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save series";
+      setMutationError(typeof msg === "string" ? msg : "Failed to save series");
+    } finally { setSub(false); }
+  };
+
+  return (
+    <>
+      {/* Page header */}
+      <div className="flex items-center justify-between px-6 py-[13px] border-b border-border">
+        <div className="flex items-center gap-3">
+          <Menu size={18} className="text-[#8B92A5]" />
+          <h1 className="text-sm font-bold text-white">Series</h1>
+          {total > 0 && (
+            <span className="text-[10px] text-[#8B92A5] bg-white/5 px-2 py-0.5 rounded-full">
+              {total.toLocaleString()}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refetch()}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={() => { setModal(true); setNewPoster(""); setNewBanner(""); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90"
+          >
+            <Plus size={13} /> Add Series
+          </button>
+        </div>
+      </div>
+
+      <div className="p-6">
+        {/* Search */}
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1 flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2.5">
+            <Search size={14} className="text-[#8B92A5] shrink-0" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search series…"
+              className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1"
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <RefreshCw size={20} className="text-primary animate-spin" />
+            </div>
+          )}
+          {error && !loading && (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <p className="text-red-400 text-sm">Failed to load series</p>
+              <button onClick={() => refetch()} className="text-xs text-primary underline">Retry</button>
+            </div>
+          )}
+          {!loading && !error && (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-[#0d1525]">
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide w-8">#</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Poster</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Title</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Category</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Seasons</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Episodes</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seriesList.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-12 text-sm text-[#8B92A5]">
+                        No series found
+                      </td>
+                    </tr>
+                  ) : seriesList.map((s, i) => (
+                    <tr key={s.id} className="tbl-row border-b border-border/50 last:border-0">
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{(page - 1) * 20 + i + 1}</td>
+                      <td className="px-4 py-3">
+                        {s.poster ? (
+                          <img src={s.poster} alt={s.title} className="w-9 h-9 rounded-lg object-cover bg-black/20" />
+                        ) : (
+                          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", gradients[i % gradients.length])}>
+                            <Library size={14} className="text-white/80" />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-white">{s.title}</td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{s.category?.name ?? "—"}</td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{s._count?.seasons ?? "—"}</td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{s._count?.episodes ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "text-xs px-2.5 py-1 rounded-full font-medium",
+                          s.status === "published" ? "bg-green-500/15 text-green-400" : "bg-yellow-500/15 text-yellow-400"
+                        )}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {/* Manage seasons/episodes */}
+                          <button
+                            onClick={() => setManageItem(s)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-semibold transition-colors"
+                            title="Manage seasons & episodes"
+                          >
+                            <Layers size={11} />
+                            Manage
+                          </button>
+                          {/* Edit series */}
+                          <button
+                            onClick={() => { setEditItem(s); setEditPoster(s.poster ?? ""); setEditBanner(s.banner ?? ""); }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10"
+                            title="Edit series"
+                          >
+                            <Edit size={13} className="text-[#8B92A5]" />
+                          </button>
+                          {/* Delete series */}
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            disabled={actionLoading}
+                            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/10"
+                            title="Delete series"
+                          >
+                            <Trash2 size={13} className="text-red-400" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-xs text-[#8B92A5]">
+                  Showing {seriesList.length} of {total.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/5 text-[#8B92A5] disabled:opacity-40"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  {(() => {
+                    const getPageNumbers = (cur: number, tot: number) => {
+                      const maxVisible = 5;
+                      let start = Math.max(1, cur - Math.floor(maxVisible / 2));
+                      let end = start + maxVisible - 1;
+                      if (end > tot) { end = tot; start = Math.max(1, end - maxVisible + 1); }
+                      return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+                    };
+                    return getPageNumbers(page, pages).map(pg => (
+                      <button key={pg} onClick={() => setPage(pg)}
+                        className={cn("w-7 h-7 rounded-md text-xs font-medium",
+                          pg === page ? "bg-primary text-white" : "text-[#8B92A5] hover:bg-white/5"
+                        )}>
+                        {pg}
+                      </button>
+                    ));
+                  })()}
+                  <button
+                    onClick={() => setPage(p => Math.min(pages, p + 1))}
+                    disabled={page >= pages}
+                    className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/5 text-[#8B92A5] disabled:opacity-40"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Seasons & Episodes Manager ── */}
+      {manageItem && (
+        <SeriesManagerModal
+          seriesId={manageItem.id}
+          seriesTitle={manageItem.title}
+          onClose={() => { setManageItem(null); refetch(); }}
+        />
+      )}
+
+      {/* ── Edit Series Modal ── */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">Edit Series</h2>
+              <button
+                onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }}
+                className="text-[#8B92A5] hover:text-white text-lg"
+              >×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
+                <input
+                  ref={eTitleRef}
+                  defaultValue={editItem.title}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Release Year</label>
+                <input
+                  ref={eYearRef}
+                  type="number"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                  placeholder="2024"
+                />
+              </div>
+              <ImageUpload
+                value={editPoster}
+                onChange={setEditPoster}
+                uploadPath="/v1/storage/upload/poster"
+                label="Series Poster"
+                previewClass="h-32 w-full"
+              />
+              <ImageUpload
+                value={editBanner}
+                onChange={setEditBanner}
+                uploadPath="/v1/storage/upload/banner"
+                label="Series Banner"
+                previewClass="h-24 w-full"
+              />
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }}
+                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                disabled={submitting}
+                className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Update Series"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Series Modal ── */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-sm font-bold text-white">Add Series</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
+                <input
+                  ref={titleRef}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                  placeholder="Series title"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Release Year</label>
+                <input
+                  ref={yearRef}
+                  type="number"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                  placeholder="2024"
+                />
+              </div>
+              <ImageUpload
+                value={newPoster}
+                onChange={setNewPoster}
+                uploadPath="/v1/storage/upload/poster"
+                label="Series Poster"
+                previewClass="h-32 w-full"
+              />
+              <ImageUpload
+                value={newBanner}
+                onChange={setNewBanner}
+                uploadPath="/v1/storage/upload/banner"
+                label="Series Banner"
+                previewClass="h-24 w-full"
+              />
+            </div>
+            {mutationError && (
+              <p className="px-6 pb-2 text-xs text-red-400">{mutationError}</p>
+            )}
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => { setModal(false); setMutationError(null); setNewPoster(""); setNewBanner(""); }}
+                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={submitting}
+                className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Save Series"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

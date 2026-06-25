@@ -1,0 +1,81 @@
+{
+  "expo": {
+    "name": "StreamPro",
+    "slug": "streampro",
+    "version": "2.4.1",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "streampro",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#05070F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.streampro.app",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "UIBackgroundModes": [
+          "audio",
+          "fetch"
+        ],
+        "UIRequiresFullScreen": false
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#05070F"
+      },
+      "package": "com.streampro.app",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "react-native-video",
+        {
+          "enableNotificationControls": true,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-screen-orientation",
+      "expo-keep-awake"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://bug-fixertv2.onrender.com",
+      "wsUrl": "wss://bug-fixertv2.onrender.com",
+      "imageUrl": "https://bug-fixertv2.onrender.com",
+      "cdnUrl": "",
+      "eas": {
+        "projectId": "72c6cc56-c04f-44cb-a241-fd9d3deead8e"
+      }
+    }
+  }
+}

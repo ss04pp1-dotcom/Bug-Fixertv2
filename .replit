@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -9,12 +9,23 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "Project"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+CORS_ORIGIN = "https://*.replit.dev,https://*.pike.replit.dev,https://*.sisko.replit.dev,https://*.expo.sisko.replit.dev"
+NEXT_PUBLIC_API_URL = "https://bug-fixertv2.onrender.com"
+EXPO_PUBLIC_DOMAIN = "bug-fixertv2.onrender.com"
+EXPO_PUBLIC_API_URL = "https://bug-fixertv2.onrender.com"
+NEXT_PUBLIC_WS_URL = "wss://bug-fixertv2.onrender.com"
+
+[nix]
+channel = "stable-25_05"

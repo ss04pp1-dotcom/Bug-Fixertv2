@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "StreamPro Admin Panel"
+version = "1.0.0"
+id = "artifacts/admin"
+router = "path"
+
+[[integratedSkills]]
+name = "nextjs"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 3000
+
+[services.development]
+run = "NEXT_PUBLIC_BASE_PATH='' pnpm --filter @workspace/admin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/admin", "run", "build" ]
+publicDir = "artifacts/admin/out"
+serve = "static"
+
+[services.env]
+PORT = "3000"
+BASE_PATH = "/"

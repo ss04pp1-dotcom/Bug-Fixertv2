@@ -1,0 +1,78 @@
+services:
+  - type: web
+    name: streampro-api
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node artifacts/api-server/dist/main.js
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Database (Supabase) ────────────────────────────────────────────────
+      # Use Transaction Pooler URL (port 6543) — required for Render's serverless
+      - key: DATABASE_URL
+        sync: false   # set manually in Render dashboard
+      # Direct connection (port 5432) — used by Prisma migrations
+      - key: DIRECT_URL
+        sync: false
+
+      # ── Security ──────────────────────────────────────────────────────────
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRY
+        value: 15m
+      - key: JWT_REFRESH_EXPIRY
+        value: 30d
+
+      # ── CORS — admin domain + Replit preview wildcards ───────────────────
+      - key: CORS_ORIGIN
+        value: https://livetv-cit.pages.dev,https://*.expo.sisko.replit.dev,https://*.pike.replit.dev,https://*.replit.dev
+
+      # ── App URLs ──────────────────────────────────────────────────────────
+      - key: APP_URL
+        value: https://streampro-api.onrender.com
+      - key: ADMIN_URL
+        sync: false   # set to your deployed admin panel URL (e.g. https://streampro-admin.pages.dev)
+
+      # ── Swagger (disable in prod for security) ────────────────────────────
+      - key: SWAGGER_ENABLED
+        value: "false"
+
+      # ── Optional services (leave empty to skip) ───────────────────────────
+      - key: REDIS_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        value: noreply@streampro.app
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: CLOUDFLARE_R2_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET_NAME
+        value: streampro-media
+      - key: CLOUDFLARE_R2_PUBLIC_URL
+        sync: false

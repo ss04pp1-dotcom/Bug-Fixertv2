@@ -2,24 +2,23 @@
   "name": "@workspace/db",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
-  },
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "build": "tsc -p tsconfig.json",
+    "db:push": "drizzle-kit push",
+    "db:pull": "drizzle-kit pull",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "drizzle-orm": "catalog:",
-    "drizzle-zod": "^0.8.3",
-    "pg": "^8.22.0",
-    "zod": "catalog:"
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@types/pg": "^8.20.0",
-    "drizzle-kit": "^0.31.10"
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "catalog:"
   }
 }
