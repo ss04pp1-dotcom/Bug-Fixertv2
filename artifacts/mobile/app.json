@@ -64,6 +64,9 @@
       ],
       "expo-screen-orientation"
     ],
+    "updates": {
+      "enabled": false
+    },
     "experiments": {
       "typedRoutes": true
     },
