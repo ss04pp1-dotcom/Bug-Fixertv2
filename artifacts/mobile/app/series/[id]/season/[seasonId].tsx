@@ -109,7 +109,7 @@ export default function SeasonEpisodesScreen() {
         item.isCurrent && styles.episodeRowCurrent,
       ]}
       activeOpacity={0.7}
-      onPress={() => router.push(`/player/${item.id}`)}
+      onPress={() => router.push({ pathname: `/player/${id}` as any, params: { type: 'series', season: String(item.number) } })}
     >
       {/* Left Border for Current */}
       {item.isCurrent && <View style={styles.currentBorder} />}

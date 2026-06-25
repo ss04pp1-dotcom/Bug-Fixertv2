@@ -220,7 +220,7 @@ export default function SeriesDetailsScreen() {
             <TouchableOpacity activeOpacity={0.8} onPress={() => {
               const firstEp = episodes[0];
               if (firstEp) router.push({
-                pathname: `/player/${firstEp.id}` as any,
+                pathname: `/player/${id}` as any,
                 params: { type: 'series', title: series?.title || '', season: '1' },
               });
             }}>

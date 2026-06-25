@@ -23,11 +23,12 @@ export default function MyListScreen() {
   const continueWatching = useMemo(() => {
     if (!continueData || !Array.isArray(continueData) || continueData.length === 0) return [];
     return continueData.slice(0, 6).map((c: any, i: number) => ({
-      id: c.id || c.movieId || String(i + 1),
-      title: c.title || c.movie?.title || '',
+      id: c.contentId || c.movieId || c.seriesId || c.id || String(i + 1),
+      title: c.title || c.movie?.title || c.series?.title || '',
       progress: c.progress || 0,
       duration: c.remainingTime || `${Math.round((1 - (c.progress || 0)) * 60)}m left`,
       color: GRADIENTS[i % GRADIENTS.length],
+      contentType: c.contentType || (c.movieId ? 'movie' : c.seriesId ? 'series' : 'movie'),
     }));
   }, [continueData]);
 
@@ -51,7 +52,7 @@ export default function MyListScreen() {
   };
 
   const renderContinueWatching = ({ item }: { item: typeof continueWatching[0] }) => (
-    <Pressable style={styles.continueCard} onPress={() => router.push(`/player/${item.id}`)}>
+    <Pressable style={styles.continueCard} onPress={() => router.push(`/player/${item.id}?type=${item.contentType}&title=${encodeURIComponent(item.title)}`)}>
       <View style={[styles.continueThumbnail, { backgroundColor: item.color }]}>
         <View style={styles.playOverlay}>
           <Ionicons name="play" size={24} color="#fff" />

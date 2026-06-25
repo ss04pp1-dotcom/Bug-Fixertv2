@@ -205,7 +205,7 @@ export default function TrendingScreen() {
           activeOpacity={0.7}
           onPress={() => {
             if (item.type === 'movie' || item.type === 'series') {
-              router.push(`/player/${item.id}`);
+              router.push(`/player/${item.id}?type=${item.type}&title=${encodeURIComponent((item as any).title || '')}`);
             } else {
               router.push(`/live-player/${item.id}`);
             }
