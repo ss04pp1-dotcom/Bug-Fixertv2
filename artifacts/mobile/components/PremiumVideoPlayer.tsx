@@ -1032,7 +1032,12 @@ export default function PremiumVideoPlayer({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <View style={[p.container, { width: vidW, height: vidH }, fullscreen && p.fullscreen, style]}>
+    <View style={[
+      p.container,
+      (!IS_WEB && fullscreen) ? p.fullscreen : { width: vidW, height: vidH },
+      IS_WEB && fullscreen ? p.fullscreen : undefined,
+      style,
+    ]}>
       <StatusBar hidden={fullscreen} barStyle="light-content" backgroundColor="#000" />
 
       {/* ── Video layer ─────────────────────────────────────────────────── */}
