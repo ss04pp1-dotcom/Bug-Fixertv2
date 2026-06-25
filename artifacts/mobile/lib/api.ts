@@ -1,7 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { Config } from '@/constants/config';
 import { Platform } from 'react-native';
-import { router } from 'expo-router';
 
 const ACCESS_KEY = 'streampro_access_token';
 const REFRESH_KEY = 'streampro_refresh_token';
@@ -10,22 +9,15 @@ const isWeb = Platform.OS === 'web';
 
 const webStorage = {
   getItem: (key: string): Promise<string | null> => {
-    try {
-      return Promise.resolve(localStorage.getItem(key));
-    } catch {
-      return Promise.resolve(null);
-    }
+    try { return Promise.resolve(localStorage.getItem(key)); }
+    catch { return Promise.resolve(null); }
   },
   setItem: (key: string, value: string): Promise<void> => {
-    try {
-      localStorage.setItem(key, value);
-    } catch {}
+    try { localStorage.setItem(key, value); } catch {}
     return Promise.resolve();
   },
   removeItem: (key: string): Promise<void> => {
-    try {
-      localStorage.removeItem(key);
-    } catch {}
+    try { localStorage.removeItem(key); } catch {}
     return Promise.resolve();
   },
 };
@@ -58,6 +50,12 @@ export const tokenStorage = {
     await Promise.all([secureDelete(ACCESS_KEY), secureDelete(REFRESH_KEY)]);
   },
 };
+
+// Safe navigation callback — set this from _layout.tsx once router is ready
+let _onUnauthenticated: (() => void) | null = null;
+export function setUnauthenticatedHandler(handler: () => void) {
+  _onUnauthenticated = handler;
+}
 
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
@@ -112,7 +110,10 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         await tokenStorage.clearTokens();
-        router.replace('/(auth)/login');
+        // Safe navigation — only navigate if router is ready
+        if (_onUnauthenticated) {
+          _onUnauthenticated();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

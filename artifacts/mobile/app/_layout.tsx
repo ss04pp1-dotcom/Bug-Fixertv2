@@ -1,13 +1,12 @@
 import React, { useEffect, createContext, useContext } from 'react';
-import { View, Text, StyleSheet, Linking, ActivityIndicator, Platform } from 'react-native';
-import { Slot } from 'expo-router';
+import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
+import { Slot, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
-import apiClient from '@/lib/api';
-// FIX 8: checkAuth import করো — app startup এ auth state initialize হবে
+import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -29,10 +28,13 @@ export const useFeatureFlagsContext = () => useContext(FeatureFlagsContext);
 // ─── App Guards (inside QueryClientProvider) ──────────────────────────────────
 function AppGuards({ children }: { children: React.ReactNode }) {
   const unwrap = (r: any) => r?.data?.data;
-  // FIX 8: App start এ auth state check করো
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
   useEffect(() => {
+    // Register safe navigation handler now that router is mounted
+    setUnauthenticatedHandler(() => {
+      try { router.replace('/(auth)/login'); } catch {}
+    });
     checkAuth();
   }, [checkAuth]);
 
