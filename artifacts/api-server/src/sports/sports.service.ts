@@ -265,13 +265,14 @@ export class SportsService {
       ];
     }
 
-    return this.prisma.sportTeam.findMany({
+    const data = await this.prisma.sportTeam.findMany({
       where,
       orderBy: { name: 'asc' },
       include: {
         tournament: { select: { id: true, name: true, slug: true } },
       },
     });
+    return { data };
   }
 
   async createTeam(dto: CreateTeamDto) {
@@ -331,13 +332,14 @@ export class SportsService {
       ];
     }
 
-    return this.prisma.tournament.findMany({
+    const data = await this.prisma.tournament.findMany({
       where,
       orderBy: { name: 'asc' },
       include: {
         sport: { select: { id: true, name: true, slug: true } },
       },
     });
+    return { data };
   }
 
   async createTournament(dto: CreateTournamentDto) {

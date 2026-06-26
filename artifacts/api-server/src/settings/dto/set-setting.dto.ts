@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, Allow } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SetSettingDto {
@@ -6,6 +6,8 @@ export class SetSettingDto {
   @IsString()
   key: string;
 
+  @ApiProperty({ description: 'Any JSON-serialisable value (string, number, boolean, object, array)' })
+  @Allow()
   value: unknown;
 
   @ApiPropertyOptional()
