@@ -122,6 +122,22 @@ enum HealthCheckMode {
   @@map("health_check_mode")
 }
 
+enum ServerSourceType {
+  ADMIN
+  GITHUB
+
+  @@map("server_source_type")
+}
+
+enum GitHubSyncStatus {
+  pending
+  running
+  success
+  failed
+
+  @@map("github_sync_status")
+}
+
 enum ImportJobStatus {
   pending
   parsing
@@ -268,16 +284,107 @@ model Channel {
   updatedAt        DateTime   @updatedAt @map("updated_at")
   deletedAt        DateTime?  @map("deleted_at")
 
+  // GitHub dedup & admin overrides
+  normalizedName          String?    @map("normalized_name")
+  githubChannelId         String?    @map("github_channel_id")
+  adminNameOverride       String?    @map("admin_name_override")
+  adminLogoOverride       String?    @map("admin_logo_override")
+  adminCategoryIdOverride String?    @map("admin_category_id_override") @db.Uuid
+
   category        Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   epgPrograms     EpgProgram[]
   favorites       Favorite[]
   playbackEvents  PlaybackEvent[]
+  servers         ChannelServer[]
 
   @@index([isActive])
   @@index([categoryId])
   @@index([createdAt])
   @@index([lastActiveAt])
+  @@index([normalizedName])
   @@map("channels")
+}
+
+// ─── GitHub Sources & Channel Servers ───────────────────────────────────────
+
+model GitHubSource {
+  id                   String            @id @default(uuid()) @db.Uuid
+  name                 String
+  url                  String
+  enabled              Boolean           @default(true)
+  syncIntervalMinutes  Int               @default(10) @map("sync_interval_minutes")
+  etag                 String?
+  lastModified         String?           @map("last_modified")
+  lastFetchedAt        DateTime?         @map("last_fetched_at")
+  lastSyncAt           DateTime?         @map("last_sync_at")
+  lastSuccessfulSyncAt DateTime?         @map("last_successful_sync_at")
+  lastSyncStatus       GitHubSyncStatus? @map("last_sync_status")
+  lastSyncMessage      String?           @map("last_sync_message")
+  consecutiveFailures  Int               @default(0) @map("consecutive_failures")
+  isSyncing            Boolean           @default(false) @map("is_syncing")
+  syncStartedAt        DateTime?         @map("sync_started_at")
+  channelCount         Int               @default(0) @map("channel_count")
+  serverCount          Int               @default(0) @map("server_count")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  servers  ChannelServer[]
+  syncLogs GitHubSyncLog[]
+
+  @@index([enabled])
+  @@map("github_sources")
+}
+
+model ChannelServer {
+  id                 String           @id @default(uuid()) @db.Uuid
+  channelId          String           @map("channel_id") @db.Uuid
+  link               String
+  cookie             String?
+  userAgent          String?          @map("user_agent")
+  referer            String?
+  origin             String?
+  priority           Int              @default(100)
+  sourceType         ServerSourceType @default(ADMIN) @map("source_type")
+  githubSourceId     String?          @map("github_source_id") @db.Uuid
+  githubChannelId    String?          @map("github_channel_id")
+  enabled            Boolean          @default(true)
+  healthCheckEnabled Boolean          @default(true) @map("health_check_enabled")
+  lastSeenAt         DateTime?        @map("last_seen_at")
+  createdBySync      Boolean          @default(false) @map("created_by_sync")
+  deletedAt          DateTime?        @map("deleted_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  channel      Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  githubSource GitHubSource? @relation(fields: [githubSourceId], references: [id], onDelete: SetNull)
+
+  @@index([channelId])
+  @@index([githubSourceId])
+  @@index([sourceType])
+  @@index([deletedAt])
+  @@map("channel_servers")
+}
+
+model GitHubSyncLog {
+  id             String           @id @default(uuid()) @db.Uuid
+  githubSourceId String           @map("github_source_id") @db.Uuid
+  startedAt      DateTime         @map("started_at")
+  endedAt        DateTime?        @map("ended_at")
+  durationMs     Int?             @map("duration_ms")
+  status         GitHubSyncStatus
+  added          Int              @default(0)
+  updated        Int              @default(0)
+  deleted        Int              @default(0)
+  failed         Int              @default(0)
+  totalParsed    Int              @default(0) @map("total_parsed")
+  errorMessage   String?          @map("error_message")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  githubSource GitHubSource @relation(fields: [githubSourceId], references: [id], onDelete: Cascade)
+
+  @@index([githubSourceId])
+  @@index([createdAt])
+  @@map("github_sync_logs")
 }
 
 model PlaybackEvent {

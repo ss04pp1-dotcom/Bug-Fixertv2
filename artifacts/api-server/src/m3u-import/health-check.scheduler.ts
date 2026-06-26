@@ -30,11 +30,18 @@ export class HealthCheckScheduler {
     try {
       this.logger.log('Starting scheduled 6-hour health check for all active channels');
 
+      // Exclude channels that only have GitHub servers (healthCheckEnabled=false).
+      // Keep channels with: no ChannelServer rows (legacy admin), or at least one
+      // server with healthCheckEnabled=true (admin servers).
       const channels = await this.prisma.channel.findMany({
         where: {
           deletedAt: null,
           primaryStreamUrl: { not: null },
           streamStatus: { in: [ChannelStreamStatus.active, ChannelStreamStatus.offline] },
+          OR: [
+            { servers: { none: {} } },
+            { servers: { some: { healthCheckEnabled: true, deletedAt: null } } },
+          ],
         },
         select: { id: true },
         take: 5000,

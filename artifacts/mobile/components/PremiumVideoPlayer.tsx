@@ -208,7 +208,7 @@ async function loadWatchPosition(contentId: string): Promise<number> {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export interface StreamSource { url: string; label: string; quality: string; }
+export interface StreamSource { url: string; label: string; quality: string; headers?: Record<string, string>; }
 
 export interface PremiumPlayerProps {
   sources:          StreamSource[];

@@ -44,6 +44,13 @@ export class ChannelsService {
           orderBy: { startTime: 'asc' },
           take: 10,
         },
+        servers: {
+          where: { deletedAt: null, enabled: true },
+          orderBy: { priority: 'asc' },
+          include: {
+            githubSource: { select: { id: true, name: true } },
+          },
+        },
       },
     });
     if (!channel) throw new NotFoundException('Channel not found');

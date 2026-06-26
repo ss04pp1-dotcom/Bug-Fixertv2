@@ -42,6 +42,8 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { JobsModule } from './jobs/jobs.module';
 import { M3uImportModule } from './m3u-import/m3u-import.module';
 import { PlaybackEventsModule } from './playback-events/playback-events.module';
+import { GitHubSourcesModule } from './github-sources/github-sources.module';
+import { GitHubSyncModule } from './github-sync/github-sync.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -90,6 +92,8 @@ import configuration from './config/configuration';
     M3uImportModule,
     PlaybackEventsModule,
     AppCacheModule,
+    GitHubSyncModule,
+    GitHubSourcesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

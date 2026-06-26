@@ -10,7 +10,7 @@ import {
   LogOut, Tv2, Megaphone, Wallet, BarChart2, Shield, Key,
   ClipboardList, User, ChevronLeft, ChevronRight, Radio, Globe, Flag,
   HelpCircle, Activity, MapPin, Trophy, Star, Download, ShieldCheck, FileUp,
-  HeartPulse, Trash2,
+  HeartPulse, Trash2, Github,
 } from "lucide-react";
 import { clearToken } from "@/lib/auth";
 import { apiClient, extractData } from "@/lib/axios-client";
@@ -45,6 +45,7 @@ const NAV_ITEMS = [
   { label: "Reviews",        icon: Star,            path: "/reviews"        },
   { label: "Downloads",      icon: Download,        path: "/downloads"      },
   { label: "M3U Import",     icon: FileUp,          path: "/m3u-import"    },
+  { label: "GitHub Sources", icon: Github,           path: "/github-sources" },
   { label: "Channel Health",  icon: HeartPulse,       path: "/channel-health"  },
   { label: "Deleted Channels", icon: Trash2,          path: "/deleted-channels" },
   { label: "Profile",        icon: User,            path: "/profile"       },

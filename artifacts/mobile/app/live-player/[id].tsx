@@ -104,6 +104,46 @@ export default function LivePlayerScreen() {
       }));
   }, [relatedRaw, id]);
 
+  // ── Build sources from channel response ───────────────────────────────────
+  const buildSources = useCallback((ch: any, overrideFirstUrl?: string): StreamSource[] => {
+    const srcs: StreamSource[] = [];
+
+    // Prefer new servers[] array (sorted by priority — Admin first, GitHub fallback)
+    if (Array.isArray(ch?.servers) && ch.servers.length > 0) {
+      const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
+      sorted.forEach((srv: any, i: number) => {
+        const sourceLabel = srv.sourceType === 'ADMIN'
+          ? 'Admin'
+          : srv.githubSource?.name ?? 'GitHub';
+        srcs.push({
+          url: srv.link,
+          label: `Server ${i + 1}`,
+          quality: i === 0 ? 'HD' : 'SD',
+          headers: {
+            ...(srv.cookie    ? { Cookie: srv.cookie }       : {}),
+            ...(srv.userAgent ? { 'User-Agent': srv.userAgent } : {}),
+            ...(srv.referer   ? { Referer: srv.referer }     : {}),
+            ...(srv.origin    ? { Origin: srv.origin }       : {}),
+          },
+        });
+      });
+    } else {
+      // Backward compat: legacy admin channels with hardcoded URL fields
+      if (ch?.primaryStreamUrl) srcs.push({ url: ch.primaryStreamUrl, label: 'Server 1', quality: ch.streamType || 'HD' });
+      if (ch?.backupStreamUrl && ch.backupStreamUrl !== ch.primaryStreamUrl)
+        srcs.push({ url: ch.backupStreamUrl, label: 'Server 2', quality: 'SD' });
+      if (ch?.thirdBackupUrl && ch.thirdBackupUrl !== ch.primaryStreamUrl)
+        srcs.push({ url: ch.thirdBackupUrl, label: 'Server 3', quality: 'SD' });
+    }
+
+    // If navigated with a direct URL, ensure it's first (may differ from DB)
+    if (overrideFirstUrl && !srcs.find(s => s.url === overrideFirstUrl)) {
+      srcs.unshift({ url: overrideFirstUrl, label: 'Server 1', quality: 'HD' });
+    }
+
+    return srcs;
+  }, []);
+
   // ── Load stream URL ────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
     setFetchLoad(true);
@@ -112,36 +152,23 @@ export default function LivePlayerScreen() {
     clearPlaybackTimer();
     reportedRef.current = false;
 
-    if (passedUrl) {
-      const srcs: StreamSource[] = [{ url: passedUrl, label: 'Server 1', quality: 'HD' }];
-      try {
-        const res = await apiClient.get(`/channels/${id}`);
-        const ch  = res.data?.data || res.data;
-        if (ch?.backupStreamUrl  && ch.backupStreamUrl  !== passedUrl) srcs.push({ url: ch.backupStreamUrl,  label: 'Server 2', quality: 'SD' });
-        if (ch?.thirdBackupUrl   && ch.thirdBackupUrl   !== passedUrl) srcs.push({ url: ch.thirdBackupUrl,   label: 'Server 3', quality: 'SD' });
-      } catch { /* non-fatal */ }
-      setSources(srcs);
-      setFetchLoad(false);
-      return;
-    }
-
     try {
       const res = await apiClient.get(`/channels/${id}`);
       const ch  = res.data?.data || res.data;
-      const srcs: StreamSource[] = [];
-      if (ch?.primaryStreamUrl) srcs.push({ url: ch.primaryStreamUrl, label: 'Server 1', quality: ch.streamType || 'HD' });
-      if (ch?.backupStreamUrl)  srcs.push({ url: ch.backupStreamUrl,  label: 'Server 2', quality: 'SD' });
-      if (ch?.thirdBackupUrl)   srcs.push({ url: ch.thirdBackupUrl,   label: 'Server 3', quality: 'SD' });
-      if (ch?.streamUrl && !srcs.find(s => s.url === ch.streamUrl))
-        srcs.push({ url: ch.streamUrl, label: `Server ${srcs.length + 1}`, quality: 'SD' });
+      const srcs = buildSources(ch, passedUrl || undefined);
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
     } catch {
-      setFetchError(true);
+      // Fallback: if API fails but we have a passedUrl, play it directly
+      if (passedUrl) {
+        setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
+      } else {
+        setFetchError(true);
+      }
     } finally {
       setFetchLoad(false);
     }
-  }, [id, passedUrl]);
+  }, [id, passedUrl, buildSources]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 

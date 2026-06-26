@@ -1,0 +1,5 @@
+{
+  "/login/page": "app/login/page.js",
+  "/(admin)/page": "app/(admin)/page.js",
+  "/(admin)/github-sources/page": "app/(admin)/github-sources/page.js"
+}
