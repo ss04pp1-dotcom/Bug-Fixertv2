@@ -416,11 +416,30 @@ export class ChannelsService {
       if (server.referer) reqHeaders['Referer'] = server.referer;
       if (server.origin)  reqHeaders['Origin']  = server.origin;
 
-      const res = await fetch(server.link, {
+      // Try HEAD first; many HLS CDNs reject HEAD so fall back to GET with a byte range
+      let res = await fetch(server.link, {
         method: 'HEAD',
         signal: controller.signal,
         headers: reqHeaders,
-      });
+      }).catch(() => null);
+
+      if (!res || res.status === 405 || res.status === 400 || res.status === 501) {
+        const getController = new AbortController();
+        const getTimer = setTimeout(() => getController.abort(), 12000);
+        res = await fetch(server.link, {
+          method: 'GET',
+          signal: getController.signal,
+          headers: reqHeaders,
+        });
+        clearTimeout(getTimer);
+        // Consume a tiny chunk then close to avoid downloading the whole stream
+        const reader = res.body?.getReader();
+        if (reader) {
+          await reader.read();
+          reader.cancel().catch(() => {});
+        }
+      }
+
       clearTimeout(timer);
       const latencyMs = Date.now() - startTime;
       const ok = res.ok || res.status === 206 || res.status === 200;
