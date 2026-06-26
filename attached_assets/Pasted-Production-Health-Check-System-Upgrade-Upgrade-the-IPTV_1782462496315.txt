@@ -1,0 +1,228 @@
+Production Health Check System Upgrade
+
+Upgrade the IPTV health check system to support multiple health-check modes, manual override, and user playback-based health monitoring.
+
+Goals
+
+The system must support three health check modes:
+
+1. Server Health Check (existing Render-based checker)
+2. User Playback Health Check (new)
+3. Disabled
+
+The administrator must be able to switch between them from Settings without redeploying the application.
+
+---
+
+Global Settings
+
+Create a new settings section.
+
+Health Check Mode
+
+○ Server Health Check
+○ User Playback
+○ Disabled
+
+Behavior:
+
+Server Health Check
+
+- Continue using the existing Render/Singapore health checker.
+- Do NOT automatically disable channels because a check failed.
+- Treat this as informational only.
+- Save the result for admin visibility.
+
+User Playback
+
+Ignore Render health status.
+
+Determine channel health using real user playback reports.
+
+Disabled
+
+No automatic health checks.
+
+Only Manual Override determines status.
+
+---
+
+Manual Override (Per Channel)
+
+Add a new field to every channel.
+
+Health Override
+
+○ Auto
+○ Force Healthy
+○ Force Offline
+
+Logic:
+
+If Force Healthy:
+
+- Always display Healthy.
+- Ignore every automatic health check.
+
+If Force Offline:
+
+- Always display Offline.
+- Ignore every automatic health check.
+
+If Auto:
+
+- Use the selected global Health Check Mode.
+
+---
+
+User Playback Health System
+
+Every playback should report analytics.
+
+When playback starts:
+
+- Create playback session.
+
+If playback continues successfully for at least 10–15 seconds:
+
+- Record Success.
+
+If playback fails before successful playback:
+
+- Record Failure.
+
+Store:
+
+- Channel ID
+- Timestamp
+- Success / Failure
+- Playback duration (optional)
+- App version (optional)
+
+---
+
+Health Calculation
+
+Calculate using recent playback only.
+
+Example:
+
+Last 24 hours
+or
+Last 100 playback attempts
+
+Success Rate:
+
+«=80%
+Healthy»
+
+50–79%
+Unstable
+
+<50%
+Offline
+
+Thresholds should be configurable.
+
+---
+
+Status Priority
+
+Health Status Priority:
+
+1. Manual Override
+2. Global Health Mode
+3. Calculated Health
+
+Meaning:
+
+Force Healthy
+↓
+
+Healthy
+
+Force Offline
+↓
+
+Offline
+
+Auto
+↓
+
+Server Check
+or
+User Playback
+or
+Disabled
+
+---
+
+Existing Render Health Checker
+
+Keep the existing Render checker.
+
+Rename its output to:
+
+"Server Health"
+
+Do not automatically disable channels.
+
+It is only informational for administrators.
+
+---
+
+Admin Dashboard
+
+Display:
+
+Server Health:
+Healthy / Offline
+
+Playback Health:
+Healthy / Unstable / Offline
+
+Manual Override:
+Auto / Force Healthy / Force Offline
+
+Current Effective Status:
+Healthy / Offline
+
+Also show:
+
+Success Count
+
+Failure Count
+
+Success Rate %
+
+Last Successful Playback
+
+Last Failed Playback
+
+---
+
+API
+
+Return both values:
+
+serverHealth
+playbackHealth
+effectiveHealth
+overrideMode
+healthMode
+
+The mobile application should only use effectiveHealth.
+
+---
+
+Migration
+
+Existing channels:
+
+Override = Auto
+
+Health Mode = Server Health Check
+
+No existing functionality should break.
+
+This upgrade must remain backward compatible.

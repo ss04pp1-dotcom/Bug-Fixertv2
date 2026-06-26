@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Save, Menu, RefreshCw, Power, AlertTriangle, Smartphone } from "lucide-react";
+import { ChevronDown, Save, Menu, RefreshCw, Power, AlertTriangle, Smartphone, Activity } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 import dynamic from "next/dynamic";
 
@@ -17,7 +17,7 @@ const SeoSettings      = dynamic(() => import("./_tabs/SeoSettings"),      { ssr
 
 const TABS = [
   "General", "App Settings", "Authentication", "Payment Gateways",
-  "Maintenance", "Force Update",
+  "Maintenance", "Force Update", "Health Check",
   "Email Settings", "Firebase / FCM", "Storage", "Security", "SEO Settings",
 ];
 
@@ -67,7 +67,22 @@ export default function SettingsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsRaw]);
 
-  // ── Force Update (controlled state) ─────────────────────────────────
+  // ── Health Check ────────────────────────────────────────────────────
+  const [healthMode, setHealthMode] = useState<string>("SERVER");
+
+  useEffect(() => {
+    if (!settingsRaw) return;
+    if (settings["health_check_mode"]) setHealthMode(String(settings["health_check_mode"]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsRaw]);
+
+  const saveHealthMode = async () => {
+    try {
+      await call("post", "/v1/settings", { key: "health_check_mode", value: healthMode });
+      flash(); refetch();
+    } catch { flashErr("Failed to save health check mode."); }
+  };
+
   const [fuEnabled,    setFuEnabled]    = useState(false);
   const [fuSoft,       setFuSoft]       = useState(false);
   const [fuMinAndroid, setFuMinAndroid] = useState("1.0.0");
@@ -354,6 +369,56 @@ export default function SettingsPage() {
                 )}>
                 {mutating ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                 {saved ? "Saved!" : mutating ? "Saving…" : "Save Force Update Config"}
+              </button>
+            </div>
+          )}
+
+          {/* ── HEALTH CHECK ── */}
+          {activeTab === "Health Check" && (
+            <div className="max-w-2xl space-y-6">
+              <h2 className="text-sm font-semibold text-white mb-4">Health Check System</h2>
+              <div className="bg-card border border-border rounded-xl p-5 space-y-5">
+                <div className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-lg p-3">
+                  <Activity size={14} className="text-primary mt-0.5 shrink-0" />
+                  <p className="text-xs text-[#8B92A5]">
+                    Choose how channel health status is determined globally. You can also override individual channels from the Channel Health page.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {([
+                    { value: "SERVER", label: "Server Health Check", desc: "Uses automated ping results from the server to determine if a channel is live." },
+                    { value: "USER_PLAYBACK", label: "User Playback Reports", desc: "Calculates health from real playback event data reported by the mobile app." },
+                    { value: "DISABLED", label: "Disabled", desc: "Turns off all health indicators. Channels always show as unknown status." },
+                  ] as const).map(opt => (
+                    <label key={opt.value}
+                      className={cn(
+                        "flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors",
+                        healthMode === opt.value ? "border-primary/60 bg-primary/5" : "border-border hover:border-border/80"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-colors",
+                        healthMode === opt.value ? "border-primary" : "border-[#555B70]"
+                      )}>
+                        {healthMode === opt.value && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <input type="radio" className="sr-only" value={opt.value} checked={healthMode === opt.value} onChange={() => setHealthMode(opt.value)} />
+                      <div>
+                        <div className="text-sm font-medium text-white">{opt.label}</div>
+                        <div className="text-xs text-[#8B92A5] mt-0.5">{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={saveHealthMode} disabled={mutating}
+                className={cn("flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-60",
+                  saved ? "bg-green-600 text-white" : "gradient-primary text-white hover:opacity-90"
+                )}>
+                {mutating ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                {saved ? "Saved!" : mutating ? "Saving…" : "Save Health Check Mode"}
               </button>
             </div>
           )}

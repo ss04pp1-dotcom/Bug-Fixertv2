@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ActivityIndicator, StatusBar, Platform,
+  ActivityIndicator, StatusBar, Platform, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const { width: W } = Dimensions.get('window');
 
@@ -34,6 +34,19 @@ export function isYouTubeUrl(url: string): boolean {
   return extractYouTubeId(url) !== null;
 }
 
+// ── PiP JS injected into native WebView ──────────────────────────────────────
+const PIP_JS = `(function(){
+  var video = document.querySelector('video');
+  if (video) {
+    if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
+      video.webkitSetPresentationMode('picture-in-picture');
+    } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+      video.requestPictureInPicture().catch(function(){});
+    }
+  }
+  true;
+})();`;
+
 // ── YouTubeVideoBox — embeddable player (no header/back) ─────────────────────
 interface YouTubeVideoBoxProps {
   url: string;
@@ -43,6 +56,8 @@ interface YouTubeVideoBoxProps {
 export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const webViewRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
 
   const videoId = extractYouTubeId(url);
   const boxH = height ?? W * (9 / 16);
@@ -62,6 +77,22 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
 
   // ── Web platform: use native iframe ────────────────────────────────────────
   if (Platform.OS === 'web') {
+    const handleWebPip = () => {
+      try {
+        const iframe = iframeRef.current as HTMLIFrameElement | null;
+        if (!iframe) return;
+        if ((document as any).pictureInPictureEnabled) {
+          (iframe as any).requestPictureInPicture?.().catch(() => {
+            Alert.alert('PiP', 'Use the browser\'s built-in PiP (right-click the video → Picture in Picture).');
+          });
+        } else {
+          Alert.alert('PiP', 'Right-click the video and select "Picture in Picture" from the context menu.');
+        }
+      } catch {
+        Alert.alert('PiP', 'Use the browser\'s built-in PiP controls on the video.');
+      }
+    };
+
     return (
       <View style={[s.playerBox, { height: boxH }]}>
         {loading && (
@@ -73,6 +104,7 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
         )}
         {/* @ts-ignore — iframe is valid in react-native-web */}
         <iframe
+          ref={iframeRef}
           src={embedUrl!}
           style={{
             width: '100%',
@@ -85,6 +117,12 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
           onLoad={() => setLoading(false)}
           onError={() => { setLoading(false); setError(true); }}
         />
+        {/* PiP button overlay */}
+        {!loading && (
+          <TouchableOpacity style={s.pipBtn} onPress={handleWebPip}>
+            <MaterialIcons name="picture-in-picture-alt" size={18} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -107,6 +145,10 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
     );
   }
 
+  const handleNativePip = () => {
+    webViewRef.current?.injectJavaScript(PIP_JS);
+  };
+
   return (
     <View style={[s.playerBox, { height: boxH }]}>
       {loading && !error && (
@@ -128,11 +170,13 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
       )}
       {!error && (
         <WebViewComponent
+          ref={webViewRef}
           source={{ uri: embedUrl! }}
           style={{ flex: 1, backgroundColor: '#000' }}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           allowsFullscreenVideo
+          allowsPictureInPictureMediaPlayback
           javaScriptEnabled
           domStorageEnabled
           startInLoadingState={false}
@@ -145,6 +189,12 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
               : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
           }
         />
+      )}
+      {/* PiP button overlay (native only) */}
+      {!loading && !error && (
+        <TouchableOpacity style={s.pipBtn} onPress={handleNativePip}>
+          <MaterialIcons name="picture-in-picture-alt" size={18} color="#fff" />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -221,4 +271,9 @@ const s = StyleSheet.create({
     paddingVertical: 10, borderRadius: 22, marginTop: 8,
   },
   retryTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  pipBtn: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8, padding: 6,
+  },
 });

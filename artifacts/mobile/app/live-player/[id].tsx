@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
   ScrollView, StatusBar, Image, FlatList, useWindowDimensions,
@@ -9,13 +9,14 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
-import { Config } from '@/constants/config';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', live: '#EF4444', text: '#fff', dim: '#9CA3AF',
 };
+
+const PLAYBACK_SUCCESS_DELAY_MS = 15_000;
 
 export default function LivePlayerScreen() {
   const {
@@ -42,6 +43,51 @@ export default function LivePlayerScreen() {
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
 
+  // ── Playback reporting ─────────────────────────────────────────────────────
+  const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reportedRef        = useRef(false);
+  const playbackStartRef   = useRef<number>(0);
+
+  const clearPlaybackTimer = () => {
+    if (playbackTimerRef.current) {
+      clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+  };
+
+  const reportPlayback = useCallback(async (success: boolean, durationSecs?: number) => {
+    if (!id) return;
+    try {
+      await apiClient.post('/playback-events/report', {
+        channelId: id,
+        success,
+        duration: durationSecs,
+      });
+    } catch { /* non-fatal */ }
+  }, [id]);
+
+  const onPlaybackStart = useCallback(() => {
+    clearPlaybackTimer();
+    reportedRef.current = false;
+    playbackStartRef.current = Date.now();
+    playbackTimerRef.current = setTimeout(() => {
+      if (!reportedRef.current) {
+        reportedRef.current = true;
+        reportPlayback(true, Math.round((Date.now() - playbackStartRef.current) / 1000));
+      }
+    }, PLAYBACK_SUCCESS_DELAY_MS);
+  }, [reportPlayback]);
+
+  const onPlaybackError = useCallback(() => {
+    clearPlaybackTimer();
+    if (!reportedRef.current) {
+      reportedRef.current = true;
+      reportPlayback(false);
+    }
+  }, [reportPlayback]);
+
+  useEffect(() => () => clearPlaybackTimer(), []);
+
   // ── Related channels ───────────────────────────────────────────────────────
   const { data: relatedRaw } = useLiveChannels({ limit: 20 });
   const related = useMemo(() => {
@@ -63,23 +109,22 @@ export default function LivePlayerScreen() {
     setFetchLoad(true);
     setFetchError(false);
     setSources([]);
+    clearPlaybackTimer();
+    reportedRef.current = false;
 
-    // 1. Use URL passed from the list (instant start) — but also fetch backup URLs from API
     if (passedUrl) {
       const srcs: StreamSource[] = [{ url: passedUrl, label: 'Server 1', quality: 'HD' }];
-      // Fetch additional backup servers in background
       try {
         const res = await apiClient.get(`/channels/${id}`);
         const ch  = res.data?.data || res.data;
         if (ch?.backupStreamUrl  && ch.backupStreamUrl  !== passedUrl) srcs.push({ url: ch.backupStreamUrl,  label: 'Server 2', quality: 'SD' });
         if (ch?.thirdBackupUrl   && ch.thirdBackupUrl   !== passedUrl) srcs.push({ url: ch.thirdBackupUrl,   label: 'Server 3', quality: 'SD' });
-      } catch { /* non-fatal — we already have passedUrl */ }
+      } catch { /* non-fatal */ }
       setSources(srcs);
       setFetchLoad(false);
       return;
     }
 
-    // 2. Fetch channel from API
     try {
       const res = await apiClient.get(`/channels/${id}`);
       const ch  = res.data?.data || res.data;
@@ -87,7 +132,6 @@ export default function LivePlayerScreen() {
       if (ch?.primaryStreamUrl) srcs.push({ url: ch.primaryStreamUrl, label: 'Server 1', quality: ch.streamType || 'HD' });
       if (ch?.backupStreamUrl)  srcs.push({ url: ch.backupStreamUrl,  label: 'Server 2', quality: 'SD' });
       if (ch?.thirdBackupUrl)   srcs.push({ url: ch.thirdBackupUrl,   label: 'Server 3', quality: 'SD' });
-      // Also check common alternative field names
       if (ch?.streamUrl && !srcs.find(s => s.url === ch.streamUrl))
         srcs.push({ url: ch.streamUrl, label: `Server ${srcs.length + 1}`, quality: 'SD' });
       if (srcs.length === 0) setFetchError(true);
@@ -133,6 +177,8 @@ export default function LivePlayerScreen() {
         onRefreshStream={loadStream}
         contentId={id}
         contentType="channel"
+        onPlaybackStart={onPlaybackStart}
+        onPlaybackError={onPlaybackError}
       />
 
       {/* ── Below player (portrait) ─────────────────────────────────────── */}
@@ -237,7 +283,6 @@ export default function LivePlayerScreen() {
 }
 
 const { width: SW } = Dimensions.get('window');
-// 14px padding each side, 10px gap between the 2 columns
 const CARD_W = Math.floor((SW - 14 * 2 - 10) / 2);
 
 const s = StyleSheet.create({

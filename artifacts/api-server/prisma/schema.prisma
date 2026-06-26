@@ -106,6 +106,22 @@ enum ChannelStreamStatus {
   @@map("channel_stream_status")
 }
 
+enum HealthOverride {
+  AUTO
+  FORCE_HEALTHY
+  FORCE_OFFLINE
+
+  @@map("health_override")
+}
+
+enum HealthCheckMode {
+  SERVER
+  USER_PLAYBACK
+  DISABLED
+
+  @@map("health_check_mode")
+}
+
 enum ImportJobStatus {
   pending
   parsing
@@ -238,6 +254,7 @@ model Channel {
   streamType       StreamType @default(HLS) @map("stream_type")
   epgChannelId     String?    @map("epg_channel_id")
   streamStatus     ChannelStreamStatus @default(active) @map("stream_status")
+  healthOverride   HealthOverride @default(AUTO) @map("health_override")
   isActive         Boolean    @default(true) @map("is_active")
   isFeatured       Boolean    @default(false) @map("is_featured")
   isTrending       Boolean    @default(false) @map("is_trending")
@@ -251,15 +268,32 @@ model Channel {
   updatedAt        DateTime   @updatedAt @map("updated_at")
   deletedAt        DateTime?  @map("deleted_at")
 
-  category   Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  epgPrograms EpgProgram[]
-  favorites  Favorite[]
+  category        Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  epgPrograms     EpgProgram[]
+  favorites       Favorite[]
+  playbackEvents  PlaybackEvent[]
 
   @@index([isActive])
   @@index([categoryId])
   @@index([createdAt])
   @@index([lastActiveAt])
   @@map("channels")
+}
+
+model PlaybackEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  channelId  String   @map("channel_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  success    Boolean
+  duration   Int?
+  appVersion String?  @map("app_version")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([createdAt])
+  @@map("playback_events")
 }
 
 model DeletedChannelLog {

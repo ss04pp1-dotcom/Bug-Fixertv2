@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsBoolean, IsNumber, IsEnum, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { HealthOverride } from '@prisma/client';
 
 export class CreateChannelDto {
   @ApiProperty()
@@ -104,4 +105,9 @@ export class CreateChannelDto {
   @IsOptional()
   @IsArray()
   tags?: string[];
+
+  @ApiPropertyOptional({ enum: ['AUTO', 'FORCE_HEALTHY', 'FORCE_OFFLINE'], description: 'Manual health override' })
+  @IsOptional()
+  @IsEnum(HealthOverride)
+  healthOverride?: HealthOverride;
 }

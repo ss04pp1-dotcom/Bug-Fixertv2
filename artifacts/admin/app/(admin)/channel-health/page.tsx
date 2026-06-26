@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Activity, Wifi, WifiOff, AlertTriangle, Clock, RefreshCw,
-  Play, Search, Loader2, ChevronLeft, ChevronRight, Zap,
-  ShieldAlert, Radio, BarChart3,
+  Search, Loader2, ChevronLeft, ChevronRight, Zap,
+  ShieldAlert, Radio, BarChart3, Shield,
 } from "lucide-react";
 import { useApiQuery, useApiCallState, useInvalidate } from "@/lib/use-api";
-import { apiClient, extractData } from "@/lib/axios-client";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -33,11 +32,14 @@ interface ImportHistoryItem {
   completedAt: string | null;
 }
 
+type HealthOverride = "AUTO" | "FORCE_HEALTHY" | "FORCE_OFFLINE";
+
 interface FailedChannel {
   id: string;
   name: string;
   primaryStreamUrl: string | null;
   streamStatus: string;
+  healthOverride: HealthOverride;
   updatedAt: string;
 }
 
@@ -150,6 +152,20 @@ function HealthRing({ stats }: { stats: HealthStats }) {
 
 /* ─── Failed Channels Table ──────────────────────────── */
 
+function OverrideBadge({ value }: { value: HealthOverride }) {
+  if (value === "FORCE_HEALTHY") return (
+    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/25">
+      <Shield size={9} /> Forced Healthy
+    </span>
+  );
+  if (value === "FORCE_OFFLINE") return (
+    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/25">
+      <Shield size={9} /> Forced Offline
+    </span>
+  );
+  return null;
+}
+
 function FailedChannelsTable() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -160,6 +176,7 @@ function FailedChannelsTable() {
   );
 
   const { call: recheckCall, loading: rechecking } = useApiCallState();
+  const { call: overrideCall } = useApiCallState();
   const invalidate = useInvalidate();
 
   const recheckSingle = async (channelId: string) => {
@@ -167,6 +184,13 @@ function FailedChannelsTable() {
       await recheckCall("post", `/v1/m3u-import/health-check/recheck/${channelId}`);
       invalidate(["failed-channels"]);
       setTimeout(() => refetch(), 5000);
+    } catch {}
+  };
+
+  const setOverride = async (channelId: string, override: HealthOverride) => {
+    try {
+      await overrideCall("put", `/v1/channels/${channelId}/health-override`, { override });
+      refetch();
     } catch {}
   };
 
@@ -209,6 +233,7 @@ function FailedChannelsTable() {
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Channel</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Stream URL</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Status</th>
+                  <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Override</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Last Checked</th>
                   <th className="text-right py-2.5 px-3 text-[#555B70] font-medium">Action</th>
                 </tr>
@@ -216,9 +241,12 @@ function FailedChannelsTable() {
               <tbody className="divide-y divide-border/50">
                 {data.data.map((ch) => (
                   <tr key={ch.id} className="hover:bg-white/[0.02]">
-                    <td className="py-2.5 px-3 text-white font-medium">{ch.name}</td>
+                    <td className="py-2.5 px-3 text-white font-medium">
+                      <div>{ch.name}</div>
+                      <OverrideBadge value={ch.healthOverride} />
+                    </td>
                     <td className="py-2.5 px-3">
-                      <span className="text-[#555B70] truncate block max-w-[250px]" title={ch.primaryStreamUrl ?? ""}>
+                      <span className="text-[#555B70] truncate block max-w-[200px]" title={ch.primaryStreamUrl ?? ""}>
                         {ch.primaryStreamUrl}
                       </span>
                     </td>
@@ -231,6 +259,17 @@ function FailedChannelsTable() {
                       )}>
                         {ch.streamStatus}
                       </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <select
+                        value={ch.healthOverride ?? "AUTO"}
+                        onChange={e => setOverride(ch.id, e.target.value as HealthOverride)}
+                        className="bg-[#0D1321] border border-border rounded px-2 py-1 text-xs text-white outline-none cursor-pointer focus:border-primary"
+                      >
+                        <option value="AUTO">Auto</option>
+                        <option value="FORCE_HEALTHY">Force Healthy</option>
+                        <option value="FORCE_OFFLINE">Force Offline</option>
+                      </select>
                     </td>
                     <td className="py-2.5 px-3 text-[#8B92A5]">
                       {new Date(ch.updatedAt).toLocaleString()}

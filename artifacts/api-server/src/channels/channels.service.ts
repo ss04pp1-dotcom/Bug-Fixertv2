@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
-import { Prisma, StreamType } from '@prisma/client';
+import { Prisma, StreamType, HealthOverride } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
@@ -211,6 +211,52 @@ export class ChannelsService {
       throw new Error(`Failed to fetch playlist: ${e?.message ?? 'Unknown error'}`);
     }
     return { content, contentType: url.includes('.json') ? 'json' : url.includes('.csv') ? 'csv' : 'm3u' };
+  }
+
+  async setHealthOverride(id: string, override: HealthOverride) {
+    await this.findOne(id);
+    return this.prisma.channel.update({ where: { id }, data: { healthOverride: override } });
+  }
+
+  async getChannelHealthStats(channelId: string, healthMode: string) {
+    const channel = await this.findOne(channelId);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const events = await this.prisma.playbackEvent.findMany({
+      where: { channelId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const successCount = events.filter(e => e.success).length;
+    const failureCount = events.filter(e => !e.success).length;
+    const total = successCount + failureCount;
+    const successRate = total > 0 ? Math.round((successCount / total) * 100) : null;
+    const lastSuccess = events.find(e => e.success)?.createdAt ?? null;
+    const lastFailure = events.find(e => !e.success)?.createdAt ?? null;
+
+    let playbackHealth = 'unknown';
+    if (successRate !== null) {
+      if (successRate >= 80) playbackHealth = 'healthy';
+      else if (successRate >= 50) playbackHealth = 'unstable';
+      else playbackHealth = 'offline';
+    }
+
+    const serverHealth = channel.streamStatus === 'active' ? 'healthy' : channel.streamStatus;
+    const override = channel.healthOverride;
+
+    if (override === HealthOverride.FORCE_HEALTHY) {
+      return { serverHealth, playbackHealth, effectiveHealth: 'healthy', overrideMode: override, healthMode, successCount, failureCount, successRate, lastSuccess, lastFailure };
+    }
+    if (override === HealthOverride.FORCE_OFFLINE) {
+      return { serverHealth, playbackHealth, effectiveHealth: 'offline', overrideMode: override, healthMode, successCount, failureCount, successRate, lastSuccess, lastFailure };
+    }
+
+    let effectiveHealth: string;
+    if (healthMode === 'SERVER') effectiveHealth = serverHealth;
+    else if (healthMode === 'USER_PLAYBACK') effectiveHealth = playbackHealth === 'unknown' ? 'healthy' : playbackHealth;
+    else effectiveHealth = 'unknown';
+
+    return { serverHealth, playbackHealth, effectiveHealth, overrideMode: override, healthMode, successCount, failureCount, successRate, lastSuccess, lastFailure };
   }
 
   async exportChannels(format: 'json' | 'csv' | 'm3u') {

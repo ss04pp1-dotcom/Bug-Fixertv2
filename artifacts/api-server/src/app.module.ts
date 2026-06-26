@@ -41,6 +41,7 @@ import { DownloadsModule } from './downloads/downloads.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { JobsModule } from './jobs/jobs.module';
 import { M3uImportModule } from './m3u-import/m3u-import.module';
+import { PlaybackEventsModule } from './playback-events/playback-events.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -87,6 +88,7 @@ import configuration from './config/configuration';
     ReviewsModule,
     JobsModule,
     M3uImportModule,
+    PlaybackEventsModule,
     AppCacheModule,
   ],
   providers: [

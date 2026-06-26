@@ -253,6 +253,17 @@
   .visible {
     visibility: visible;
   }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
   .absolute {
     position: absolute;
   }
@@ -727,9 +738,6 @@
   .max-w-\[200px\] {
     max-width: 200px;
   }
-  .max-w-\[250px\] {
-    max-width: 250px;
-  }
   .max-w-lg {
     max-width: var(--container-lg);
   }
@@ -1084,6 +1092,9 @@
   .border-\[\#8B92A5\]\/40 {
     border-color: color-mix(in oklab, #8B92A5 40%, transparent);
   }
+  .border-\[\#555B70\] {
+    border-color: #555B70;
+  }
   .border-amber-500\/20 {
     border-color: color-mix(in srgb, oklch(76.9% 0.188 70.08) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1144,6 +1155,12 @@
       border-color: color-mix(in oklab, var(--color-green-500) 20%, transparent);
     }
   }
+  .border-green-500\/25 {
+    border-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 25%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-green-500) 25%, transparent);
+    }
+  }
   .border-green-500\/30 {
     border-color: color-mix(in srgb, oklch(72.3% 0.219 149.579) 30%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1189,6 +1206,12 @@
       border-color: color-mix(in oklab, hsl(var(--primary)) 50%, transparent);
     }
   }
+  .border-primary\/60 {
+    border-color: hsl(var(--primary));
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, hsl(var(--primary)) 60%, transparent);
+    }
+  }
   .border-red-400\/20 {
     border-color: color-mix(in srgb, oklch(70.4% 0.191 22.216) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1199,6 +1222,12 @@
     border-color: color-mix(in srgb, oklch(63.7% 0.237 25.331) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--color-red-500) 20%, transparent);
+    }
+  }
+  .border-red-500\/25 {
+    border-color: color-mix(in srgb, oklch(63.7% 0.237 25.331) 25%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-red-500) 25%, transparent);
     }
   }
   .border-red-500\/30 {

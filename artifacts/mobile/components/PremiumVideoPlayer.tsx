@@ -225,9 +225,11 @@ export interface PremiumPlayerProps {
   episodes?:        { id: string; title: string; number: number }[];
   currentEpIdx?:    number;
   onEpisodeChange?: (idx: number) => void;
-  onNext?:          () => void;
-  onPrev?:          () => void;
-  style?:           any;
+  onNext?:            () => void;
+  onPrev?:            () => void;
+  style?:             any;
+  onPlaybackStart?:   () => void;
+  onPlaybackError?:   () => void;
 }
 
 // ─── HLS.js CDN loader (web only, no static import needed) ───────────────────
@@ -718,6 +720,7 @@ export default function PremiumVideoPlayer({
   contentId = '', contentType = 'movie',
   episodes = [], currentEpIdx = 0, onEpisodeChange,
   onNext, onPrev, style,
+  onPlaybackStart, onPlaybackError,
 }: PremiumPlayerProps) {
   const insets = useSafeAreaInsets();
   const [dims, setDims] = useState(Dimensions.get('window'));
@@ -1141,7 +1144,7 @@ export default function PremiumVideoPlayer({
         IS_WEB
           ? <WebVideoPlayer
               url={src.url} paused={!isPlaying} rate={speed} videoRef={videoRef}
-              onReady={() => { setReady(true); setBuffering(false); }}
+              onReady={() => { setReady(true); setBuffering(false); onPlaybackStart?.(); }}
               onError={(e: any) => {
                 VideoLog.error('PLAYER', 'Web player error', e);
                 // FIX: auto-fallback to next server before showing error UI
@@ -1151,6 +1154,7 @@ export default function PremiumVideoPlayer({
                 } else {
                   setPlayerError('Stream failed to load');
                   setBuffering(false);
+                  onPlaybackError?.();
                 }
               }}
               onTimeUpdate={(t: number, d: number) => {
@@ -1176,6 +1180,7 @@ export default function PremiumVideoPlayer({
                 setDuration(data?.duration || 0);
                 durationRef.current = data?.duration || 0;
                 setBuffering(false); setReady(true); setEnded(false); setPlayerError(null);
+                onPlaybackStart?.();
               }}
               onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
               onProgress={(data) => {
@@ -1200,6 +1205,7 @@ export default function PremiumVideoPlayer({
                 } else {
                   setPlayerError(desc);
                   setBuffering(false);
+                  onPlaybackError?.();
                 }
               }}
               onEnd={() => { setEnded(true); setPlaying(false); onNext?.(); }}
