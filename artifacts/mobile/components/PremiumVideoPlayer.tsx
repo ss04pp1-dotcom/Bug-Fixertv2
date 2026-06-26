@@ -750,6 +750,7 @@ export default function PremiumVideoPlayer({
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const videoRef        = useRef<any>(null);
+  const webContainerRef = useRef<any>(null);
   const hideTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef      = useRef<{ time: number; x: number } | null>(null);
@@ -858,6 +859,34 @@ export default function PremiumVideoPlayer({
       } catch {}
     })();
   }, [fullscreen]);
+
+  // ── Web fullscreen sync (Escape key / browser exit) ────────────────────────
+  useEffect(() => {
+    if (!IS_WEB || typeof document === 'undefined') return;
+    // Inject CSS so the fullscreen element fills the screen
+    const styleId = '__pvp_fs_style';
+    if (!document.getElementById(styleId)) {
+      const st = document.createElement('style');
+      st.id = styleId;
+      st.textContent = `
+        :fullscreen { width: 100vw !important; height: 100vh !important; background: #000; }
+        :-webkit-full-screen { width: 100vw !important; height: 100vh !important; background: #000; }
+        :-moz-full-screen { width: 100vw !important; height: 100vh !important; background: #000; }
+        :fullscreen video { width: 100% !important; height: 100% !important; object-fit: contain; }
+        :-webkit-full-screen video { width: 100% !important; height: 100% !important; object-fit: contain; }
+      `;
+      document.head.appendChild(st);
+    }
+    const onFsChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  }, []);
 
   // ── Keep awake ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1032,12 +1061,14 @@ export default function PremiumVideoPlayer({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <View style={[
-      p.container,
-      (!IS_WEB && fullscreen) ? p.fullscreen : { width: vidW, height: vidH },
-      IS_WEB && fullscreen ? p.fullscreen : undefined,
-      style,
-    ]}>
+    <View
+      ref={IS_WEB ? webContainerRef : undefined}
+      style={[
+        p.container,
+        (!IS_WEB && fullscreen) ? p.fullscreen : { width: vidW, height: vidH },
+        style,
+      ]}
+    >
       <StatusBar hidden={fullscreen} barStyle="light-content" backgroundColor="#000" />
 
       {/* ── Video layer ─────────────────────────────────────────────────── */}
@@ -1377,7 +1408,9 @@ export default function PremiumVideoPlayer({
                 <TouchableOpacity onPress={() => {
                   if (IS_WEB && typeof document !== 'undefined') {
                     if (!document.fullscreenElement) {
-                      document.documentElement.requestFullscreen?.().catch(() => {});
+                      const el = webContainerRef.current as any;
+                      const target = el || document.documentElement;
+                      (target.requestFullscreen?.() ?? Promise.resolve()).catch(() => {});
                       setFullscreen(true);
                     } else {
                       document.exitFullscreen?.().catch(() => {});
