@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Headers, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
@@ -43,6 +43,16 @@ export class PaymentsController {
   upsertGateway(@Body() body: UpsertGatewayDto) {
     const { slug, ...dto } = body;
     return this.svc.upsertBySlug(slug, dto);
+  }
+
+  @Post('gateways/:slug/test') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Test gateway credentials (validates keys are non-empty)' })
+  testGateway(
+    @Param('slug') slug: string,
+    @Body() body: { publicKey?: string; secretKey?: string; config?: Record<string, unknown> },
+  ) {
+    const hasKey = !!(body.secretKey || body.publicKey || (body.config && Object.keys(body.config).length > 0));
+    if (!hasKey) throw new BadRequestException('No credentials provided to test');
+    return { success: true, slug, message: 'Credentials accepted — connection will be verified on first transaction' };
   }
 
   @Delete('gateways/:id') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete payment gateway' })

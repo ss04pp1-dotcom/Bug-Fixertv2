@@ -16,7 +16,7 @@ interface AuthState {
   isLoading: boolean;
   setUser: (user: User | null) => void;
   logout: () => Promise<void>;
-  checkAuth: () => void;
+  checkAuth: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }

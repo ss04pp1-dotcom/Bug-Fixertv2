@@ -3,3 +3,4 @@
 - [Subscription path alias](subscription-alias.md) — Mobile calls /subscriptions/me; API has /subscriptions/my; added /me alias
 - [Series player navigation](series-player-nav.md) — always pass series id (not episode id) to /player/[id] with type=series; season param is 1-based episode index
 - [Mobile API endpoint auth mismatches](api-endpoint-auth.md) — several hooks were calling admin-only endpoints; correct public paths documented
+- [StreamPro full bug audit](streamPro-bug-fixes.md) — comprehensive table of all HTTP method and path bugs fixed across mobile api.service.ts, api-hooks.ts, auth-store.ts, API support controller, payments controller, and admin auth/axios-client

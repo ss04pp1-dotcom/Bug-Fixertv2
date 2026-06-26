@@ -98,7 +98,8 @@ export const useUpdateSetting = () => {
 
 // Support
 export const useCreateTicket = () => useMutation({
-  mutationFn: (data: { subject: string; message: string }) => apiClient.post('/support/tickets', data),
+  mutationFn: (data: { subject: string; message: string }) =>
+    apiClient.post('/support', { subject: data.subject, description: data.message }),
 });
 
 // Geo-check — server reads CF-IPCountry header; falls back to unblocked if header absent

@@ -43,10 +43,10 @@ const AuthService = {
     apiClient.get<{ data: unknown }>('/auth/profile'),
 
   updateProfile: (data: { name?: string; email?: string; phone?: string; language?: string; country?: string; avatar?: string }) =>
-    apiClient.patch('/auth/profile', data),
+    apiClient.put('/auth/profile', data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
-    apiClient.post('/auth/change-password', { currentPassword, newPassword }),
+    apiClient.put('/auth/change-password', { currentPassword, newPassword }),
 
   getSessions: () =>
     apiClient.get('/auth/sessions'),
@@ -110,26 +110,24 @@ const SubscriptionService = {
   getPlans: () => apiClient.get('/subscriptions/plans'),
   getMySubscription: () => apiClient.get('/subscriptions/me'),
   subscribe: (planId: string, paymentRef?: string) =>
-    apiClient.post('/subscriptions', { planId, paymentReference: paymentRef }),
+    apiClient.post('/subscriptions/subscribe', { planId, paymentReference: paymentRef }),
   verifyPayment: (data: unknown) => apiClient.post('/subscriptions/verify', data),
-  cancel: () => apiClient.delete('/subscriptions/me'),
+  cancel: () => apiClient.post('/subscriptions/cancel'),
 };
 
 const SupportService = {
-  getTickets: () => apiClient.get('/support/tickets'),
+  getTickets: () => apiClient.get('/support'),
   createTicket: (data: { subject: string; message: string; category?: string }) =>
-    apiClient.post('/support/tickets', data),
-  replyTicket: (id: string, message: string) =>
-    apiClient.post(`/support/tickets/${id}/messages`, { message }),
-  getFAQs: () => apiClient.get('/support/faq'),
+    apiClient.post('/support', { subject: data.subject, description: data.message }),
+  getFAQs: () => apiClient.get('/settings/public'),
 };
 
 const SportService = {
-  getMatches: (params?: Record<string, unknown>) => apiClient.get('/sports/matches', { params }),
-  getMatch: (id: string) => apiClient.get(`/sports/matches/${id}`),
-  getMatchCommentary: (id: string) => apiClient.get(`/sports/matches/${id}/commentary`),
-  setAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alerts`),
-  removeAlert: (matchId: string) => apiClient.delete(`/sports/matches/${matchId}/alerts`),
+  getMatches: (params?: Record<string, unknown>) => apiClient.get('/sports', { params }),
+  getMatch: (id: string) => apiClient.get(`/sports/${id}`),
+  getMatchCommentary: (id: string) => apiClient.get(`/sports/${id}/commentary`),
+  setAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
+  removeAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
 };
 
 const ReviewService = {

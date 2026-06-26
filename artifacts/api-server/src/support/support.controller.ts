@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SupportService } from './support.service';
 
 @ApiTags('support')
@@ -25,8 +26,11 @@ export class SupportController {
   findOne(@Param('id') id: string) { return this.supportService.findOne(id); }
 
   @Post() @Roles('user', 'premium', 'moderator', 'admin', 'super_admin') @ApiOperation({ summary: 'Create ticket' })
-  create(@Body() dto: { userEmail: string; subject: string; description?: string; priority?: string }) {
-    return this.supportService.create(dto);
+  create(
+    @CurrentUser() user: { email: string },
+    @Body() dto: { subject: string; description?: string; priority?: string },
+  ) {
+    return this.supportService.create({ ...dto, userEmail: user.email });
   }
 
   @Put(':id') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Update ticket (admin)' })

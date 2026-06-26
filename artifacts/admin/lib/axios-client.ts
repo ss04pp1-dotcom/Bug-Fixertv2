@@ -64,17 +64,13 @@ apiClient.interceptors.response.use(
       try {
         const refreshToken = getRefreshToken();
 
-        // FIX: Production তে refreshToken null কারণ httpOnly cookie use হয়।
-        // Cookie automatically browser দ্বারা send হয় withCredentials:true দিলে।
-        // Development তে sessionStorage থেকে body তে পাঠাই।
-        if (!refreshToken && process.env.NODE_ENV === 'development') {
-          throw new Error('No refresh token');
+        if (!refreshToken) {
+          throw new Error('No refresh token — please log in again');
         }
-        const requestBody = refreshToken ? { refreshToken } : {};
 
         const { data } = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
           `${API_CONFIG.BASE_URL}/v1/auth/refresh`,
-          requestBody,
+          { refreshToken },
           { withCredentials: true },
         );
 
