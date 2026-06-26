@@ -5,7 +5,7 @@ import {
   X, ChevronUp, ChevronDown, Play, Trash2, RotateCcw, Plus,
   CheckCircle, XCircle, Loader2, Clock, Github, Server,
   Shield, Save, AlertTriangle, Info, ExternalLink, ToggleLeft,
-  ToggleRight, Wifi, WifiOff, ImageIcon, Tag, Type,
+  ToggleRight, Wifi, WifiOff, ImageIcon, Tag, Type, Copy,
 } from "lucide-react";
 import { apiClient } from "@/lib/axios-client";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -776,11 +776,25 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
 
                             {/* HTTP headers (if set) */}
                             {(srv.cookie || srv.userAgent || srv.referer || srv.origin) && (
-                              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/50">
-                                {srv.cookie    && <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-[#8B92A5]">Cookie</span>}
-                                {srv.userAgent && <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-[#8B92A5]">User-Agent</span>}
-                                {srv.referer   && <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-[#8B92A5]">Referer</span>}
-                                {srv.origin    && <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-[#8B92A5]">Origin</span>}
+                              <div className="flex flex-col gap-1 pt-1 border-t border-border/50">
+                                {[
+                                  { label: 'Cookie',     value: srv.cookie },
+                                  { label: 'User-Agent', value: srv.userAgent },
+                                  { label: 'Referer',    value: srv.referer },
+                                  { label: 'Origin',     value: srv.origin },
+                                ].filter(h => h.value).map(h => (
+                                  <div key={h.label} className="flex items-center gap-2 group/hdr">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#8B92A5] shrink-0 font-mono">{h.label}</span>
+                                    <span className="text-[10px] font-mono text-[#8B92A5] truncate flex-1" title={h.value!}>{h.value}</span>
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(h.value!)}
+                                      className="opacity-0 group-hover/hdr:opacity-100 text-[#8B92A5] hover:text-white transition-opacity shrink-0"
+                                      title="Copy"
+                                    >
+                                      <Copy size={10} />
+                                    </button>
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
