@@ -1,8 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform,
+  View, Text, TouchableOpacity, StyleSheet, Platform, AppState,
+  type AppStateStatus,
 } from 'react-native';
-import Animated, { SlideInDown, SlideOutDown, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, {
+  SlideInDown, SlideOutDown, useSharedValue, useAnimatedStyle, withTiming,
+} from 'react-native-reanimated';
 import Constants from 'expo-constants';
 
 const IS_EXPO_GO =
@@ -17,21 +20,45 @@ export default function OtaUpdateBanner() {
   const [error, setError] = useState('');
   const progressAnim = useSharedValue(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkingRef = useRef(false);
 
-  useEffect(() => {
+  const checkForUpdate = useCallback(async () => {
+    if (checkingRef.current) return;
     if (Platform.OS === 'web') return;
     if (IS_EXPO_GO) return;
-    checkForUpdate();
-  }, []);
 
-  async function checkForUpdate() {
+    checkingRef.current = true;
     try {
       const Updates = await import('expo-updates');
-      if (!Updates.isEnabled) return;
+
+      if (!Updates.isEnabled) {
+        console.log('[OTA] Updates not enabled in this build');
+        checkingRef.current = false;
+        return;
+      }
+
+      console.log('[OTA] Checking for update…');
       const result = await Updates.checkForUpdateAsync();
+      console.log('[OTA] isAvailable:', result.isAvailable);
+
       if (result.isAvailable) setState('available');
-    } catch {}
-  }
+    } catch (e: any) {
+      console.warn('[OTA] checkForUpdate error:', e?.message ?? e);
+    } finally {
+      checkingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    checkForUpdate();
+  }, [checkForUpdate]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') checkForUpdate();
+    });
+    return () => sub.remove();
+  }, [checkForUpdate]);
 
   function startProgressTimer() {
     let current = 0;
@@ -63,6 +90,7 @@ export default function OtaUpdateBanner() {
       setTimeout(() => Updates.reloadAsync(), 1200);
     } catch (e: any) {
       if (timerRef.current) clearInterval(timerRef.current);
+      console.warn('[OTA] applyUpdate error:', e?.message ?? e);
       setError('আপডেট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
       setState('available');
       setProgress(0);
