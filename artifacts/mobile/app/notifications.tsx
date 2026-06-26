@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNotifications, useMarkNotificationRead } from '@/lib/api-hooks';
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/lib/api-hooks';
 
 const C = {
   bg: '#0A0A0F',
@@ -100,6 +100,7 @@ const FILTER_TABS = ['All', 'New Releases', 'Live Sports', 'Offers', 'System'];
 export default function NotificationsScreen() {
   const { data, isLoading, isError, refetch } = useNotifications();
   const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
   const [activeTab, setActiveTab] = useState('All');
 
   const notifications: NotificationItem[] = React.useMemo(() => {
@@ -135,7 +136,7 @@ export default function NotificationsScreen() {
   };
 
   const handleMarkAllRead = () => {
-    notifications.filter(n => !n.isRead).forEach(n => markRead.mutate(n.id));
+    markAllRead.mutate();
   };
 
   return (

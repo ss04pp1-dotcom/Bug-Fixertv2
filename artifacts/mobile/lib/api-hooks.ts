@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import apiClient from './api';
 
 // ─── Response helpers ─────────────────────────────────────────────────────────
@@ -62,8 +63,14 @@ export const useNotifications = () => useQuery({ queryKey: ['notifications'], qu
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient();
   return useMutation({
-    // FIX: correct endpoint is /notifications/user/{id}/read
     mutationFn: (id: string) => apiClient.patch(`/notifications/user/${id}/read`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+};
+export const useMarkAllNotificationsRead = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.patch('/notifications/user/read-all'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 };
@@ -90,7 +97,8 @@ export const useCreateTicket = () => useMutation({
 export const useGeoCheck = () => useQuery({ queryKey: ['geo-check'], queryFn: () => apiClient.get('/geo-block/check/auto').then(unwrap), retry: false });
 
 // Force update — correct path is /force-update/check
-export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: 'ios' } }).then(unwrap), retry: false });
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: APP_VERSION, platform: Platform.OS } }).then(unwrap), retry: false });
 
 // Feature flags
 export const useFeatureFlags = () => useQuery({ queryKey: ['feature-flags'], queryFn: () => apiClient.get('/feature-flags/enabled').then(unwrapList) });

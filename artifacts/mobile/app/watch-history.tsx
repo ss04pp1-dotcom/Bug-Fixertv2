@@ -49,7 +49,7 @@ export default function WatchHistoryScreen() {
           onPress: async () => {
             try {
               await apiClient.delete('/watch-history');
-              queryClient.invalidateQueries({ queryKey: ['watch-history'] });
+              queryClient.invalidateQueries({ queryKey: ['continue-watching'] });
             } catch {
               Alert.alert('Error', 'Failed to clear watch history. Please try again.');
             }
