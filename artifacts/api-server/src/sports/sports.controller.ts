@@ -28,6 +28,20 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class SportsController {
   constructor(private sportsService: SportsService) {}
 
+  // ──────────────── Sport Types ────────────────
+
+  @Public()
+  @Get('sports')
+  @ApiOperation({ summary: 'List sport types (football, cricket, etc.)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false })
+  findAllSportTypes(
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.sportsService.findAllSports({ limit: limit ? Number(limit) : 200, search });
+  }
+
   // ──────────────── Matches ────────────────
 
   @Public()

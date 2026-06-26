@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req,
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto } from './dto/payments.dto';
+import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto, UpsertGatewayDto } from './dto/payments.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -40,7 +40,7 @@ export class PaymentsController {
   }
 
   @Post('gateways/upsert') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Upsert gateway by slug' })
-  upsertGateway(@Body() body: { slug: string } & Partial<CreateGatewayDto>) {
+  upsertGateway(@Body() body: UpsertGatewayDto) {
     const { slug, ...dto } = body;
     return this.svc.upsertBySlug(slug, dto);
   }

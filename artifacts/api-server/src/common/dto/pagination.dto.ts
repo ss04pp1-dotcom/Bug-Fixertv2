@@ -90,7 +90,7 @@ export class PaginationDto {
   type?: string;
 
   get skip(): number {
-    return (Number(this.page) || 1 - 1) * (Number(this.limit) || 20);
+    return ((Number(this.page) || 1) - 1) * (Number(this.limit) || 20);
   }
 
   /** Always a number — safe to pass directly to Prisma's `take`. */

@@ -39,6 +39,33 @@ export class WebhookDto {
   metadata?: Record<string, unknown>;
 }
 
+export class UpsertGatewayDto {
+  @IsString()
+  slug: string;
+  @IsOptional() @IsString()
+  name?: string;
+  @IsOptional() @IsBoolean()
+  isActive?: boolean;
+  @IsOptional() @IsBoolean()
+  isTestMode?: boolean;
+  @IsOptional() @IsString()
+  publicKey?: string;
+  @IsOptional() @IsString()
+  secretKey?: string;
+  @IsOptional() @IsString()
+  webhookSecret?: string;
+  @IsOptional() @IsObject()
+  config?: Record<string, unknown>;
+  @IsOptional() @IsNumber()
+  feePercent?: number;
+  @IsOptional() @IsNumber()
+  fixedFee?: number;
+  @IsOptional() @IsArray()
+  currencies?: string[];
+  @IsOptional() @IsArray()
+  countries?: string[];
+}
+
 export class CreateGatewayDto {
   @IsString()
   name: string;
