@@ -322,7 +322,11 @@ export class ChannelsService {
     return this.prisma.channelServer.findMany({
       where: { channelId, deletedAt: null },
       orderBy: { priority: 'asc' },
-      include: { githubSource: { select: { id: true, name: true } } },
+      include: {
+        githubSource: {
+          select: { id: true, name: true, lastSyncAt: true, lastSyncStatus: true, lastSyncMessage: true },
+        },
+      },
     });
   }
 

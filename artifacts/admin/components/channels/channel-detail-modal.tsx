@@ -28,7 +28,13 @@ interface ChannelServer {
   origin?: string | null;
   lastSeenAt?: string | null;
   githubChannelId?: string | null;
-  githubSource?: { id: string; name: string } | null;
+  githubSource?: {
+    id: string;
+    name: string;
+    lastSyncAt?: string | null;
+    lastSyncStatus?: "pending" | "running" | "success" | "failed" | null;
+    lastSyncMessage?: string | null;
+  } | null;
   createdAt: string;
 }
 
@@ -788,6 +794,31 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
               {/* ── GitHub Details Tab ─────────────────────────────────── */}
               {activeTab === "github" && detail.githubChannelId && (
                 <div className="p-6 space-y-5">
+                  {/* Sync Status Banner */}
+                  {(() => {
+                    const ghSrc = servers.find(s => s.sourceType === "GITHUB")?.githubSource;
+                    if (!ghSrc?.lastSyncStatus) return null;
+                    const statusMap: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+                      success: { bg: "bg-green-500/10 border-green-500/20",  text: "text-green-400",  dot: "bg-green-400",  label: "Last sync succeeded" },
+                      failed:  { bg: "bg-red-500/10 border-red-500/20",    text: "text-red-400",    dot: "bg-red-400",    label: "Last sync failed" },
+                      running: { bg: "bg-blue-500/10 border-blue-500/20",   text: "text-blue-400",  dot: "bg-blue-400 animate-pulse",  label: "Sync in progress" },
+                      pending: { bg: "bg-yellow-500/10 border-yellow-500/20", text: "text-yellow-400", dot: "bg-yellow-400", label: "Sync pending" },
+                    };
+                    const s = statusMap[ghSrc.lastSyncStatus] ?? statusMap.pending;
+                    return (
+                      <div className={cn("flex items-start gap-3 px-4 py-3 rounded-xl border", s.bg)}>
+                        <span className={cn("w-2 h-2 rounded-full mt-0.5 shrink-0", s.dot)} />
+                        <div className="min-w-0">
+                          <p className={cn("text-xs font-medium", s.text)}>{s.label} — {ghSrc.name}</p>
+                          {ghSrc.lastSyncMessage && (
+                            <p className="text-[11px] text-[#8B92A5] mt-0.5 truncate">{ghSrc.lastSyncMessage}</p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-[#8B92A5] shrink-0 ml-auto">{formatRelative(ghSrc.lastSyncAt)}</span>
+                      </div>
+                    );
+                  })()}
+
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       {
@@ -821,21 +852,48 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                         mono: false,
                       },
                       {
+                        label: "Last Seen",
+                        value: formatRelative(
+                          servers
+                            .filter(s => s.sourceType === "GITHUB")
+                            .sort((a, b) => new Date(b.lastSeenAt ?? 0).getTime() - new Date(a.lastSeenAt ?? 0).getTime())[0]
+                            ?.lastSeenAt,
+                        ),
+                        mono: false,
+                      },
+                      {
+                        label: "Last Sync",
+                        value: formatRelative(
+                          servers.find(s => s.sourceType === "GITHUB")?.githubSource?.lastSyncAt,
+                        ),
+                        mono: false,
+                      },
+                      {
+                        label: "Sync Status",
+                        value: servers.find(s => s.sourceType === "GITHUB")?.githubSource?.lastSyncStatus ?? "—",
+                        mono: false,
+                        badge: true,
+                      },
+                      {
                         label: "Active Servers",
                         value: String(servers.filter(s => s.enabled).length),
                         mono: false,
                       },
-                      {
-                        label: "Last Seen",
-                        value: formatRelative(servers
-                          .filter(s => s.sourceType === "GITHUB")
-                          .sort((a, b) => new Date(b.lastSeenAt ?? 0).getTime() - new Date(a.lastSeenAt ?? 0).getTime())[0]?.lastSeenAt),
-                        mono: false,
-                      },
-                    ].map(({ label, value, mono }) => (
+                    ].map(({ label, value, mono, badge }) => (
                       <div key={label} className="bg-background/60 border border-border rounded-xl p-4">
                         <div className="text-xs text-[#8B92A5] mb-1">{label}</div>
-                        <div className={cn("text-sm text-white", mono && "font-mono break-all")}>{value}</div>
+                        {badge ? (
+                          <span className={cn(
+                            "inline-block text-xs px-2 py-0.5 rounded-full font-medium capitalize",
+                            value === "success" ? "bg-green-500/15 text-green-400"
+                            : value === "failed"  ? "bg-red-500/15 text-red-400"
+                            : value === "running" ? "bg-blue-500/15 text-blue-400"
+                            : value === "pending" ? "bg-yellow-500/15 text-yellow-400"
+                            : "bg-white/5 text-[#8B92A5]"
+                          )}>{value}</span>
+                        ) : (
+                          <div className={cn("text-sm text-white", mono && "font-mono break-all")}>{value}</div>
+                        )}
                       </div>
                     ))}
                   </div>
