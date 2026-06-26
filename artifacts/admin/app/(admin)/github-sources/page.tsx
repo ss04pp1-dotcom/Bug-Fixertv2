@@ -197,7 +197,8 @@ export default function GitHubSourcesPage() {
             <p className="text-sm">No GitHub sources yet. Add one to start syncing.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px]">
             <thead className="border-b border-border bg-white/[0.02]">
               <tr>
                 {["Source", "Status", "Channels", "Servers", "Last Sync", "Next Sync", "Actions"].map(h => (
@@ -338,6 +339,7 @@ export default function GitHubSourcesPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
