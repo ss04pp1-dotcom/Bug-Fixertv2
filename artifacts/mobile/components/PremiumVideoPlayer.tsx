@@ -90,50 +90,6 @@ function getVideoType(fmt: StreamFormat): string | undefined {
   }
 }
 
-// ─── URL Reachability ─────────────────────────────────────────────────────────
-interface UrlCheckResult {
-  reachable: boolean;
-  status: number;
-  contentType: string;
-  contentLength: string;
-  acceptRanges: string;
-  finalUrl: string;
-  error?: string;
-}
-
-async function checkUrlReachability(url: string, headers: Record<string, string>): Promise<UrlCheckResult> {
-  const start = Date.now();
-  try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, {
-      method: 'HEAD',
-      headers,
-      redirect: 'follow',
-      signal: ctrl.signal,
-    });
-    clearTimeout(timeout);
-    const result: UrlCheckResult = {
-      reachable: res.ok || res.status === 206,
-      status: res.status,
-      contentType: res.headers.get('content-type') || '',
-      contentLength: res.headers.get('content-length') || '',
-      acceptRanges: res.headers.get('accept-ranges') || '',
-      finalUrl: res.url || url,
-    };
-    VideoLog.info('URL_CHECK', `${res.status} in ${Date.now() - start}ms`, {
-      url: url.slice(0, 80),
-      contentType: result.contentType,
-      reachable: result.reachable,
-    });
-    return result;
-  } catch (e: any) {
-    const err = e?.message || 'Network error';
-    VideoLog.error('URL_CHECK', err, { url: url.slice(0, 80) });
-    return { reachable: false, status: 0, contentType: '', contentLength: '', acceptRanges: '', finalUrl: url, error: err };
-  }
-}
-
 // ─── Video Logger ─────────────────────────────────────────────────────────────
 type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'EVENT';
 interface LogEntry { ts: number; level: LogLevel; tag: string; msg: string; data?: any; }
@@ -146,10 +102,12 @@ class VideoLoggerClass {
     const entry: LogEntry = { ts: Date.now(), level, tag, msg, data };
     this.entries.unshift(entry);
     if (this.entries.length > this.maxEntries) this.entries.pop();
-    const prefix = `[IPTV][${level}][${tag}]`;
-    if (level === 'ERROR') console.error(prefix, msg, data ?? '');
-    else if (level === 'WARN') console.warn(prefix, msg, data ?? '');
-    else console.log(prefix, msg, data ? JSON.stringify(data).slice(0, 200) : '');
+    if (__DEV__) {
+      const prefix = `[IPTV][${level}][${tag}]`;
+      if (level === 'ERROR') console.error(prefix, msg, data ?? '');
+      else if (level === 'WARN') console.warn(prefix, msg, data ?? '');
+      else console.log(prefix, msg, data ? JSON.stringify(data).slice(0, 200) : '');
+    }
   }
 
   info  = (tag: string, msg: string, data?: any) => this.add('INFO',  tag, msg, data);
@@ -485,105 +443,6 @@ function NativeIPTVPlayer({
   }
 }
 
-// ─── Debug Panel ──────────────────────────────────────────────────────────────
-function DebugPanel({
-  url, streamFormat, urlCheck, videoTracks, audioTracks, textTracks, logs, onClose,
-}: {
-  url: string; streamFormat: StreamFormat; urlCheck: UrlCheckResult | null;
-  videoTracks: any[]; audioTracks: any[]; textTracks: any[];
-  logs: LogEntry[]; onClose: () => void;
-}) {
-  const fmt_compat: Record<string, '✓' | '✗' | '?'> = {
-    'MP4':    '✓', 'M3U8/HLS': '✓', 'TS/MPEGTS': '✓',
-    'MKV':    '✓', 'WEBM': '✓', 'DASH/MPD': '✓',
-    'MOV':    '✓', 'AVI': '?',
-  };
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={db.overlay}>
-        <View style={db.panel}>
-          <View style={db.header}>
-            <Text style={db.title}>🛠 Debug Panel</Text>
-            <TouchableOpacity onPress={onClose} style={db.closeBtn}>
-              <Ionicons name="close" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-          {/* URL info */}
-          <Text style={db.section}>Stream Info</Text>
-          <Text style={db.mono} numberOfLines={2}>{url}</Text>
-          <Text style={db.row}>
-            Format: <Text style={db.val}>{streamFormat}</Text>
-            {'  '}Status: <Text style={[db.val, { color: urlCheck?.reachable ? C.green : C.live }]}>
-              {urlCheck ? urlCheck.status : 'checking…'}
-            </Text>
-          </Text>
-          {urlCheck && (
-            <>
-              <Text style={db.row}>Content-Type: <Text style={db.val}>{urlCheck.contentType || '–'}</Text></Text>
-              <Text style={db.row}>Accept-Ranges: <Text style={db.val}>{urlCheck.acceptRanges || '–'}</Text></Text>
-              {urlCheck.error && <Text style={[db.row, { color: C.live }]}>Error: {urlCheck.error}</Text>}
-            </>
-          )}
-
-          {/* Format compatibility */}
-          <Text style={db.section}>Format Support (ExoPlayer)</Text>
-          <View style={db.grid}>
-            {Object.entries(fmt_compat).map(([f, ok]) => (
-              <Text key={f} style={[db.chip, { color: ok === '✓' ? C.green : ok === '✗' ? C.live : C.dim }]}>
-                {ok} {f}
-              </Text>
-            ))}
-          </View>
-
-          {/* Tracks */}
-          {videoTracks.length > 0 && (
-            <>
-              <Text style={db.section}>Video Tracks ({videoTracks.length})</Text>
-              {videoTracks.map((t: any, i: number) => (
-                <Text key={i} style={db.row}>
-                  #{i}: <Text style={db.val}>{t.width}×{t.height} {t.codecs || ''} {t.bitrate ? `${Math.round(t.bitrate/1000)}kbps` : ''}</Text>
-                </Text>
-              ))}
-            </>
-          )}
-          {audioTracks.length > 0 && (
-            <>
-              <Text style={db.section}>Audio Tracks ({audioTracks.length})</Text>
-              {audioTracks.map((t: any, i: number) => (
-                <Text key={i} style={db.row}>#{i}: <Text style={db.val}>{t.language || 'default'} — {t.title || t.type || ''}</Text></Text>
-              ))}
-            </>
-          )}
-
-          {/* Logs */}
-          <Text style={db.section}>Recent Logs</Text>
-          {logs.slice(0, 12).map((l, i) => (
-            <Text key={i} style={[db.log, { color: l.level === 'ERROR' ? C.live : l.level === 'WARN' ? '#F59E0B' : C.dim }]} numberOfLines={2}>
-              [{l.level}][{l.tag}] {l.msg}
-            </Text>
-          ))}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const db = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  panel: { backgroundColor: '#0D0D1A', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  section: { color: C.primary, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 12, marginBottom: 4, textTransform: 'uppercase' },
-  mono: { color: '#e5e7eb', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 4 },
-  row: { color: C.dim, fontSize: 11, marginBottom: 2 },
-  val: { color: '#e5e7eb', fontWeight: '600' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { fontSize: 11, fontWeight: '600' },
-  log: { fontSize: 10, lineHeight: 14, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-});
-
 // ─── Settings Sheet ───────────────────────────────────────────────────────────
 const SPEED_OPTS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 const ASPECT_CYCLE = ['contain', 'cover', 'stretch', 'none'] as const;
@@ -732,7 +591,6 @@ export default function PremiumVideoPlayer({
   // ── Stream source state ────────────────────────────────────────────────────
   const [srcIdx, setSrcIdx]         = useState(0);
   const [streamFormat, setFormat]   = useState<StreamFormat>('UNKNOWN');
-  const [urlCheck, setUrlCheck]     = useState<UrlCheckResult | null>(null);
 
   // ── Playback state ─────────────────────────────────────────────────────────
   const [isPlaying, setPlaying]     = useState(true);
@@ -753,8 +611,6 @@ export default function PremiumVideoPlayer({
   const [speed, setSpeed]           = useState(1.0);
   const [pip, setPip]               = useState(false);
   const [pipActive, setPipActive]   = useState(false);
-  const [showDebug, setShowDebug]   = useState(false);
-  const [debugLogs, setDebugLogs]   = useState<LogEntry[]>([]);
 
   // ── Tracks ─────────────────────────────────────────────────────────────────
   const [videoTracks, setVideoTracks] = useState<any[]>([]);
@@ -777,8 +633,6 @@ export default function PremiumVideoPlayer({
   const hideTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef      = useRef<{ time: number; x: number } | null>(null);
-  const debugTapCount   = useRef(0);
-  const debugTapTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const swipeStartY     = useRef(0);
   const swipeStartV     = useRef(0.7);
   const swipeSide       = useRef<'left' | 'right'>('right');
@@ -806,19 +660,9 @@ export default function PremiumVideoPlayer({
     setSelVid(-1); setSelAud(-1); setSelSub(-1);
 
     VideoLog.info('SOURCE', `Loaded source #${srcIdx}`, {
-      url: src.url.slice(0, 100),
       format: fmt,
       label: src.label,
     });
-    VideoLog.info('SOURCE', `VIDEO URL: ${src.url}`);
-    VideoLog.info('SOURCE', `VIDEO TYPE: ${typeof src.url}`);
-    VideoLog.info('SOURCE', `DETECTED FORMAT: ${fmt}`);
-
-    // Async URL check — include the source's own headers so auth/cookie streams test correctly
-    if (!IS_WEB) {
-      const headers = { ...DEFAULT_HEADERS, ...(src.headers ?? {}) };
-      checkUrlReachability(src.url, headers).then(setUrlCheck);
-    }
   }, [src?.url, src?.headers, srcIdx]);
 
   // ── Build native source object ─────────────────────────────────────────────
@@ -836,11 +680,8 @@ export default function PremiumVideoPlayer({
       ...(videoType ? { type: videoType } : {}),
     };
     VideoLog.info('SOURCE', 'Built native source', {
-      uri: built.uri.slice(0, 80),
       type: videoType || 'auto-detect',
       headerKeys: Object.keys(built.headers),
-      hasCookie: !!built.headers['Cookie'],
-      hasReferer: !!built.headers['Referer'],
     });
     return built;
   }, [src?.url, src?.headers, streamFormat]);
@@ -1058,18 +899,6 @@ export default function PremiumVideoPlayer({
     bumpCtrl();
   }, [srcIdx, onRefreshStream, bumpCtrl]);
 
-  // ── Debug tap (5 taps center) ──────────────────────────────────────────────
-  const handleDebugTap = useCallback(() => {
-    debugTapCount.current += 1;
-    if (debugTapTimer.current) clearTimeout(debugTapTimer.current);
-    debugTapTimer.current = setTimeout(() => { debugTapCount.current = 0; }, 1500);
-    if (debugTapCount.current >= 5) {
-      debugTapCount.current = 0;
-      setDebugLogs(VideoLog.getEntries());
-      setShowDebug(true);
-    }
-  }, []);
-
   // ── PanResponder ───────────────────────────────────────────────────────────
   const vidW = fullscreen ? Math.max(dims.width, dims.height) : dims.width;
 
@@ -1106,7 +935,6 @@ export default function PremiumVideoPlayer({
           setTimeout(() => {
             if (lastTapRef.current && Date.now() - lastTapRef.current.time >= 340) {
               lastTapRef.current = null;
-              handleDebugTap();
               if (showCtrlRef.current) {
                 hideCtrlNow();
               } else {
@@ -1229,9 +1057,6 @@ export default function PremiumVideoPlayer({
           <Text style={p.overlayTxt}>
             {isLoading ? 'Loading…' : isLive ? 'Buffering live stream…' : 'Buffering…'}
           </Text>
-          {urlCheck && !urlCheck.reachable && (
-            <Text style={p.overlayWarn}>⚠ Stream may be offline ({urlCheck.status || 'no response'})</Text>
-          )}
         </View>
       )}
 
@@ -1258,11 +1083,6 @@ export default function PremiumVideoPlayer({
               <Text style={p.retryTxt}>Retry</Text>
             </TouchableOpacity>
           </View>
-          {urlCheck && (
-            <Text style={p.debugHint}>
-              HTTP {urlCheck.status} · {urlCheck.contentType || 'no content-type'}
-            </Text>
-          )}
         </View>
       )}
 
@@ -1325,10 +1145,9 @@ export default function PremiumVideoPlayer({
 
               <View style={{ flex: 1, marginHorizontal: 8 }}>
                 <Text style={p.titleTxt} numberOfLines={1}>{title}</Text>
-                <Text style={p.formatBadge}>
-                  {streamFormat !== 'UNKNOWN' ? streamFormat : ''}
-                  {urlCheck?.reachable ? ' · ✓' : urlCheck ? ' · ✗ offline' : ''}
-                </Text>
+                {streamFormat !== 'UNKNOWN' && (
+                  <Text style={p.formatBadge}>{streamFormat}</Text>
+                )}
               </View>
 
               <View style={p.topRight}>
@@ -1549,14 +1368,6 @@ export default function PremiumVideoPlayer({
         selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
       />
 
-      {/* ── Debug panel (5-tap to open) ──────────────────────────────────── */}
-      {showDebug && (
-        <DebugPanel
-          url={src?.url || ''} streamFormat={streamFormat} urlCheck={urlCheck}
-          videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
-          logs={debugLogs} onClose={() => setShowDebug(false)}
-        />
-      )}
     </View>
   );
 }
@@ -1572,10 +1383,8 @@ const p = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.75)',
   },
   overlayTxt:  { color: C.dim, fontSize: 13, marginTop: 6 },
-  overlayWarn: { color: '#F59E0B', fontSize: 11, marginTop: 4 },
   errorTxt:    { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 8, textAlign: 'center' },
   errorSub:    { color: C.dim, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
-  debugHint:   { color: C.dim, fontSize: 10, marginTop: 8 },
   errorActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   retryBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: C.primary, borderRadius: 22 },
   retryTxt:    { color: '#fff', fontWeight: '700', fontSize: 14 },

@@ -106,7 +106,7 @@ export default function MovieDetailsScreen() {
         message: `Check out ${movie?.title} on StreamPro!`,
       });
     } catch (error) {
-      console.log('Share error:', error);
+      if (__DEV__) console.log('Share error:', error);
     }
   };
 

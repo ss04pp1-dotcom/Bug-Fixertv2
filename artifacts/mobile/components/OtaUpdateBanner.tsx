@@ -32,18 +32,14 @@ export default function OtaUpdateBanner() {
       const Updates = await import('expo-updates');
 
       if (!Updates.isEnabled) {
-        console.log('[OTA] Updates not enabled in this build');
         checkingRef.current = false;
         return;
       }
 
-      console.log('[OTA] Checking for update…');
       const result = await Updates.checkForUpdateAsync();
-      console.log('[OTA] isAvailable:', result.isAvailable);
-
       if (result.isAvailable) setState('available');
     } catch (e: any) {
-      console.warn('[OTA] checkForUpdate error:', e?.message ?? e);
+      if (__DEV__) console.warn('[OTA] checkForUpdate error:', e?.message ?? e);
     } finally {
       checkingRef.current = false;
     }
@@ -90,7 +86,7 @@ export default function OtaUpdateBanner() {
       setTimeout(() => Updates.reloadAsync(), 1200);
     } catch (e: any) {
       if (timerRef.current) clearInterval(timerRef.current);
-      console.warn('[OTA] applyUpdate error:', e?.message ?? e);
+      if (__DEV__) console.warn('[OTA] applyUpdate error:', e?.message ?? e);
       setError('আপডেট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
       setState('available');
       setProgress(0);

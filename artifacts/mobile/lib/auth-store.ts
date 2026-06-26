@@ -66,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
       set({ user });
     } catch (err) {
-      console.warn('[auth-store] Profile update failed:', err instanceof Error ? err.message : err);
+      if (__DEV__) console.warn('[auth-store] Profile update failed:', err instanceof Error ? err.message : err);
       throw err;
     }
   },
@@ -83,7 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
       set({ user, isAuthenticated: true });
     } catch (err) {
-      console.warn('[auth-store] Profile refresh failed:', err instanceof Error ? err.message : err);
+      if (__DEV__) console.warn('[auth-store] Profile refresh failed:', err instanceof Error ? err.message : err);
     }
   },
 }));

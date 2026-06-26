@@ -1,7 +1,6 @@
 /**
- * StreamPro — IPTV Compatibility Report
- * Tests HLS, DASH, MPEGTS, MP4, MKV, WEBM against real public streams
- * Shows: reachability, content-type, latency, ExoPlayer codec support, final report
+ * StreamPro — IPTV Compatibility Report (Development Only)
+ * This screen is only accessible in development builds (__DEV__ === true).
  */
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
@@ -543,6 +542,10 @@ function buildReport(results: Record<string, TestResult>): string {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function IPTVReportScreen() {
+  if (!__DEV__) {
+    return <Redirect href="/(main)" />;
+  }
+
   const insets = useSafeAreaInsets();
   const [results, setResults] = useState<Record<string, TestResult>>(
     Object.fromEntries(TEST_STREAMS.map(s => [s.id, defaultResult()]))

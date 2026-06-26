@@ -125,7 +125,7 @@ export default function SeriesDetailsScreen() {
         message: `Watch ${series?.title} on StreamPro!`,
       });
     } catch (error) {
-      console.log('Share error:', error);
+      if (__DEV__) console.log('Share error:', error);
     }
   };
 

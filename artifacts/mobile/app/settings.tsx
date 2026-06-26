@@ -63,12 +63,12 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: 'v2.4.1' },
     ],
   },
-  {
+  ...(__DEV__ ? [{
     title: 'Diagnostics',
     items: [
       { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline', iconColor: '#8B5CF6', type: 'nav', route: '/iptv-report' },
     ],
-  },
+  }] : []),
 ];
 
 export default function SettingsScreen() {
