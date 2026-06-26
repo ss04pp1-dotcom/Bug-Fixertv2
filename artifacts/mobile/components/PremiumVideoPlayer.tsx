@@ -814,32 +814,36 @@ export default function PremiumVideoPlayer({
     VideoLog.info('SOURCE', `VIDEO TYPE: ${typeof src.url}`);
     VideoLog.info('SOURCE', `DETECTED FORMAT: ${fmt}`);
 
-    // Async URL check
+    // Async URL check — include the source's own headers so auth/cookie streams test correctly
     if (!IS_WEB) {
-      const headers = { ...DEFAULT_HEADERS };
+      const headers = { ...DEFAULT_HEADERS, ...(src.headers ?? {}) };
       checkUrlReachability(src.url, headers).then(setUrlCheck);
     }
-  }, [src?.url, srcIdx]);
+  }, [src?.url, src?.headers, srcIdx]);
 
   // ── Build native source object ─────────────────────────────────────────────
   const nativeSource = useMemo(() => {
     if (!src?.url) return null;
     const videoType = getVideoType(streamFormat);
+    // Merge: DEFAULT_HEADERS (baseline) → src.headers (server-specific Cookie/UA/Referer/Origin)
+    // Server headers take priority so they are not overwritten by hardcoded defaults.
     const built = {
       uri: src.url,
       headers: {
         ...DEFAULT_HEADERS,
-        'Referer': 'https://streampro.app',
+        ...(src.headers ?? {}),
       },
       ...(videoType ? { type: videoType } : {}),
     };
     VideoLog.info('SOURCE', 'Built native source', {
       uri: built.uri.slice(0, 80),
       type: videoType || 'auto-detect',
-      headers: Object.keys(built.headers),
+      headerKeys: Object.keys(built.headers),
+      hasCookie: !!built.headers['Cookie'],
+      hasReferer: !!built.headers['Referer'],
     });
     return built;
-  }, [src?.url, streamFormat]);
+  }, [src?.url, src?.headers, streamFormat]);
 
   // ── Selected tracks for react-native-video ─────────────────────────────────
   const selectedVideoTrack = useMemo(() =>
