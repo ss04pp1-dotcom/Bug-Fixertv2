@@ -301,7 +301,7 @@ model Channel {
   @@index([categoryId])
   @@index([createdAt])
   @@index([lastActiveAt])
-  @@index([normalizedName])
+  @@unique([normalizedName])
   @@map("channels")
 }
 

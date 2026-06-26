@@ -1,14 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GitHubSyncStatus, ServerSourceType } from '@prisma/client';
 import { M3uParser } from './parsers/m3u.parser';
 import { JsonParser } from './parsers/json.parser';
 import { ParsedChannel } from './parsers/parser.interface';
 
+/**
+ * Normalise a channel name for deduplication.
+ * Collapses whitespace, hyphens, underscores and dots into a single space
+ * so that "Sony HD", "SONY HD", "Sony-HD", "Sony_HD" and "Sony.HD" all
+ * produce the same key: "sony hd".
+ */
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[\s\-_]+/g, ' ')
+    .replace(/[\s\-_\.]+/g, ' ')
     .trim();
 }
 
@@ -28,6 +34,9 @@ function uniqueSlug(base: string, existing: Set<string>): string {
   return slug;
 }
 
+/** Prisma error code for a unique-constraint violation */
+const P2002 = 'P2002';
+
 interface ExistingServer {
   id: string;
   channelId: string;
@@ -36,11 +45,95 @@ interface ExistingServer {
 }
 
 @Injectable()
-export class GitHubSyncService {
+export class GitHubSyncService implements OnModuleInit {
   private readonly logger = new Logger(GitHubSyncService.name);
   private readonly parsers = [new JsonParser(), new M3uParser()];
 
   constructor(private prisma: PrismaService) {}
+
+  // ── Startup: clean up any existing duplicate channels ─────────────────────
+
+  async onModuleInit(): Promise<void> {
+    await this.deduplicateExistingChannels();
+  }
+
+  /**
+   * Merges any Channel rows that share the same normalizedName (idempotent).
+   * Keeps the oldest row, reassigns all ChannelServer rows to it, and
+   * soft-deletes the duplicates. Must run before the @@unique constraint
+   * is enforced so that stale duplicates don't block schema pushes.
+   */
+  async deduplicateExistingChannels(): Promise<void> {
+    const dupeGroups = await this.prisma.$queryRaw<
+      { normalizedName: string; ids: string[] }[]
+    >`
+      SELECT
+        normalized_name        AS "normalizedName",
+        array_agg(id::text ORDER BY created_at ASC) AS ids
+      FROM channels
+      WHERE normalized_name IS NOT NULL
+        AND deleted_at IS NULL
+      GROUP BY normalized_name
+      HAVING count(*) > 1
+    `;
+
+    if (dupeGroups.length === 0) return;
+
+    this.logger.warn(
+      `deduplicateExistingChannels: ${dupeGroups.length} duplicate group(s) found — merging…`,
+    );
+
+    for (const group of dupeGroups) {
+      const [keepId, ...removeIds] = group.ids;
+
+      // Re-assign servers from duplicate channels to the keeper
+      await this.prisma.channelServer.updateMany({
+        where: { channelId: { in: removeIds } },
+        data: { channelId: keepId },
+      });
+
+      // Re-assign playback events
+      await this.prisma.$executeRaw`
+        UPDATE playback_events
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
+
+      // Re-assign EPG programs
+      await this.prisma.$executeRaw`
+        UPDATE epg_programs
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
+
+      // Re-assign favorites — drop any that would collide with an existing
+      // favorite for the keeper, then reassign the rest.
+      await this.prisma.$executeRaw`
+        DELETE FROM favorites
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+          AND EXISTS (
+            SELECT 1 FROM favorites f2
+            WHERE f2.user_id = favorites.user_id
+              AND f2.channel_id = ${keepId}::uuid
+          )
+      `;
+      await this.prisma.$executeRaw`
+        UPDATE favorites
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
+
+      // Soft-delete the duplicate rows
+      await this.prisma.channel.updateMany({
+        where: { id: { in: removeIds } },
+        data: { deletedAt: new Date() },
+      });
+
+      this.logger.log(`Merged ${removeIds.length} duplicate(s) → kept channel ${keepId}`);
+    }
+  }
+
+  // ── Public sync entry point ────────────────────────────────────────────────
 
   async syncSource(sourceId: string): Promise<void> {
     const source = await this.prisma.gitHubSource.findUnique({ where: { id: sourceId } });
@@ -151,7 +244,7 @@ export class GitHubSyncService {
     parsed: ParsedChannel[],
     stats: { added: number; updated: number; deleted: number; failed: number },
   ): Promise<void> {
-    // All active servers from this source (used for soft-delete of removed entries)
+    // Active servers from this source (used for soft-delete of removed entries)
     const existingServers: ExistingServer[] = await this.prisma.channelServer.findMany({
       where: { githubSourceId: sourceId, deletedAt: null },
       select: { id: true, channelId: true, link: true, githubChannelId: true },
@@ -159,20 +252,22 @@ export class GitHubSyncService {
 
     const seenServerIds = new Set<string>();
 
-    // Build dedup maps from all channels
+    // Build in-memory dedup maps from the current DB snapshot.
+    // These are updated after each successful channel create so later items
+    // in the same sync don't trigger redundant DB lookups.
     const allChannels = await this.prisma.channel.findMany({
       where: { deletedAt: null },
       select: { id: true, normalizedName: true, githubChannelId: true, slug: true },
     });
-    const byNorm = new Map<string, string>();
-    const byGhId = new Map<string, string>();
+    const byNorm = new Map<string, string>();   // normalizedName → channelId
+    const byGhId = new Map<string, string>();   // githubChannelId → channelId
     const slugSet = new Set<string>(allChannels.map(c => c.slug));
     for (const ch of allChannels) {
       if (ch.normalizedName) byNorm.set(ch.normalizedName, ch.id);
       if (ch.githubChannelId) byGhId.set(ch.githubChannelId, ch.id);
     }
 
-    // Process in batches of 100 items, each batch in a transaction
+    // Process in batches of 100 items
     const BATCH = 100;
     for (let i = 0; i < parsed.length; i += BATCH) {
       await this.processBatch(
@@ -202,6 +297,12 @@ export class GitHubSyncService {
     }
   }
 
+  /**
+   * Process a slice of parsed channels.
+   *
+   * Each item is handled individually (no shared batch transaction) so that a
+   * failure or unique-constraint race on one item does not roll back the others.
+   */
   private async processBatch(
     batch: ParsedChannel[],
     sourceId: string,
@@ -212,105 +313,166 @@ export class GitHubSyncService {
     slugSet: Set<string>,
     stats: { added: number; updated: number; deleted: number; failed: number },
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      for (const item of batch) {
-        try {
-          const normalized = normalizeName(item.name);
-
-          // Resolve channel: githubChannelId → normalizedName → create
-          let channelId: string | undefined =
-            (item.githubChannelId ? byGhId.get(item.githubChannelId) : undefined) ??
-            byNorm.get(normalized);
-
-          if (!channelId) {
-            const slug = uniqueSlug(slugify(item.name), slugSet);
-            const created = await tx.channel.create({
-              data: {
-                name: item.name,
-                slug,
-                normalizedName: normalized,
-                githubChannelId: item.githubChannelId ?? null,
-                logo: item.logo ?? null,
-                primaryStreamUrl: item.link,
-                isActive: true,
-              },
-              select: { id: true },
-            });
-            channelId = created.id;
-            byNorm.set(normalized, channelId);
-            if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
-            stats.added++;
-          } else {
-            // Update from GitHub, but never overwrite fields the admin has explicitly set
-            const ch = await tx.channel.findUnique({
-              where: { id: channelId },
-              select: { adminLogoOverride: true, adminNameOverride: true },
-            });
-            const updateData: Record<string, unknown> = { normalizedName: normalized };
-            if (!ch?.adminNameOverride) updateData.name = item.name;
-            if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
-            await tx.channel.update({ where: { id: channelId }, data: updateData });
-          }
-
-          // Find existing server for this source + channel (by githubChannelId or channelId)
-          const existingServer =
-            (item.githubChannelId
-              ? existingServers.find(s => s.githubChannelId === item.githubChannelId)
-              : undefined) ??
-            existingServers.find(s => s.channelId === channelId);
-
-          if (existingServer) {
-            await tx.channelServer.update({
-              where: { id: existingServer.id },
-              data: {
-                channelId,
-                link: item.link,
-                cookie: item.cookie ?? null,
-                userAgent: item.userAgent ?? null,
-                referer: item.referer ?? null,
-                origin: item.origin ?? null,
-                lastSeenAt: new Date(),
-                deletedAt: null,
-                enabled: true,
-              },
-            });
-            seenServerIds.add(existingServer.id);
-            stats.updated++;
-          } else {
-            const newServer = await tx.channelServer.create({
-              data: {
-                channelId,
-                link: item.link,
-                cookie: item.cookie ?? null,
-                userAgent: item.userAgent ?? null,
-                referer: item.referer ?? null,
-                origin: item.origin ?? null,
-                priority: 100,
-                sourceType: ServerSourceType.GITHUB,
-                githubSourceId: sourceId,
-                githubChannelId: item.githubChannelId ?? null,
-                healthCheckEnabled: false,
-                createdBySync: true,
-                lastSeenAt: new Date(),
-                enabled: true,
-              },
-              select: { id: true },
-            });
-            seenServerIds.add(newServer.id);
-            existingServers.push({
-              id: newServer.id,
-              channelId,
-              link: item.link,
-              githubChannelId: item.githubChannelId ?? null,
-            });
-            stats.updated++;
-          }
-        } catch (e: any) {
-          this.logger.warn(`Failed to process "${item.name}": ${e.message}`);
-          stats.failed++;
-        }
+    for (const item of batch) {
+      try {
+        await this.processItem(
+          item, sourceId, existingServers, seenServerIds, byNorm, byGhId, slugSet, stats,
+        );
+      } catch (e: any) {
+        this.logger.warn(`Failed to process "${item.name}": ${e.message}`);
+        stats.failed++;
       }
-    });
+    }
+  }
+
+  /**
+   * Resolve (or create) the Channel and ChannelServer records for one parsed entry.
+   *
+   * Channel deduplication order:
+   *   1. githubChannelId match in the in-memory map   (same tvg-id)
+   *   2. normalizedName  match in the in-memory map   (within this sync)
+   *   3. normalizedName  match re-queried from the DB  (concurrent sync created it)
+   *   4. INSERT with catch of P2002 + re-fetch         (true race condition)
+   *
+   * Server deduplication (per source):
+   *   Match by githubChannelId first, then by channelId + exact link.
+   *   This lets the same source supply multiple distinct URLs for the same
+   *   channel — each URL becomes its own ChannelServer row.
+   */
+  private async processItem(
+    item: ParsedChannel,
+    sourceId: string,
+    existingServers: ExistingServer[],
+    seenServerIds: Set<string>,
+    byNorm: Map<string, string>,
+    byGhId: Map<string, string>,
+    slugSet: Set<string>,
+    stats: { added: number; updated: number; deleted: number; failed: number },
+  ): Promise<void> {
+    const normalized = normalizeName(item.name);
+    if (!normalized) return;
+
+    // ── 1. Resolve Channel ───────────────────────────────────────────────────
+
+    let channelId: string | undefined =
+      (item.githubChannelId ? byGhId.get(item.githubChannelId) : undefined) ??
+      byNorm.get(normalized);
+
+    if (!channelId) {
+      // Maps were built before the sync started; another concurrent sync for a
+      // different source may have created this channel since then — check the DB.
+      const existingInDb = await this.prisma.channel.findFirst({
+        where: { normalizedName: normalized, deletedAt: null },
+        select: { id: true },
+      });
+
+      if (existingInDb) {
+        // Concurrent sync already created it — adopt it
+        channelId = existingInDb.id;
+        byNorm.set(normalized, channelId);
+        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
+      } else {
+        // Genuinely new — create it
+        const slug = uniqueSlug(slugify(item.name), slugSet);
+        try {
+          const created = await this.prisma.channel.create({
+            data: {
+              name: item.name,
+              slug,
+              normalizedName: normalized,
+              githubChannelId: item.githubChannelId ?? null,
+              logo: item.logo ?? null,
+              primaryStreamUrl: item.link,
+              isActive: true,
+            },
+            select: { id: true },
+          });
+          channelId = created.id;
+          stats.added++;
+        } catch (e: any) {
+          if (e?.code !== P2002) throw e;
+          // Another process won the race — re-fetch the winner
+          const winner = await this.prisma.channel.findFirst({
+            where: { normalizedName: normalized, deletedAt: null },
+            select: { id: true },
+          });
+          if (!winner) throw e;   // should never happen
+          channelId = winner.id;
+        }
+
+        byNorm.set(normalized, channelId);
+        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
+      }
+    } else {
+      // Channel already exists — sync non-overridden metadata from source
+      const ch = await this.prisma.channel.findUnique({
+        where: { id: channelId },
+        select: { adminLogoOverride: true, adminNameOverride: true },
+      });
+      const updateData: Record<string, unknown> = { normalizedName: normalized };
+      if (!ch?.adminNameOverride) updateData.name = item.name;
+      if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
+      await this.prisma.channel.update({ where: { id: channelId }, data: updateData });
+    }
+
+    // ── 2. Resolve ChannelServer ─────────────────────────────────────────────
+    //
+    // existingServers is already filtered to this githubSourceId, so each
+    // source manages only its own server rows.  Matching by (channelId + link)
+    // means the same channel listed twice with different URLs gets two rows.
+
+    const existingServer =
+      (item.githubChannelId
+        ? existingServers.find(s => s.githubChannelId === item.githubChannelId)
+        : undefined) ??
+      existingServers.find(s => s.channelId === channelId && s.link === item.link);
+
+    if (existingServer) {
+      await this.prisma.channelServer.update({
+        where: { id: existingServer.id },
+        data: {
+          channelId,
+          link: item.link,
+          cookie: item.cookie ?? null,
+          userAgent: item.userAgent ?? null,
+          referer: item.referer ?? null,
+          origin: item.origin ?? null,
+          lastSeenAt: new Date(),
+          deletedAt: null,
+          enabled: true,
+        },
+      });
+      seenServerIds.add(existingServer.id);
+      stats.updated++;
+    } else {
+      const newServer = await this.prisma.channelServer.create({
+        data: {
+          channelId,
+          link: item.link,
+          cookie: item.cookie ?? null,
+          userAgent: item.userAgent ?? null,
+          referer: item.referer ?? null,
+          origin: item.origin ?? null,
+          priority: 100,
+          sourceType: ServerSourceType.GITHUB,
+          githubSourceId: sourceId,
+          githubChannelId: item.githubChannelId ?? null,
+          healthCheckEnabled: false,
+          createdBySync: true,
+          lastSeenAt: new Date(),
+          enabled: true,
+        },
+        select: { id: true },
+      });
+      seenServerIds.add(newServer.id);
+      existingServers.push({
+        id: newServer.id,
+        channelId,
+        link: item.link,
+        githubChannelId: item.githubChannelId ?? null,
+      });
+      stats.updated++;
+    }
   }
 
   private async cleanupOrphanChannels(deletedServerIds: string[]): Promise<void> {
