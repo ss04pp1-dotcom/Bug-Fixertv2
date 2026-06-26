@@ -1,0 +1,50 @@
+# Dependencies (installed fresh during build)
+node_modules/
+
+# Test & dev files
+__tests__/
+__mocks__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Docs & repo files
+*.md
+*.mdx
+CHANGELOG*
+LICENSE*
+.github/
+docs/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Local env files (never include in build)
+.env.local
+.env.development
+.env*.local
+
+# Build output & cache
+dist/
+build/
+.expo/
+web-build/
+.metro-health-check*
+
+# Git
+.git/
+.gitignore
+
+# Replit-specific
+.replit
+replit.nix
+.local/
+
+# Large assets not needed for build
+assets/videos/
+assets/raw/

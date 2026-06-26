@@ -124,6 +124,7 @@ function MatchesTab() {
   const streamUrlRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const isActiveRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLSelectElement>(null);
 
   const editTitleRef = useRef<HTMLInputElement>(null);
   const editSportIdRef = useRef<HTMLSelectElement>(null);
@@ -135,6 +136,7 @@ function MatchesTab() {
   const editStreamUrlRef = useRef<HTMLInputElement>(null);
   const editDescriptionRef = useRef<HTMLTextAreaElement>(null);
   const editIsActiveRef = useRef<HTMLInputElement>(null);
+  const editStatusRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
@@ -181,19 +183,28 @@ function MatchesTab() {
 
   const handleSave = async () => {
     const title = titleRef.current?.value?.trim();
-    if (!title) return;
+    if (!title) { setMutationError("Title is required"); return; }
+    const sportId = sportIdRef.current?.value;
+    if (!sportId) { setMutationError("Sport is required"); return; }
+    const teamAId = teamAIdRef.current?.value;
+    const teamBId = teamBIdRef.current?.value;
+    if (!teamAId || !teamBId) { setMutationError("Both Team A and Team B are required"); return; }
+    if (teamAId === teamBId) { setMutationError("Team A and Team B must be different"); return; }
+    const url = streamUrlRef.current?.value?.trim() || undefined;
     setSubmitting(true);
     setMutationError(null);
     try {
       await call("post", "/v1/sports", {
         title,
-        sportId: sportIdRef.current?.value || undefined,
+        sportId,
         tournamentId: tournamentIdRef.current?.value || undefined,
-        teamAId: teamAIdRef.current?.value || undefined,
-        teamBId: teamBIdRef.current?.value || undefined,
+        teamAId,
+        teamBId,
         scheduledAt: scheduledAtRef.current?.value || undefined,
         venue: venueRef.current?.value?.trim() || undefined,
-        streamUrl: streamUrlRef.current?.value?.trim() || undefined,
+        streamUrl: url,
+        liveUrl: url,
+        status: statusRef.current?.value || "upcoming",
         description: descriptionRef.current?.value?.trim() || undefined,
         isActive: isActiveRef.current?.checked ?? true,
       });
@@ -201,7 +212,7 @@ function MatchesTab() {
       refetch();
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save match";
-      setMutationError(typeof msg === "string" ? msg : "Failed to save match");
+      setMutationError(typeof msg === "string" ? msg : Array.isArray(msg) ? msg.join(", ") : "Failed to save match");
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +221,8 @@ function MatchesTab() {
   const handleUpdate = async () => {
     if (!editItem) return;
     const title = editTitleRef.current?.value?.trim();
-    if (!title) return;
+    if (!title) { alert("Title is required"); return; }
+    const url = editStreamUrlRef.current?.value?.trim() || undefined;
     setSubmitting(true);
     try {
       await call("put", `/v1/sports/${editItem.id}`, {
@@ -221,7 +233,9 @@ function MatchesTab() {
         teamBId: editTeamBIdRef.current?.value || undefined,
         scheduledAt: editScheduledAtRef.current?.value || undefined,
         venue: editVenueRef.current?.value?.trim() || undefined,
-        streamUrl: editStreamUrlRef.current?.value?.trim() || undefined,
+        streamUrl: url,
+        liveUrl: url,
+        status: editStatusRef.current?.value || editItem.status || "upcoming",
         description: editDescriptionRef.current?.value?.trim() || undefined,
         isActive: editIsActiveRef.current?.checked ?? editItem.isActive,
       });
@@ -229,9 +243,18 @@ function MatchesTab() {
       refetch();
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update match";
-      alert(typeof msg === "string" ? msg : "Failed to update match");
+      alert(typeof msg === "string" ? msg : Array.isArray(msg) ? msg.join(", ") : "Failed to update match");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleQuickStatus = async (id: string, status: string) => {
+    try {
+      await call("put", `/v1/sports/${id}`, { status });
+      refetch();
+    } catch (e: any) {
+      alert("Failed to update status");
     }
   };
 
@@ -375,6 +398,25 @@ function MatchesTab() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
+                          {m.status !== "live" ? (
+                            <button
+                              onClick={() => handleQuickStatus(m.id, "live")}
+                              disabled={actionLoading}
+                              title="Mark as Live Now"
+                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40"
+                            >
+                              🔴 Live
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleQuickStatus(m.id, "completed")}
+                              disabled={actionLoading}
+                              title="Mark as Completed"
+                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40"
+                            >
+                              ✓ End
+                            </button>
+                          )}
                           <button onClick={() => openEdit(m)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
                             <Edit size={13} className="text-[#8B92A5]" />
                           </button>
@@ -449,6 +491,18 @@ function MatchesTab() {
           <ModalField label="Description">
             <textarea ref={descriptionRef} rows={3} className={cn(inputClass, "resize-none")} placeholder="Match description" />
           </ModalField>
+          <ModalField label="Status">
+            <div className="relative">
+              <select ref={statusRef} defaultValue="upcoming" className={cn(inputClass, "appearance-none cursor-pointer")}>
+                <option value="upcoming">Upcoming</option>
+                <option value="live">🔴 Live Now</option>
+                <option value="completed">Completed</option>
+                <option value="postponed">Postponed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+            </div>
+          </ModalField>
           <ModalField label="Active">
             <label className="flex items-center gap-2 cursor-pointer">
               <input ref={isActiveRef} type="checkbox" defaultChecked className="accent-primary w-4 h-4" />
@@ -521,6 +575,18 @@ function MatchesTab() {
           </ModalField>
           <ModalField label="Description">
             <textarea ref={editDescriptionRef} rows={3} defaultValue={editItem.description ?? ""} className={cn(inputClass, "resize-none")} />
+          </ModalField>
+          <ModalField label="Status">
+            <div className="relative">
+              <select ref={editStatusRef} defaultValue={editItem.status ?? "upcoming"} className={cn(inputClass, "appearance-none cursor-pointer")}>
+                <option value="upcoming">Upcoming</option>
+                <option value="live">🔴 Live Now</option>
+                <option value="completed">Completed</option>
+                <option value="postponed">Postponed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+            </div>
           </ModalField>
           <ModalField label="Active">
             <label className="flex items-center gap-2 cursor-pointer">
