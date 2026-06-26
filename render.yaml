@@ -35,7 +35,7 @@ services:
 
       # ── App URLs ──────────────────────────────────────────────────────────
       - key: APP_URL
-        value: https://streampro-api.onrender.com
+        value: https://bug-fixertv2.onrender.com
       - key: ADMIN_URL
         sync: false   # set to your deployed admin panel URL (e.g. https://streampro-admin.pages.dev)
 

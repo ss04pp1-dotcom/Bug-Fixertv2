@@ -36,7 +36,7 @@ export class SportsController {
   @ApiQuery({ name: 'sportId', required: false })
   @ApiQuery({ name: 'status', required: false, enum: ['upcoming', 'live', 'completed'] })
   @ApiQuery({ name: 'tournamentId', required: false })
-  findAll(@Query() query: PaginationDto & { sportId?: string; status?: string; tournamentId?: string }) {
+  findAll(@Query() query: PaginationDto) {
     return this.sportsService.findAllMatches(query);
   }
 

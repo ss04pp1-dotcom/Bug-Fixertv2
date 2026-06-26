@@ -17,7 +17,7 @@ export class DownloadsController {
   constructor(private downloadsService: DownloadsService) {}
 
   @Get('admin') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Admin: list all downloads' })
-  findAllAdmin(@Query() query: PaginationDto & { contentType?: string }) {
+  findAllAdmin(@Query() query: PaginationDto) {
     return this.downloadsService.findAllAdmin(query);
   }
 
@@ -34,7 +34,7 @@ export class DownloadsController {
   @Get() @ApiOperation({ summary: 'Get user downloads' })
   findAll(
     @CurrentUser('id') userId: string,
-    @Query() query: PaginationDto & { contentType?: string; status?: string },
+    @Query() query: PaginationDto,
   ) {
     return this.downloadsService.findAll(userId, query);
   }

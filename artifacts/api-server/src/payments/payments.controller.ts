@@ -18,7 +18,7 @@ export class PaymentsController {
   constructor(private svc: PaymentsService) {}
 
   @Get() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Get all payments' })
-  findAll(@Query() query: PaginationDto & { status?: string; search?: string }) { return this.svc.findAll(query); }
+  findAll(@Query() query: PaginationDto) { return this.svc.findAll(query); }
 
   @Get('stats') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Payment stats' })
   getStats() { return this.svc.getStats(); }
