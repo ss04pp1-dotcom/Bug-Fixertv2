@@ -725,6 +725,7 @@ export default function PremiumVideoPlayer({
   const [fullscreen, setFullscreen] = useState(false);
   const [aspect, setAspect]         = useState<AspectMode>('contain');
   const [showCtrl, setShowCtrl]     = useState(true);
+  const showCtrlRef                  = useRef(true);
   const [isLocked, setLocked]       = useState(false);
   const [sheet, setSheet]           = useState<SheetType>('none');
   const [speed, setSpeed]           = useState(1.0);
@@ -849,16 +850,39 @@ export default function PremiumVideoPlayer({
   }, [contentId, isLive]);
 
   // ── Screen orientation ─────────────────────────────────────────────────────
+  // Track whether fullscreen was triggered by user button (vs auto-rotation)
+  const manualFsRef = useRef(false);
+
   useEffect(() => {
     if (IS_WEB) return;
     (async () => {
       try {
         const SO = await import('expo-screen-orientation');
-        if (fullscreen) await SO.lockAsync(SO.OrientationLock.LANDSCAPE);
-        else await SO.lockAsync(SO.OrientationLock.PORTRAIT_UP);
+        if (fullscreen && manualFsRef.current) {
+          // User pressed fullscreen button in portrait → lock landscape
+          await SO.lockAsync(SO.OrientationLock.LANDSCAPE);
+        } else if (!fullscreen && manualFsRef.current) {
+          // User pressed exit-fullscreen button → unlock so they can rotate freely
+          await SO.lockAsync(SO.OrientationLock.PORTRAIT_UP);
+          manualFsRef.current = false;
+        }
+        // Auto-rotation triggered fullscreen: don't touch the lock
       } catch {}
     })();
   }, [fullscreen]);
+
+  // Auto-fullscreen when device rotates to landscape
+  useEffect(() => {
+    if (IS_WEB) return;
+    const isLandscape = dims.width > dims.height;
+    if (isLandscape && !fullscreen) {
+      setFullscreen(true);
+    } else if (!isLandscape && fullscreen && !manualFsRef.current) {
+      // Device rotated back to portrait (auto mode) → exit fullscreen
+      setFullscreen(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dims.width, dims.height]);
 
   // ── Web fullscreen sync (Escape key / browser exit) ────────────────────────
   useEffect(() => {
@@ -911,20 +935,33 @@ export default function PremiumVideoPlayer({
   }, [fullscreen, pip]);
 
   // ── Auto-hide controls ─────────────────────────────────────────────────────
+  const setCtrlHidden = useCallback(() => {
+    setShowCtrl(false);
+    showCtrlRef.current = false;
+  }, []);
+
   const startHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
       ctrlOpacity.value = withTiming(0, { duration: 400 });
-      runOnJS(setShowCtrl)(false);
+      runOnJS(setCtrlHidden)();
     }, 4500);
-  }, [ctrlOpacity]);
+  }, [ctrlOpacity, setCtrlHidden]);
 
   const bumpCtrl = useCallback(() => {
     if (isLocked) return;
     ctrlOpacity.value = withTiming(1, { duration: 200 });
     setShowCtrl(true);
+    showCtrlRef.current = true;
     startHide();
   }, [isLocked, ctrlOpacity, startHide]);
+
+  const hideCtrlNow = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    ctrlOpacity.value = withTiming(0, { duration: 300 });
+    setShowCtrl(false);
+    showCtrlRef.current = false;
+  }, [ctrlOpacity]);
 
   useEffect(() => {
     startHide();
@@ -1039,7 +1076,11 @@ export default function PremiumVideoPlayer({
             if (lastTapRef.current && Date.now() - lastTapRef.current.time >= 340) {
               lastTapRef.current = null;
               handleDebugTap();
-              bumpCtrl();
+              if (showCtrlRef.current) {
+                hideCtrlNow();
+              } else {
+                bumpCtrl();
+              }
             }
           }, 360);
         }
@@ -1048,7 +1089,7 @@ export default function PremiumVideoPlayer({
       setTimeout(() => setSwipeType(null), 1200);
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [vidW, swipeValue, seek, bumpCtrl]);
+  }), [vidW, swipeValue, seek, bumpCtrl, hideCtrlNow]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
@@ -1417,6 +1458,7 @@ export default function PremiumVideoPlayer({
                       setFullscreen(false);
                     }
                   } else {
+                    manualFsRef.current = true;
                     setFullscreen(v => !v);
                   }
                   bumpCtrl();
