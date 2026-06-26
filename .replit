@@ -43,10 +43,12 @@ timeoutMs = 20000
 
 [userenv.shared]
 CORS_ORIGIN = "https://*.replit.dev,https://*.pike.replit.dev,https://*.sisko.replit.dev,https://*.expo.sisko.replit.dev"
-NEXT_PUBLIC_API_URL = "https://bug-fixertv2.onrender.com"
+NEXT_PUBLIC_API_URL = "https://$REPLIT_DEV_DOMAIN/api-server"
 EXPO_PUBLIC_DOMAIN = "bug-fixertv2.onrender.com"
 EXPO_PUBLIC_API_URL = "https://bug-fixertv2.onrender.com"
-NEXT_PUBLIC_WS_URL = "wss://bug-fixertv2.onrender.com"
+NEXT_PUBLIC_WS_URL = "wss://$REPLIT_DEV_DOMAIN/api-server"
+NODE_ENV = "development"
+PORT = "8080"
 
 [userenv.development]
 

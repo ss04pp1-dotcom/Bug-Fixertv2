@@ -41,6 +41,14 @@ export const channelStreamStatusEnum = pgEnum('channel_stream_status', [
   'pending', 'checking', 'active', 'offline', 'failed',
 ]);
 
+export const healthOverrideEnum = pgEnum('health_override', [
+  'AUTO', 'FORCE_HEALTHY', 'FORCE_OFFLINE',
+]);
+
+export const healthCheckModeEnum = pgEnum('health_check_mode', [
+  'SERVER', 'USER_PLAYBACK', 'DISABLED',
+]);
+
 export const importJobStatusEnum = pgEnum('import_job_status', [
   'pending', 'parsing', 'validating', 'completing', 'completed', 'failed', 'cancelled',
 ]);
@@ -142,6 +150,7 @@ export const channels = pgTable('channels', {
   streamType:       streamTypeEnum('stream_type').default('HLS').notNull(),
   epgChannelId:     text('epg_channel_id'),
   streamStatus:     channelStreamStatusEnum('stream_status').default('active').notNull(),
+  healthOverride:   healthOverrideEnum('health_override').default('AUTO').notNull(),
   isActive:         boolean('is_active').default(true).notNull(),
   isFeatured:       boolean('is_featured').default(false).notNull(),
   isTrending:       boolean('is_trending').default(false).notNull(),
