@@ -70,6 +70,12 @@ export const downloadStatusEnum = pgEnum('download_status', [
   'pending', 'downloading', 'completed', 'failed', 'paused', 'cancelled',
 ]);
 
+export const serverSourceTypeEnum = pgEnum('server_source_type', ['ADMIN', 'GITHUB']);
+
+export const githubSyncStatusEnum = pgEnum('github_sync_status', [
+  'pending', 'running', 'success', 'failed',
+]);
+
 // ─── Tables ──────────────────────────────────────────────────
 
 export const users = pgTable('users', {
@@ -159,16 +165,107 @@ export const channels = pgTable('channels', {
   viewCount:        integer('view_count').default(0).notNull(),
   sortOrder:        integer('sort_order').default(0).notNull(),
   tags:             text('tags').array().default([]),
-  lastActiveAt:     timestamp('last_active_at'),
-  createdAt:        timestamp('created_at').defaultNow().notNull(),
-  updatedAt:        timestamp('updated_at').defaultNow().notNull(),
-  deletedAt:        timestamp('deleted_at'),
+  lastActiveAt:            timestamp('last_active_at'),
+  // GitHub dedup & admin overrides
+  normalizedName:          text('normalized_name'),
+  githubChannelId:         text('github_channel_id'),
+  adminNameOverride:       text('admin_name_override'),
+  adminLogoOverride:       text('admin_logo_override'),
+  adminCategoryIdOverride: uuid('admin_category_id_override'),
+  createdAt:               timestamp('created_at').defaultNow().notNull(),
+  updatedAt:               timestamp('updated_at').defaultNow().notNull(),
+  deletedAt:               timestamp('deleted_at'),
 }, (t) => [
   index('channels_is_active_idx').on(t.isActive),
   index('channels_category_id_idx').on(t.categoryId),
   index('channels_created_at_idx').on(t.createdAt),
   index('channels_last_active_at_idx').on(t.lastActiveAt),
+  index('channels_normalized_name_idx').on(t.normalizedName),
 ]);
+
+// ─── GitHub Sources & Channel Servers ────────────────────────
+
+export const githubSources = pgTable('github_sources', {
+  id:                   uuid('id').primaryKey().defaultRandom(),
+  name:                 text('name').notNull(),
+  url:                  text('url').notNull(),
+  enabled:              boolean('enabled').default(true).notNull(),
+  syncIntervalMinutes:  integer('sync_interval_minutes').default(10).notNull(),
+  etag:                 text('etag'),
+  lastModified:         text('last_modified'),
+  lastFetchedAt:        timestamp('last_fetched_at'),
+  lastSyncAt:           timestamp('last_sync_at'),
+  lastSuccessfulSyncAt: timestamp('last_successful_sync_at'),
+  lastSyncStatus:       githubSyncStatusEnum('last_sync_status'),
+  lastSyncMessage:      text('last_sync_message'),
+  consecutiveFailures:  integer('consecutive_failures').default(0).notNull(),
+  isSyncing:            boolean('is_syncing').default(false).notNull(),
+  syncStartedAt:        timestamp('sync_started_at'),
+  channelCount:         integer('channel_count').default(0).notNull(),
+  serverCount:          integer('server_count').default(0).notNull(),
+  createdAt:            timestamp('created_at').defaultNow().notNull(),
+  updatedAt:            timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [index('github_sources_enabled_idx').on(t.enabled)]);
+
+export const channelServers = pgTable('channel_servers', {
+  id:                 uuid('id').primaryKey().defaultRandom(),
+  channelId:          uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  link:               text('link').notNull(),
+  cookie:             text('cookie'),
+  userAgent:          text('user_agent'),
+  referer:            text('referer'),
+  origin:             text('origin'),
+  priority:           integer('priority').default(100).notNull(),
+  sourceType:         serverSourceTypeEnum('source_type').default('ADMIN').notNull(),
+  githubSourceId:     uuid('github_source_id').references(() => githubSources.id, { onDelete: 'set null' }),
+  githubChannelId:    text('github_channel_id'),
+  enabled:            boolean('enabled').default(true).notNull(),
+  healthCheckEnabled: boolean('health_check_enabled').default(true).notNull(),
+  lastSeenAt:         timestamp('last_seen_at'),
+  createdBySync:      boolean('created_by_sync').default(false).notNull(),
+  deletedAt:          timestamp('deleted_at'),
+  createdAt:          timestamp('created_at').defaultNow().notNull(),
+  updatedAt:          timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  index('channel_servers_channel_id_idx').on(t.channelId),
+  index('channel_servers_github_source_id_idx').on(t.githubSourceId),
+  index('channel_servers_source_type_idx').on(t.sourceType),
+  index('channel_servers_deleted_at_idx').on(t.deletedAt),
+]);
+
+export const githubSyncLogs = pgTable('github_sync_logs', {
+  id:             uuid('id').primaryKey().defaultRandom(),
+  githubSourceId: uuid('github_source_id').notNull().references(() => githubSources.id, { onDelete: 'cascade' }),
+  startedAt:      timestamp('started_at').notNull(),
+  endedAt:        timestamp('ended_at'),
+  durationMs:     integer('duration_ms'),
+  status:         githubSyncStatusEnum('status').notNull(),
+  added:          integer('added').default(0).notNull(),
+  updated:        integer('updated').default(0).notNull(),
+  deleted:        integer('deleted').default(0).notNull(),
+  failed:         integer('failed').default(0).notNull(),
+  totalParsed:    integer('total_parsed').default(0).notNull(),
+  errorMessage:   text('error_message'),
+  createdAt:      timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('github_sync_logs_source_id_idx').on(t.githubSourceId),
+  index('github_sync_logs_created_at_idx').on(t.createdAt),
+]);
+
+export const playbackEvents = pgTable('playback_events', {
+  id:         uuid('id').primaryKey().defaultRandom(),
+  channelId:  uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  userId:     uuid('user_id'),
+  success:    boolean('success').notNull(),
+  duration:   integer('duration'),
+  appVersion: text('app_version'),
+  createdAt:  timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('playback_events_channel_id_idx').on(t.channelId),
+  index('playback_events_created_at_idx').on(t.createdAt),
+]);
+
+// ─────────────────────────────────────────────────────────────
 
 export const movies = pgTable('movies', {
   id:          uuid('id').primaryKey().defaultRandom(),
