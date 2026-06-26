@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build
+    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build && cd artifacts/api-server && npx prisma db push
     startCommand: node artifacts/api-server/dist/main.js
     healthCheckPath: /healthz
     envVars:
@@ -31,7 +31,7 @@ services:
 
       # ── CORS — admin domain + Replit preview wildcards ───────────────────
       - key: CORS_ORIGIN
-        value: https://livetv-cit.pages.dev,https://*.expo.sisko.replit.dev,https://*.pike.replit.dev,https://*.replit.dev
+        value: https://livetvv.pages.dev,https://livetv-cit.pages.dev,https://*.expo.sisko.replit.dev,https://*.pike.replit.dev,https://*.replit.dev
 
       # ── App URLs ──────────────────────────────────────────────────────────
       - key: APP_URL
