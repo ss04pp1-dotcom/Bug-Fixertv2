@@ -1,0 +1,146 @@
+import 'reflect-metadata';
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import helmet from 'helmet';
+import compression from 'compression';
+import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+
+function validateEnvironment(logger: Logger): void {
+  const critical = ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
+  const missing = critical.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    logger.error(`Missing critical environment variables: ${missing.join(', ')}`);
+    logger.error('Application cannot start without these variables. Check your .env file.');
+    process.exit(1);
+  }
+
+  const recommended = [
+    'CLOUDFLARE_R2_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID',
+    'SMTP_HOST', 'FIREBASE_PROJECT_ID',
+  ];
+  const missingRec = recommended.filter(k => !process.env[k]);
+  if (missingRec.length > 0) {
+    logger.warn(
+      `Missing recommended env vars (feature-limited without them): ${missingRec.join(', ')}`,
+    );
+  }
+}
+
+async function bootstrap(): Promise<void> {
+  const logger = new Logger('Bootstrap');
+
+  validateEnvironment(logger);
+
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Security
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: process.env['NODE_ENV'] === 'production',
+  }));
+  app.use(compression());
+
+  const rawOrigins = process.env['CORS_ORIGIN'];
+  const allowedOrigins: string[] = rawOrigins
+    ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+
+  // Convert wildcard entries like "https://*.replit.dev" into RegExp patterns
+  // Use .+ (not [^.]+) so a single * matches multiple subdomain levels
+  const originPatterns: Array<string | RegExp> = allowedOrigins.map(o => {
+    if (o.includes('*')) {
+      // Escape all regex special chars first, then replace * with .+ for wildcard matching
+      // Note: /\*/g not /\\\*/g — the latter looks for a literal backslash+asterisk
+      const escaped = o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.+');
+      return new RegExp(`^${escaped}$`);
+    }
+    return o;
+  });
+
+  function isOriginAllowed(origin: string): boolean {
+    return originPatterns.some(p =>
+      typeof p === 'string' ? p === origin : p.test(origin),
+    );
+  }
+
+  const isProduction = process.env['NODE_ENV'] === 'production';
+  app.enableCors({
+    origin: allowedOrigins.length > 0
+      ? (origin, callback) => {
+          if (!origin || isOriginAllowed(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error(`CORS: origin not allowed — ${origin}`));
+          }
+        }
+      : (isProduction ? false : true),
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
+    credentials: true,
+  });
+
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+
+  // Validation
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+
+  // Global error handling and response shaping
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
+
+  // Swagger — disabled in production unless explicitly enabled via SWAGGER_ENABLED=true
+  const swaggerEnabled = process.env.NODE_ENV !== 'production'
+    || process.env.SWAGGER_ENABLED === 'true';
+  if (swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('StreamPro API')
+      .setDescription(
+        'Enterprise TV Streaming Platform API — Live TV, VOD, Subscriptions, Ads',
+      )
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addServer('/api-server', 'API Server (proxied)')
+      .build();
+
+    SwaggerModule.setup(
+      'docs',
+      app,
+      SwaggerModule.createDocument(app, swaggerConfig),
+    );
+  }
+
+  app.enableShutdownHooks();
+
+  // Root route — satisfies Render/load-balancer health checks that hit GET /
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/', (_req: unknown, res: { json: (d: unknown) => void }) => {
+    res.json({ status: 'ok', service: 'StreamPro API', version: '1.0' });
+  });
+
+  const port = process.env['PORT'] ?? 8080;
+  await app.listen(port, '0.0.0.0');
+
+  const env = process.env['NODE_ENV'] ?? 'development';
+  logger.log(`StreamPro API [${env}] running on port ${port}`);
+  logger.log(`Swagger docs: http://localhost:${port}/docs`);
+  logger.log(`Health: http://localhost:${port}/healthz`);
+  logger.log(`Full health: http://localhost:${port}/health/full`);
+}
+
+bootstrap().catch((err: unknown) => {
+  const logger = new Logger('Bootstrap');
+  logger.error('Fatal startup error', err instanceof Error ? err.stack : String(err));
+  process.exit(1);
+});
