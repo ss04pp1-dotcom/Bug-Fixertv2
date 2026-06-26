@@ -10,18 +10,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
+import YouTubePlayer, { isYouTubeUrl } from '@/components/YouTubePlayer';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', text: '#fff', dim: '#9CA3AF',
 };
 
-// Detect URLs that ExoPlayer cannot play directly (social/streaming platforms)
+// Detect URLs that cannot be played directly (excluding YouTube — handled separately)
 function getUnsupportedUrlReason(url: string): string | null {
   if (!url) return 'No stream URL configured for this content.';
   const lower = url.toLowerCase();
-  if (lower.includes('youtu.be') || lower.includes('youtube.com'))
-    return 'YouTube URLs cannot be played directly.\n\nPlease set an HLS (.m3u8), DASH (.mpd), or direct MP4 stream URL in the admin panel.';
   if (lower.includes('vimeo.com'))
     return 'Vimeo URLs cannot be played directly. Use a direct stream URL instead.';
   if (lower.includes('facebook.com') || lower.includes('fb.watch') || lower.includes('tiktok.com') || lower.includes('instagram.com'))
@@ -52,6 +51,7 @@ export default function PlayerScreen() {
   const [srcLoading, setSrcLoad]  = useState(true);
   const [srcError, setSrcError]   = useState(false);
   const [srcErrorMsg, setSrcErrMsg] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
 
   // ── Series episode state ───────────────────────────────────────────────────
   const [epIdx, setEpIdx]         = useState(season ? parseInt(season) - 1 : 0);
@@ -93,22 +93,21 @@ export default function PlayerScreen() {
 
   // ── Load stream ────────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
-    setSrcLoad(true); setSrcError(false); setSrcErrMsg('');
+    setSrcLoad(true); setSrcError(false); setSrcErrMsg(''); setYoutubeUrl(null);
     try {
       if (cType === 'movie') {
         const res = await apiClient.get(`/movies/${id}`);
         const d   = res.data?.data || res.data;
         const url = d?.streamUrl || d?.stream_url || d?.videoUrl || d?.video_url || d?.url || '';
+        if (!url) { setSrcErrMsg('No stream URL configured for this content.'); setSrcError(true); return; }
+        // YouTube → use embedded YouTube player
+        if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
-        if (url) {
-          const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
-          if (d?.backupStreamUrl && d.backupStreamUrl !== url)
-            srcs.push({ label: 'Server 2', url: d.backupStreamUrl, quality: 'SD' });
-          setSources(srcs);
-        } else {
-          setSrcErrMsg('No stream URL configured for this content.'); setSrcError(true);
-        }
+        const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
+        if (d?.backupStreamUrl && d.backupStreamUrl !== url)
+          srcs.push({ label: 'Server 2', url: d.backupStreamUrl, quality: 'SD' });
+        setSources(srcs);
       } else {
         const res = await apiClient.get(`/series/${id}`);
         const d   = res.data?.data || res.data;
@@ -121,16 +120,15 @@ export default function PlayerScreen() {
         if (allEps.length === 0 && Array.isArray(d?.episodes)) allEps.push(...d.episodes);
         const ep  = allEps[epIdx] || allEps[0];
         const url = ep?.streamUrl || ep?.stream_url || ep?.videoUrl || ep?.url || '';
+        if (!url) { setSrcErrMsg('No episode stream URL found.'); setSrcError(true); return; }
+        // YouTube → use embedded YouTube player
+        if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
-        if (url) {
-          const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
-          if (ep?.backupStreamUrl && ep.backupStreamUrl !== url)
-            srcs.push({ label: 'Server 2', url: ep.backupStreamUrl, quality: 'SD' });
-          setSources(srcs);
-        } else {
-          setSrcErrMsg('No episode stream URL found.'); setSrcError(true);
-        }
+        const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
+        if (ep?.backupStreamUrl && ep.backupStreamUrl !== url)
+          srcs.push({ label: 'Server 2', url: ep.backupStreamUrl, quality: 'SD' });
+        setSources(srcs);
       }
     } catch {
       setSrcErrMsg('Failed to load stream. Check your connection.'); setSrcError(true);
@@ -153,6 +151,22 @@ export default function PlayerScreen() {
     number: ep.episodeNumber || i + 1,
   }));
 
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(main)');
+  };
+
+  // YouTube URL → show dedicated YouTube player (full screen replacement)
+  if (youtubeUrl) {
+    return (
+      <YouTubePlayer
+        url={youtubeUrl}
+        title={contentTitle}
+        onBack={handleBack}
+      />
+    );
+  }
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -164,13 +178,9 @@ export default function PlayerScreen() {
         isLoading={srcLoading}
         hasError={srcError}
         errorMessage={srcErrorMsg}
-        onBack={() => {
-          if (router.canGoBack()) router.back();
-          else router.replace('/(main)');
-        }}
+        onBack={handleBack}
         onRetry={loadStream}
         onRefreshStream={loadStream}
-        // FIX 16: Series হলে active episode id পাঠাও (series id নয়)
         contentId={cType === 'series' && episodes[epIdx]?.id ? episodes[epIdx].id : id}
         contentType={cType}
         episodes={epList}
