@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsBoolean, Allow } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, Allow, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SetSettingDto {
@@ -23,6 +24,9 @@ export class SetSettingDto {
 
 export class BulkSettingsDto {
   @ApiProperty({ type: [SetSettingDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SetSettingDto)
   settings: SetSettingDto[];
 }
 
