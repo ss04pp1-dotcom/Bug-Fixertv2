@@ -114,8 +114,9 @@ export default function SeriesDetailsScreen() {
   }, [series]);
 
   const handleToggleFavorite = () => {
-    setIsBookmarked(!isBookmarked);
-    toggleFav.mutate({ type: 'series', id: id || '' });
+    const nextState = !isBookmarked;
+    setIsBookmarked(nextState);
+    toggleFav.mutate({ type: 'series', id: id || '', action: nextState ? 'add' : 'remove' });
   };
 
   const handleShare = async () => {

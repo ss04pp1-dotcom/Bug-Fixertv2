@@ -6,7 +6,7 @@ services:
     region: oregon
     buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build
     startCommand: node artifacts/api-server/dist/main.js
-    healthCheckPath: /api/healthz
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production

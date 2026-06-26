@@ -32,8 +32,10 @@ export const Config = {
   /** CDN URL for static assets — override via expo config extra.cdnUrl if needed */
   CDN_URL: Constants.expoConfig?.extra?.cdnUrl || SERVER_URL,
 
-  APP_VERSION: '2.4.1',
-  BUILD_NUMBER: 842,
+  APP_VERSION: Constants.expoConfig?.version ?? '2.4.1',
+  BUILD_NUMBER: Constants.expoConfig?.ios?.buildNumber
+    ? parseInt(Constants.expoConfig.ios.buildNumber as string, 10)
+    : (Constants.expoConfig?.android?.versionCode ?? 842),
 
   /** Resolves a media path to a full URL. Absolute URLs pass through unchanged. */
   imageUrl(path: string): string {

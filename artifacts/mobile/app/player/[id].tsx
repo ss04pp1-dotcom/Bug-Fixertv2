@@ -8,7 +8,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
-import { useMovie, useSeries, useRelatedMovies } from '@/lib/api-hooks';
+import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
 
 const C = {
@@ -46,22 +46,21 @@ export default function PlayerScreen() {
   // ── Content data ───────────────────────────────────────────────────────────
   const { data: movieData }   = useMovie(cType === 'movie' ? id : '');
   const { data: seriesData }  = useSeries(cType === 'series' ? id : '');
-  const { data: relatedRaw }  = useRelatedMovies(cType === 'movie' ? id : '');
+  const { data: relatedMoviesRaw }  = useRelatedMovies(cType === 'movie' ? id : '');
+  const { data: relatedSeriesRaw }  = useRecommendations('series', cType === 'series' ? id : '');
 
   const contentData  = movieData || seriesData;
   const contentTitle = titleParam || (contentData as any)?.title || (contentData as any)?.name || 'Now Playing';
-  // FIX 17: API returns 'poster' not 'posterUrl'; series uses 'poster' too
   const poster       = (contentData as any)?.poster || (contentData as any)?.posterUrl || (contentData as any)?.thumbnailUrl || '';
   const overview     = (contentData as any)?.description || (contentData as any)?.overview || '';
   const rating       = (contentData as any)?.rating || '';
   const year         = (contentData as any)?.releaseYear || (contentData as any)?.year || '';
   const genre        = (contentData as any)?.genre || '';
 
-  // FIX 13: Series এ episodes সরাসরি নয়, seasons[].episodes[] এ থাকে
+  // Series এ episodes সরাসরি নয়, seasons[].episodes[] এ থাকে
   const episodes: any[] = useMemo(() => {
     const sd = seriesData as any;
     if (sd?.seasons?.length) {
-      // সব seasons এর episodes flat করো
       const all: any[] = [];
       for (const season of sd.seasons) {
         if (Array.isArray(season.episodes)) all.push(...season.episodes);
@@ -72,6 +71,7 @@ export default function PlayerScreen() {
     return [];
   }, [seriesData]);
 
+  const relatedRaw = cType === 'movie' ? relatedMoviesRaw : relatedSeriesRaw;
   const related: any[] = useMemo(() => {
     const d = (relatedRaw as any)?.data || (relatedRaw as any) || [];
     return Array.isArray(d) ? d.slice(0, 12) : [];

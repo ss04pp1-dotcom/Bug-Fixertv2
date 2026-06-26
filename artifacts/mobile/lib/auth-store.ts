@@ -55,8 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   updateUser: async (data: Partial<User>) => {
     try {
-      // FIX: /users/me does not exist. Use /auth/profile with PATCH (admin-only UsersController এ নেই)
-      const response = await apiClient.patch('/auth/profile', data);
+      const response = await apiClient.put('/auth/profile', data);
       const userData = response.data.data;
       const user: User = {
         id: userData.id,

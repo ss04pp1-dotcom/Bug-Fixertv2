@@ -51,7 +51,7 @@ export default function ChannelDetailScreen() {
 
   const handleToggleFav = () => {
     if (!channel) return;
-    toggleFav.mutate({ type: 'channel', id: channel.id });
+    toggleFav.mutate({ type: 'channel', id: channel.id, action: 'add' });
   };
 
   if (isLoading) {

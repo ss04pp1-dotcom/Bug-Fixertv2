@@ -95,8 +95,9 @@ export default function MovieDetailsScreen() {
   }, [movie, relatedData]);
 
   const handleToggleFavorite = () => {
-    setIsBookmarked(!isBookmarked);
-    toggleFav.mutate({ type: 'movie', id: id || '' });
+    const nextState = !isBookmarked;
+    setIsBookmarked(nextState);
+    toggleFav.mutate({ type: 'movie', id: id || '', action: nextState ? 'add' : 'remove' });
   };
 
   const handleShare = async () => {

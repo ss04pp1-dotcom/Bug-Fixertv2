@@ -48,7 +48,7 @@ export default function MyListScreen() {
   }, [favoritesData, favError]);
 
   const removeFavorite = (item: any) => {
-    toggleFav.mutate({ type: item.type || 'movie', id: item.id });
+    toggleFav.mutate({ type: item.type || 'movie', id: item.id, action: 'remove' });
   };
 
   const renderContinueWatching = ({ item }: { item: typeof continueWatching[0] }) => (

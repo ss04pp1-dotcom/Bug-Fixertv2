@@ -45,7 +45,15 @@ export const useFavorites = () => useQuery({ queryKey: ['favorites'], queryFn: (
 export const useToggleFavorite = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { type: string; id: string }) => apiClient.post('/favorites', data),
+    mutationFn: ({ type, id, action }: { type: 'channel' | 'movie' | 'series'; id: string; action?: 'add' | 'remove' }) => {
+      const body =
+        type === 'channel' ? { channelId: id } :
+        type === 'movie'   ? { movieId: id }   :
+                             { seriesId: id };
+      return action === 'remove'
+        ? apiClient.delete('/favorites', { data: body })
+        : apiClient.post('/favorites', body);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['favorites'] }),
   });
 };
@@ -70,7 +78,7 @@ export const useMarkNotificationRead = () => {
 export const useMarkAllNotificationsRead = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.patch('/notifications/user/read-all'),
+    mutationFn: () => apiClient.post('/notifications/user/read-all'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 };
@@ -83,7 +91,7 @@ export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () 
 export const useUpdateSetting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { key: string; value: unknown }) => apiClient.put('/settings', data),
+    mutationFn: (data: { key: string; value: unknown }) => apiClient.post('/settings', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 };

@@ -48,12 +48,11 @@ export class AuthController {
     const tokens = await this.authService.refresh(user.id, user.sessionId!);
     // Set refresh token as httpOnly cookie for XSS protection
     const isProd = process.env.NODE_ENV === 'production';
-    const cookiePath = isProd ? '/api-server' : '/';
     res.cookie('streampro_refresh_token', tokens.refreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
-      path: cookiePath,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
     return tokens;
