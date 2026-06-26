@@ -8,11 +8,12 @@ import { CreateMovieDto } from './dto/create-movie.dto';
 export class MoviesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean }) {
+  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; genre?: string }) {
     const { skip, limit = 20, page = 1, search } = query;
     const where: Prisma.MovieWhereInput = { deletedAt: null };
     if (search) where.title = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
+    if (query.genre) where.category = { name: { contains: query.genre, mode: 'insensitive' } };
     if (query.isPremium !== undefined) where.isPremium = query.isPremium;
 
     const [data, total] = await Promise.all([

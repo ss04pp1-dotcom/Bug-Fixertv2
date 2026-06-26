@@ -79,8 +79,9 @@ export class SubscriptionsService {
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.subscription.findUnique({ where: { userId: dto.userId } });
 
+      // Always use the real UUID from the fetched plan (dto.planId may be a slug)
       const subData: Prisma.SubscriptionUpdateInput = {
-        plan: { connect: { id: dto.planId } },
+        plan: { connect: { id: plan.id } },
         status: status as SubscriptionStatus,
         endsAt, trialEndsAt,
         renewedAt: now, nextRenewalAt: endsAt,
@@ -93,12 +94,12 @@ export class SubscriptionsService {
         const prevStatus = existing.status;
         sub = await tx.subscription.update({ where: { userId: dto.userId }, data: subData });
         await tx.subscriptionHistory.create({
-          data: { userId: dto.userId, subscriptionId: sub.id, planId: dto.planId, fromStatus: prevStatus, toStatus: status as SubscriptionStatus },
+          data: { userId: dto.userId, subscriptionId: sub.id, planId: plan.id, fromStatus: prevStatus, toStatus: status as SubscriptionStatus },
         });
       } else {
         sub = await tx.subscription.create({ data: { userId: dto.userId, ...subData } as Prisma.SubscriptionCreateInput });
         await tx.subscriptionHistory.create({
-          data: { userId: dto.userId, subscriptionId: sub.id, planId: dto.planId, toStatus: status as SubscriptionStatus },
+          data: { userId: dto.userId, subscriptionId: sub.id, planId: plan.id, toStatus: status as SubscriptionStatus },
         });
       }
 

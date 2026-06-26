@@ -216,6 +216,7 @@ export interface PremiumPlayerProps {
   isLive?:          boolean;
   isLoading?:       boolean;
   hasError?:        boolean;
+  errorMessage?:    string;
   onBack:           () => void;
   onRetry?:         () => void;
   onRefreshStream?: () => void;
@@ -712,7 +713,7 @@ const sw = StyleSheet.create({
 // ─── Main Player ──────────────────────────────────────────────────────────────
 export default function PremiumVideoPlayer({
   sources, title, isLive = false,
-  isLoading = false, hasError = false,
+  isLoading = false, hasError = false, errorMessage = '',
   onBack, onRetry, onRefreshStream,
   contentId = '', contentType = 'movie',
   episodes = [], currentEpIdx = 0, onEpisodeChange,
@@ -1267,8 +1268,13 @@ export default function PremiumVideoPlayer({
       {/* API error */}
       {hasError && !playerError && (
         <View style={p.overlay}>
-          <Ionicons name="wifi-outline" size={52} color={C.accent} />
+          <Ionicons name="alert-circle-outline" size={52} color={C.accent} />
           <Text style={p.errorTxt}>Stream Unavailable</Text>
+          {!!errorMessage && (
+            <Text style={[p.errorSub, { textAlign: 'center', marginHorizontal: 24 }]} numberOfLines={5}>
+              {errorMessage}
+            </Text>
+          )}
           <TouchableOpacity onPress={onRetry} style={p.retryBtn}>
             <Ionicons name="refresh" size={16} color="#fff" />
             <Text style={p.retryTxt}>Retry</Text>

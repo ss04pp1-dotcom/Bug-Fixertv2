@@ -16,6 +16,19 @@ const C = {
   accent: '#EC4899', text: '#fff', dim: '#9CA3AF',
 };
 
+// Detect URLs that ExoPlayer cannot play directly (social/streaming platforms)
+function getUnsupportedUrlReason(url: string): string | null {
+  if (!url) return 'No stream URL configured for this content.';
+  const lower = url.toLowerCase();
+  if (lower.includes('youtu.be') || lower.includes('youtube.com'))
+    return 'YouTube URLs cannot be played directly.\n\nPlease set an HLS (.m3u8), DASH (.mpd), or direct MP4 stream URL in the admin panel.';
+  if (lower.includes('vimeo.com'))
+    return 'Vimeo URLs cannot be played directly. Use a direct stream URL instead.';
+  if (lower.includes('facebook.com') || lower.includes('fb.watch') || lower.includes('tiktok.com') || lower.includes('instagram.com'))
+    return 'Social media URLs cannot be played directly. Use an HLS/DASH/MP4 stream URL.';
+  return null;
+}
+
 export default function PlayerScreen() {
   const { id, type, title: titleParam, season } = useLocalSearchParams<{
     id: string; type?: string; title?: string; season?: string;
@@ -38,6 +51,7 @@ export default function PlayerScreen() {
   const [sources, setSources]     = useState<StreamSource[]>([]);
   const [srcLoading, setSrcLoad]  = useState(true);
   const [srcError, setSrcError]   = useState(false);
+  const [srcErrorMsg, setSrcErrMsg] = useState('');
 
   // ── Series episode state ───────────────────────────────────────────────────
   const [epIdx, setEpIdx]         = useState(season ? parseInt(season) - 1 : 0);
@@ -79,50 +93,47 @@ export default function PlayerScreen() {
 
   // ── Load stream ────────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
-    setSrcLoad(true); setSrcError(false);
+    setSrcLoad(true); setSrcError(false); setSrcErrMsg('');
     try {
       if (cType === 'movie') {
         const res = await apiClient.get(`/movies/${id}`);
         const d   = res.data?.data || res.data;
-        // Check all common stream URL field names
         const url = d?.streamUrl || d?.stream_url || d?.videoUrl || d?.video_url || d?.url || '';
+        const reason = getUnsupportedUrlReason(url);
+        if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         if (url) {
           const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
           if (d?.backupStreamUrl && d.backupStreamUrl !== url)
             srcs.push({ label: 'Server 2', url: d.backupStreamUrl, quality: 'SD' });
           setSources(srcs);
         } else {
-          setSrcError(true);
+          setSrcErrMsg('No stream URL configured for this content.'); setSrcError(true);
         }
       } else {
-        // Series: seasons → episodes[epIdx] → streamUrl
         const res = await apiClient.get(`/series/${id}`);
         const d   = res.data?.data || res.data;
-        // Flat all episodes from all seasons
         const allEps: any[] = [];
         if (Array.isArray(d?.seasons)) {
-          for (const season of d.seasons) {
-            if (Array.isArray(season.episodes)) {
-              allEps.push(...season.episodes);
-            }
+          for (const s of d.seasons) {
+            if (Array.isArray(s.episodes)) allEps.push(...s.episodes);
           }
         }
-        if (allEps.length === 0 && Array.isArray(d?.episodes)) {
-          allEps.push(...d.episodes);
-        }
+        if (allEps.length === 0 && Array.isArray(d?.episodes)) allEps.push(...d.episodes);
         const ep  = allEps[epIdx] || allEps[0];
         const url = ep?.streamUrl || ep?.stream_url || ep?.videoUrl || ep?.url || '';
+        const reason = getUnsupportedUrlReason(url);
+        if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         if (url) {
           const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
           if (ep?.backupStreamUrl && ep.backupStreamUrl !== url)
             srcs.push({ label: 'Server 2', url: ep.backupStreamUrl, quality: 'SD' });
           setSources(srcs);
         } else {
-          setSrcError(true);
+          setSrcErrMsg('No episode stream URL found.'); setSrcError(true);
         }
       }
     } catch {
-      setSrcError(true);
+      setSrcErrMsg('Failed to load stream. Check your connection.'); setSrcError(true);
     } finally {
       setSrcLoad(false);
     }
@@ -152,6 +163,7 @@ export default function PlayerScreen() {
         title={contentTitle}
         isLoading={srcLoading}
         hasError={srcError}
+        errorMessage={srcErrorMsg}
         onBack={() => {
           if (router.canGoBack()) router.back();
           else router.replace('/(main)');

@@ -29,24 +29,35 @@ const C = {
 
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedPlan, setSelectedPlan] = useState('standard');
+  const [selectedPlan, setSelectedPlan] = useState('');
   const [loading, setLoading] = useState(false);
   const { data: plansData, isLoading: plansLoading } = useSubscriptionPlans();
   const { data: currentSub } = useMySubscription();
 
   const plans = (plansData && Array.isArray(plansData))
     ? plansData.map((p: any, i: number) => ({
-        id: p.id || p.name?.toLowerCase() || String(i),
+        id: p.id,
         name: p.name || `Plan ${i + 1}`,
         price: p.price || p.amount || 0,
         period: p.description || p.period || '1 Month',
-        features: p.features || [],
+        features: Array.isArray(p.features) ? p.features : [],
         popular: p.popular || i === 1,
         theme: i === 2 ? 'gradient' : (i === 1 ? 'border' : 'dark'),
       }))
     : [];
 
+  // Auto-select the first available plan once plans load
+  React.useEffect(() => {
+    if (plans.length > 0 && !selectedPlan) {
+      setSelectedPlan(plans[0].id);
+    }
+  }, [plans.length]);
+
   const handleSubscribe = async () => {
+    if (!selectedPlan) {
+      Alert.alert('Select a Plan', 'Please select a subscription plan first.');
+      return;
+    }
     setLoading(true);
     try {
       await apiClient.post('/subscriptions/subscribe', { planId: selectedPlan });
@@ -54,7 +65,8 @@ export default function SubscriptionScreen() {
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message || 'Failed to subscribe. Please try again.');
+      const msg = err?.response?.data?.message || err?.message || 'Failed to subscribe.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }

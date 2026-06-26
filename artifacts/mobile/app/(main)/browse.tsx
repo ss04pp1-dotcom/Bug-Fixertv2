@@ -56,7 +56,7 @@ export default function BrowseScreen() {
   }, [catsData]);
 
   const params = useMemo(() => ({
-    category: activeCat !== 'All' ? activeCat.toLowerCase() : undefined,
+    genre: activeCat !== 'All' ? activeCat : undefined,
     page,
     limit: 30,
   }), [activeCat, page]);
