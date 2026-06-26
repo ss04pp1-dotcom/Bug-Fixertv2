@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Loader2, Globe, Mail, Phone, MapPin, Smartphone, Link2 } from "lucide-react";
+import { Save, Loader2, Globe, Mail, Phone, MapPin, Smartphone, Link2, Activity, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { useApiCallState, getApiErrorMessage } from "@/lib/use-api";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -50,6 +50,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
     android_package_name: "",
     app_version_android: "1.0.0",
     app_version_ios: "1.0.0",
+    keep_alive_enabled: "true",
   });
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
       android_package_name:field(settingsRaw, "android_package_name"),
       app_version_android: field(settingsRaw, "app_version_android", "1.0.0"),
       app_version_ios:     field(settingsRaw, "app_version_ios", "1.0.0"),
+      keep_alive_enabled:  field(settingsRaw, "keep_alive_enabled", "true"),
     });
   }, [settingsRaw]);
 
@@ -78,8 +80,9 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
 
   const handleSave = async () => {
     try {
+      const PUBLIC_KEYS = ["app_name","app_tagline","app_logo","app_favicon","website_url","keep_alive_enabled"];
       await call("post", "/v1/settings/bulk", {
-        settings: Object.entries(form).map(([key, value]) => ({ key, value, isPublic: ["app_name","app_tagline","app_logo","app_favicon","website_url"].includes(key) })),
+        settings: Object.entries(form).map(([key, value]) => ({ key, value, isPublic: PUBLIC_KEYS.includes(key) })),
       });
       toast.success("App settings saved successfully");
       refetch();
@@ -87,6 +90,8 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
       toast.error(getApiErrorMessage(err));
     }
   };
+
+  const keepAliveOn = form.keep_alive_enabled !== "false";
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -185,6 +190,54 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
             <input className={INPUT + " font-mono"} value={form.app_version_ios} onChange={onChange("app_version_ios")} placeholder="1.0.0" />
           </Field>
         </div>
+      </div>
+
+      {/* ── Server Keep-Alive ───────────────────────────────────────────────── */}
+      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+        <h3 className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wider flex items-center gap-2">
+          <Activity size={12} /> Server Keep-Alive
+        </h3>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${keepAliveOn ? "bg-emerald-500/15" : "bg-red-500/15"}`}>
+              {keepAliveOn
+                ? <Wifi size={16} className="text-emerald-400" />
+                : <WifiOff size={16} className="text-red-400" />}
+            </div>
+            <div>
+              <p className="text-sm text-white font-medium">
+                Prevent Render from Sleeping
+              </p>
+              <p className="text-xs text-[#8B92A5] mt-0.5 leading-relaxed">
+                Pings the Render server every 8 minutes so it never goes to sleep.{" "}
+                {keepAliveOn
+                  ? <span className="text-emerald-400 font-medium">Currently active — server stays awake.</span>
+                  : <span className="text-red-400 font-medium">Disabled — server may sleep after 15 min.</span>}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => set("keep_alive_enabled")(keepAliveOn ? "false" : "true")}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 focus:outline-none ${
+              keepAliveOn ? "bg-emerald-500" : "bg-[#374151]"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                keepAliveOn ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+        {!keepAliveOn && (
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5">
+            <Activity size={13} className="text-amber-400 flex-shrink-0" />
+            <p className="text-xs text-amber-300">
+              Keep-alive is disabled. Save settings to apply. The server will sleep after 15 minutes of inactivity.
+            </p>
+          </div>
+        )}
       </div>
 
       <button onClick={handleSave} disabled={loading}
