@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Res, Req, HttpStatus, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Res, Req, HttpStatus, ForbiddenException } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ChannelsService } from './channels.service';
@@ -138,4 +138,76 @@ export class ChannelsController {
   @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Delete a channel' })
   remove(@Param('id') id: string) { return this.channelsService.remove(id); }
+
+  // ── Admin overrides ─────────────────────────────────────────────────────────
+
+  @Patch(':id/overrides')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Set admin overrides for a GitHub-synced channel' })
+  updateOverrides(@Param('id') id: string, @Body() dto: any) {
+    return this.channelsService.updateOverrides(id, dto);
+  }
+
+  @Delete(':id/overrides/:field')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Reset a specific admin override back to GitHub value' })
+  resetOverride(@Param('id') id: string, @Param('field') field: string) {
+    return this.channelsService.resetOverride(id, field);
+  }
+
+  // ── Server management ────────────────────────────────────────────────────────
+
+  @Get(':id/servers')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor', 'moderator')
+  @ApiOperation({ summary: 'Get all servers for a channel (admin — includes disabled)' })
+  getServers(@Param('id') id: string) {
+    return this.channelsService.getServers(id);
+  }
+
+  @Post(':id/servers')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Add an admin-managed server to a channel' })
+  addServer(@Param('id') id: string, @Body() dto: any) {
+    return this.channelsService.addServer(id, dto);
+  }
+
+  @Put(':id/servers')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Bulk-reorder servers (set priorities)' })
+  reorderServers(@Param('id') id: string, @Body() body: { servers: { id: string; priority: number }[] }) {
+    return this.channelsService.reorderServers(id, body.servers);
+  }
+
+  @Patch(':id/servers/:serverId')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Update a single server (enabled, link, headers)' })
+  updateServer(
+    @Param('id') id: string,
+    @Param('serverId') serverId: string,
+    @Body() dto: any,
+  ) {
+    return this.channelsService.updateServer(id, serverId, dto);
+  }
+
+  @Post(':id/servers/:serverId/test')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor', 'moderator')
+  @ApiOperation({ summary: 'Test server reachability from the API host' })
+  testServer(@Param('id') id: string, @Param('serverId') serverId: string) {
+    return this.channelsService.testServer(id, serverId);
+  }
+
+  @Delete(':id/servers/:serverId')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Soft-delete a server from a channel' })
+  deleteServer(@Param('id') id: string, @Param('serverId') serverId: string) {
+    return this.channelsService.deleteServer(id, serverId);
+  }
 }

@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight, Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare } from "lucide-react";
+import {
+  Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight,
+  Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare, Settings2,
+} from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
 import { ImageUpload } from "@/components/ui/image-upload";
 import BulkImportModal from "@/components/channels/bulk-import-modal";
+import { ChannelDetailModal } from "@/components/channels/channel-detail-modal";
 
 interface Channel {
   id: string;
@@ -36,22 +40,24 @@ const gradColors = [
 export default function Channels() {
   const [search, setSearch]       = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage]         = useState(1);
+  const [page, setPage]           = useState(1);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
-  const [showModal, setModal] = useState(false);
-  const [showImport, setImport] = useState(false);
-  const [showExport, setExport] = useState(false);
-  const [submitting, setSub]  = useState(false);
+
+  const [showModal,  setModal]   = useState(false);
+  const [showImport, setImport]  = useState(false);
+  const [showExport, setExport]  = useState(false);
+  const [submitting, setSub]     = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [editItem, setEditItem] = useState<Channel | null>(null);
+  const [editItem,   setEditItem]   = useState<Channel | null>(null);
+  const [manageId,   setManageId]   = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const [newLogo, setNewLogo]  = useState("");
+  const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
 
   const nameRef      = useRef<HTMLInputElement>(null);
@@ -201,7 +207,6 @@ export default function Channels() {
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
           </button>
 
-          {/* Export dropdown */}
           <div className="relative">
             <button onClick={() => setExport(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5">
               <Download size={12} /> Export <ChevronDown size={10} />
@@ -242,7 +247,6 @@ export default function Channels() {
           </div>
         </div>
 
-        {/* Bulk Action Bar */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 px-6 py-3 bg-primary/10 border border-primary/20 rounded-xl mb-3">
             <CheckSquare size={15} className="text-primary shrink-0" />
@@ -324,7 +328,20 @@ export default function Channels() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => { setEditItem(ch); setEditLogo(ch.logo ?? ""); }} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
+                          {/* Manage (Detail Modal) */}
+                          <button
+                            onClick={() => setManageId(ch.id)}
+                            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-primary/10 transition-colors"
+                            title="Manage channel — overrides, servers, GitHub details"
+                          >
+                            <Settings2 size={13} className="text-primary" />
+                          </button>
+                          {/* Quick edit */}
+                          <button
+                            onClick={() => { setEditItem(ch); setEditLogo(ch.logo ?? ""); }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10"
+                            title="Quick edit"
+                          >
                             <Edit size={13} className="text-[#8B92A5]" />
                           </button>
                           <button
@@ -373,12 +390,22 @@ export default function Channels() {
         </div>
       </div>
 
-      {/* Edit Channel Modal */}
+      {/* ── Channel Detail Modal (Manage) ──────────────────────────────── */}
+      {manageId && (
+        <ChannelDetailModal
+          channelId={manageId}
+          categories={categories}
+          onClose={() => setManageId(null)}
+          onSaved={() => refetch()}
+        />
+      )}
+
+      {/* ── Quick Edit Modal ───────────────────────────────────────────── */}
       {editItem && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">Edit Channel</h2>
+              <h2 className="text-sm font-bold text-white">Quick Edit — {editItem.name}</h2>
               <button onClick={() => { setEditItem(null); setEditLogo(""); }} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-4">
@@ -421,7 +448,7 @@ export default function Channels() {
         </div>
       )}
 
-      {/* Add Channel Modal */}
+      {/* ── Add Channel Modal ──────────────────────────────────────────── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -474,22 +501,17 @@ export default function Channels() {
               <p className="px-6 pb-2 text-xs text-red-400">{mutationError}</p>
             )}
             <div className="flex gap-3 px-6 pb-6">
-              <button onClick={() => { setModal(false); setMutationError(null); setNewLogo(""); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
+              <button onClick={() => { setModal(false); setNewLogo(""); setMutationError(null); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleSave} disabled={submitting} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-                {submitting ? "Saving…" : "Save Channel"}
+                {submitting ? "Saving…" : "Add Channel"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bulk Import Modal */}
       {showImport && (
-        <BulkImportModal
-          categories={categories}
-          onClose={() => setImport(false)}
-          onImported={() => { refetch(); }}
-        />
+        <BulkImportModal onClose={() => setImport(false)} onSuccess={() => { setImport(false); refetch(); }} />
       )}
     </>
   );

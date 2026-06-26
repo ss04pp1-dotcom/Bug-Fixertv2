@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
-import { Prisma, StreamType, HealthOverride } from '@prisma/client';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Prisma, StreamType, HealthOverride, ServerSourceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
@@ -313,5 +313,145 @@ export class ChannelsService {
       lines.push(c.primaryStreamUrl);
     }
     return lines.join('\n');
+  }
+
+  // ── Server management ───────────────────────────────────────────────────────
+
+  async getServers(channelId: string) {
+    await this.findOne(channelId);
+    return this.prisma.channelServer.findMany({
+      where: { channelId, deletedAt: null },
+      orderBy: { priority: 'asc' },
+      include: { githubSource: { select: { id: true, name: true } } },
+    });
+  }
+
+  async addServer(channelId: string, dto: {
+    link: string;
+    cookie?: string;
+    userAgent?: string;
+    referer?: string;
+    origin?: string;
+    priority?: number;
+  }) {
+    await this.findOne(channelId);
+    return this.prisma.channelServer.create({
+      data: {
+        channelId,
+        link: dto.link,
+        cookie: dto.cookie ?? null,
+        userAgent: dto.userAgent ?? null,
+        referer: dto.referer ?? null,
+        origin: dto.origin ?? null,
+        priority: dto.priority ?? 0,
+        sourceType: ServerSourceType.ADMIN,
+        healthCheckEnabled: true,
+        enabled: true,
+        createdBySync: false,
+      },
+      include: { githubSource: { select: { id: true, name: true } } },
+    });
+  }
+
+  async reorderServers(channelId: string, servers: { id: string; priority: number }[]) {
+    await this.findOne(channelId);
+    await this.prisma.$transaction(
+      servers.map(s =>
+        this.prisma.channelServer.update({
+          where: { id: s.id, channelId },
+          data: { priority: s.priority },
+        }),
+      ),
+    );
+    return this.getServers(channelId);
+  }
+
+  async updateServer(channelId: string, serverId: string, dto: {
+    enabled?: boolean;
+    link?: string;
+    cookie?: string | null;
+    userAgent?: string | null;
+    referer?: string | null;
+    origin?: string | null;
+  }) {
+    const server = await this.prisma.channelServer.findFirst({
+      where: { id: serverId, channelId, deletedAt: null },
+    });
+    if (!server) throw new NotFoundException('Server not found');
+    await this.prisma.channelServer.update({ where: { id: serverId }, data: dto });
+    return this.getServers(channelId);
+  }
+
+  async deleteServer(channelId: string, serverId: string) {
+    const server = await this.prisma.channelServer.findFirst({
+      where: { id: serverId, channelId, deletedAt: null },
+    });
+    if (!server) throw new NotFoundException('Server not found');
+    await this.prisma.channelServer.update({
+      where: { id: serverId },
+      data: { deletedAt: new Date() },
+    });
+    return { message: 'Server removed' };
+  }
+
+  async testServer(channelId: string, serverId: string) {
+    const server = await this.prisma.channelServer.findFirst({
+      where: { id: serverId, channelId, deletedAt: null },
+    });
+    if (!server) throw new NotFoundException('Server not found');
+
+    const startTime = Date.now();
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      const reqHeaders: Record<string, string> = {
+        'User-Agent': server.userAgent ?? 'StreamPro/1.0',
+        'Range': 'bytes=0-1023',
+      };
+      if (server.cookie)  reqHeaders['Cookie']  = server.cookie;
+      if (server.referer) reqHeaders['Referer'] = server.referer;
+      if (server.origin)  reqHeaders['Origin']  = server.origin;
+
+      const res = await fetch(server.link, {
+        method: 'HEAD',
+        signal: controller.signal,
+        headers: reqHeaders,
+      });
+      clearTimeout(timer);
+      const latencyMs = Date.now() - startTime;
+      const ok = res.ok || res.status === 206 || res.status === 200;
+      return {
+        ok,
+        status: res.status,
+        latencyMs,
+        contentType: res.headers.get('content-type') ?? null,
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        status: null,
+        latencyMs: Date.now() - startTime,
+        error: err?.name === 'AbortError' ? 'Timeout (12s)' : err?.message ?? 'Connection failed',
+      };
+    }
+  }
+
+  // ── Admin overrides ─────────────────────────────────────────────────────────
+
+  async updateOverrides(channelId: string, dto: {
+    adminNameOverride?: string | null;
+    adminLogoOverride?: string | null;
+    adminCategoryIdOverride?: string | null;
+    categoryId?: string | null;
+  }) {
+    await this.findOne(channelId);
+    return this.prisma.channel.update({ where: { id: channelId }, data: dto });
+  }
+
+  async resetOverride(channelId: string, field: string) {
+    const allowed = ['adminNameOverride', 'adminLogoOverride', 'adminCategoryIdOverride'];
+    if (!allowed.includes(field)) throw new BadRequestException(`Invalid override field: ${field}`);
+    await this.findOne(channelId);
+    return this.prisma.channel.update({ where: { id: channelId }, data: { [field]: null } });
   }
 }

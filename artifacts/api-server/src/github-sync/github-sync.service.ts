@@ -241,12 +241,13 @@ export class GitHubSyncService {
             if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
             stats.added++;
           } else {
-            // Update logo only if no admin override
+            // Update from GitHub, but never overwrite fields the admin has explicitly set
             const ch = await tx.channel.findUnique({
               where: { id: channelId },
-              select: { adminLogoOverride: true },
+              select: { adminLogoOverride: true, adminNameOverride: true },
             });
             const updateData: Record<string, unknown> = { normalizedName: normalized };
+            if (!ch?.adminNameOverride) updateData.name = item.name;
             if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
             await tx.channel.update({ where: { id: channelId }, data: updateData });
           }
