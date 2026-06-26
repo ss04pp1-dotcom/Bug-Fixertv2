@@ -249,7 +249,7 @@ export default function HomeScreen() {
           <Text style={s.headerBrand}>StreamPro</Text>
         </View>
         <View style={s.headerRight}>
-          <Pressable onPress={() => router.push('/(main)/search')} style={s.iconBtn}>
+          <Pressable onPress={() => router.push('/search-screen')} style={s.iconBtn}>
             <Ionicons name="search" size={24} color={C.text} />
           </Pressable>
           <Pressable onPress={() => router.push('/notifications')} style={s.iconBtn}>

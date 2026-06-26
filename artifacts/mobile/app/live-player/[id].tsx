@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Image, FlatList,
+  ScrollView, StatusBar, Image, FlatList, useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,8 +28,9 @@ export default function LivePlayerScreen() {
     id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
   }>();
 
-  const insets   = useSafeAreaInsets();
-  const { width: W } = Dimensions.get('window');
+  const insets = useSafeAreaInsets();
+  const { width: W, height: H } = useWindowDimensions();
+  const isLandscape = W > H;
 
   const contentTitle = titleParam || 'Live TV';
   const logoUrl      = passedLogo || '';
@@ -114,8 +115,8 @@ export default function LivePlayerScreen() {
   }, []);
 
   return (
-    <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+    <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
+      <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
       {/* ── Premium Player ──────────────────────────────────────────────── */}
       <PremiumVideoPlayer
@@ -124,7 +125,10 @@ export default function LivePlayerScreen() {
         isLive
         isLoading={fetchLoading}
         hasError={fetchError}
-        onBack={() => router.back()}
+        onBack={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace('/(main)/live-tv');
+        }}
         onRetry={loadStream}
         onRefreshStream={loadStream}
         contentId={id}

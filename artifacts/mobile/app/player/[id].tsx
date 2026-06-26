@@ -152,7 +152,10 @@ export default function PlayerScreen() {
         title={contentTitle}
         isLoading={srcLoading}
         hasError={srcError}
-        onBack={() => router.back()}
+        onBack={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace('/(main)');
+        }}
         onRetry={loadStream}
         onRefreshStream={loadStream}
         // FIX 16: Series হলে active episode id পাঠাও (series id নয়)

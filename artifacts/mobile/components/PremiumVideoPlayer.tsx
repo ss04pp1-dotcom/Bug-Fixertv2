@@ -13,6 +13,7 @@ import {
   ActivityIndicator, StatusBar, Platform, PanResponder, Modal,
   BackHandler, Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
@@ -602,13 +603,29 @@ function SettingsSheet({ visible, sheet, onClose, onSelect, speed, videoTracks, 
     items = SPEED_OPTS.map(s => ({ label: s === 1 ? 'Normal' : `${s}×`, value: s, isActive: s === speed }));
   } else if (sheet === 'quality' && videoTracks.length > 0) {
     sheetTitle = 'Video Quality';
+    // Deduplicate tracks: keep only the highest-bitrate track per height
+    const seen = new Map<number, { idx: number; bitrate: number }>();
+    videoTracks.forEach((t, i) => {
+      const h = t.height || 0;
+      // Skip tracks with suspiciously low bitrate that are likely audio-only renditions
+      const br = t.bitrate || 0;
+      if (h > 0 && br > 0) {
+        const existing = seen.get(h);
+        if (!existing || br > existing.bitrate) seen.set(h, { idx: i, bitrate: br });
+      } else if (h > 0 && !seen.has(h)) {
+        seen.set(h, { idx: i, bitrate: 0 });
+      }
+    });
+    const uniqueTracks = Array.from(seen.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([height, { idx, bitrate }]) => ({
+        label: `${height}p${bitrate > 0 ? ` · ${Math.round(bitrate / 1000)}kbps` : ''}`,
+        value: idx,
+        isActive: idx === selectedVidIdx,
+      }));
     items = [
       { label: 'Auto', value: -1, isActive: selectedVidIdx === -1 },
-      ...videoTracks.map((t, i) => ({
-        label: t.height ? `${t.height}p${t.bitrate ? ` · ${Math.round(t.bitrate / 1000)}kbps` : ''}` : `Track ${i + 1}`,
-        value: i,
-        isActive: i === selectedVidIdx,
-      })),
+      ...uniqueTracks,
     ];
   } else if (sheet === 'audio') {
     sheetTitle = 'Audio Track';
@@ -701,6 +718,7 @@ export default function PremiumVideoPlayer({
   episodes = [], currentEpIdx = 0, onEpisodeChange,
   onNext, onPrev, style,
 }: PremiumPlayerProps) {
+  const insets = useSafeAreaInsets();
   const [dims, setDims] = useState(Dimensions.get('window'));
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setDims(window));
@@ -877,9 +895,12 @@ export default function PremiumVideoPlayer({
     const isLandscape = dims.width > dims.height;
     if (isLandscape && !fullscreen) {
       setFullscreen(true);
+      // In landscape, auto-fill the screen for IPTV (stretch avoids black bars on wide screens)
+      setAspect('stretch');
     } else if (!isLandscape && fullscreen && !manualFsRef.current) {
-      // Device rotated back to portrait (auto mode) → exit fullscreen
+      // Device rotated back to portrait (auto mode) → exit fullscreen, restore contain
       setFullscreen(false);
+      setAspect('contain');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dims.width, dims.height]);
@@ -943,8 +964,10 @@ export default function PremiumVideoPlayer({
   const startHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
-      ctrlOpacity.value = withTiming(0, { duration: 400 });
-      runOnJS(setCtrlHidden)();
+      // Run setCtrlHidden AFTER animation finishes so showCtrlRef stays true during fade
+      ctrlOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
+        if (finished) runOnJS(setCtrlHidden)();
+      });
     }, 4500);
   }, [ctrlOpacity, setCtrlHidden]);
 
@@ -1213,7 +1236,13 @@ export default function PremiumVideoPlayer({
                 <Text style={p.altBtnTxt}>Try Server {srcIdx + 2}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => { setPlayerError(null); refreshSource(); }} style={p.retryBtn}>
+            <TouchableOpacity onPress={() => {
+                setPlayerError(null);
+                setSrcIdx(0);
+                setReady(false);
+                setBuffering(true);
+                onRetry?.();
+              }} style={p.retryBtn}>
               <Ionicons name="refresh" size={16} color="#fff" />
               <Text style={p.retryTxt}>Retry</Text>
             </TouchableOpacity>
@@ -1270,9 +1299,9 @@ export default function PremiumVideoPlayer({
 
           {/* ── Top bar ─────────────────────────────────────────────────── */}
           {!isLocked && (
-            <View style={p.topBar}>
+            <View style={[p.topBar, { paddingTop: (fullscreen ? insets.top : 0) + 12 }]}>
               <TouchableOpacity
-                onPress={fullscreen ? () => setFullscreen(false) : onBack}
+                onPress={fullscreen ? () => { setFullscreen(false); setAspect('contain'); } : onBack}
                 style={p.iconBtn}
               >
                 <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -1453,13 +1482,17 @@ export default function PremiumVideoPlayer({
                       const target = el || document.documentElement;
                       (target.requestFullscreen?.() ?? Promise.resolve()).catch(() => {});
                       setFullscreen(true);
+                      setAspect('stretch');
                     } else {
                       document.exitFullscreen?.().catch(() => {});
                       setFullscreen(false);
+                      setAspect('contain');
                     }
                   } else {
                     manualFsRef.current = true;
-                    setFullscreen(v => !v);
+                    const goingFs = !fullscreen;
+                    setFullscreen(goingFs);
+                    setAspect(goingFs ? 'stretch' : 'contain');
                   }
                   bumpCtrl();
                 }} style={p.toolBtn}>
