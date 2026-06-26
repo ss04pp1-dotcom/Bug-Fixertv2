@@ -34,6 +34,7 @@ interface SyncLog {
   added: number;
   updated: number;
   deleted: number;
+  failed: number;
   durationMs: number | null;
   errorMessage: string | null;
   startedAt: string;
@@ -250,10 +251,16 @@ export default function GitHubSourcesPage() {
                       <td className="px-4 py-3 text-white font-medium">{source.channelCount}</td>
                       <td className="px-4 py-3 text-white font-medium">{source.serverCount}</td>
                       <td className="px-4 py-3">
-                        <div className="text-white">{formatRelative(source.lastSyncAt)}</div>
+                        <div className="text-white text-sm">{formatRelative(source.lastSyncAt)}</div>
                         {lastLog && (
-                          <div className="text-xs text-[#8B92A5] mt-0.5">
-                            +{lastLog.added} /{lastLog.updated}↺ /{lastLog.deleted}✕ · {formatMs(lastLog.durationMs)}
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 font-medium">+{lastLog.added}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">↻{lastLog.updated}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 font-medium">−{lastLog.deleted}</span>
+                            {lastLog.failed > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">✕{lastLog.failed}</span>
+                            )}
+                            <span className="text-[10px] text-[#8B92A5]">{formatMs(lastLog.durationMs)}</span>
                           </div>
                         )}
                       </td>
@@ -298,19 +305,24 @@ export default function GitHubSourcesPage() {
                       <tr key={`${source.id}-log`} className="bg-white/[0.015]">
                         <td colSpan={7} className="px-8 py-3">
                           <p className="text-xs text-[#8B92A5] font-medium mb-2">Recent sync logs</p>
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {source.syncLogs.slice(0, 5).map((log, i) => (
-                              <div key={i} className="flex items-center gap-3 text-xs">
+                              <div key={i} className="flex flex-wrap items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
                                 <span className={cn(
-                                  "px-1.5 py-0.5 rounded text-[10px] font-medium",
-                                  log.status === "success" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                                  "px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                                  log.status === "success" ? "bg-green-500/20 text-green-400"
+                                  : log.status === "running"  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-red-500/20 text-red-400"
                                 )}>
                                   {log.status}
                                 </span>
-                                <span className="text-[#8B92A5]">{formatRelative(log.startedAt)}</span>
-                                <span className="text-white">+{log.added} added</span>
-                                <span className="text-white">{log.updated} updated</span>
-                                <span className="text-white">{log.deleted} removed</span>
+                                <span className="text-[#8B92A5] shrink-0">{formatRelative(log.startedAt)}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">+{log.added} added</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">↻{log.updated} updated</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">−{log.deleted} removed</span>
+                                {log.failed > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">✕{log.failed} failed</span>
+                                )}
                                 <span className="text-[#8B92A5]">{formatMs(log.durationMs)}</span>
                                 {log.errorMessage && (
                                   <span className="text-red-400 truncate max-w-xs">{log.errorMessage}</span>
