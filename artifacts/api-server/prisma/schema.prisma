@@ -387,6 +387,22 @@ model GitHubSyncLog {
   @@map("github_sync_logs")
 }
 
+model ChannelMergeLog {
+  id                  String   @id @default(uuid()) @db.Uuid
+  trigger             String
+  normalizedName      String   @map("normalized_name")
+  keptChannelId       String   @map("kept_channel_id")
+  mergedChannelIds    String[] @map("merged_channel_ids")
+  serversMoved        Int      @default(0) @map("servers_moved")
+  serversDeduplicated Int      @default(0) @map("servers_deduplicated")
+  details             Json?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([keptChannelId])
+  @@map("channel_merge_logs")
+}
+
 model PlaybackEvent {
   id         String   @id @default(uuid()) @db.Uuid
   channelId  String   @map("channel_id") @db.Uuid

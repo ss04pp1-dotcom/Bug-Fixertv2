@@ -14,6 +14,14 @@ export class GitHubSyncScheduler {
 
   @Cron('* * * * *', { name: 'github-sync-tick' })
   async tick(): Promise<void> {
+    // Startup deduplication must complete before any sync runs.
+    // OnModuleInit is guaranteed to finish before the first cron fires, but
+    // this guard makes the invariant explicit and safe against future refactors.
+    if (!this.syncService.isDedupReady()) {
+      this.logger.log('Startup deduplication not yet complete — skipping sync tick');
+      return;
+    }
+
     const now = new Date();
 
     const sources = await this.prisma.gitHubSource.findMany({
