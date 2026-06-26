@@ -4,20 +4,19 @@ import {
   ScrollView, StatusBar, Platform, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
-import YouTubePlayer, { isYouTubeUrl } from '@/components/YouTubePlayer';
+import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', text: '#fff', dim: '#9CA3AF',
 };
 
-// Detect URLs that cannot be played directly (excluding YouTube — handled separately)
 function getUnsupportedUrlReason(url: string): string | null {
   if (!url) return 'No stream URL configured for this content.';
   const lower = url.toLowerCase();
@@ -27,6 +26,8 @@ function getUnsupportedUrlReason(url: string): string | null {
     return 'Social media URLs cannot be played directly. Use an HLS/DASH/MP4 stream URL.';
   return null;
 }
+
+const { width: SW } = Dimensions.get('window');
 
 export default function PlayerScreen() {
   const { id, type, title: titleParam, season } = useLocalSearchParams<{
@@ -46,22 +47,22 @@ export default function PlayerScreen() {
 
   const cType = (type || 'movie') as 'movie' | 'series';
 
-  // ── Stream sources ─────────────────────────────────────────────────────────
-  const [sources, setSources]     = useState<StreamSource[]>([]);
-  const [srcLoading, setSrcLoad]  = useState(true);
-  const [srcError, setSrcError]   = useState(false);
+  // ── Stream sources ──────────────────────────────────────────────────────────
+  const [sources, setSources]       = useState<StreamSource[]>([]);
+  const [srcLoading, setSrcLoad]    = useState(true);
+  const [srcError, setSrcError]     = useState(false);
   const [srcErrorMsg, setSrcErrMsg] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
 
-  // ── Series episode state ───────────────────────────────────────────────────
-  const [epIdx, setEpIdx]         = useState(season ? parseInt(season) - 1 : 0);
+  // ── Series episode state ────────────────────────────────────────────────────
+  const [epIdx, setEpIdx]       = useState(season ? parseInt(season) - 1 : 0);
   const [activeTab, setActiveTab] = useState<'info' | 'episodes' | 'related'>('info');
 
-  // ── Content data ───────────────────────────────────────────────────────────
-  const { data: movieData }   = useMovie(cType === 'movie' ? id : '');
-  const { data: seriesData }  = useSeries(cType === 'series' ? id : '');
-  const { data: relatedMoviesRaw }  = useRelatedMovies(cType === 'movie' ? id : '');
-  const { data: relatedSeriesRaw }  = useRecommendations('series', cType === 'series' ? id : '');
+  // ── Content data ────────────────────────────────────────────────────────────
+  const { data: movieData }  = useMovie(cType === 'movie' ? id : '');
+  const { data: seriesData } = useSeries(cType === 'series' ? id : '');
+  const { data: relatedMoviesRaw } = useRelatedMovies(cType === 'movie' ? id : '');
+  const { data: relatedSeriesRaw } = useRecommendations('series', cType === 'series' ? id : '');
 
   const contentData  = movieData || seriesData;
   const contentTitle = titleParam || (contentData as any)?.title || (contentData as any)?.name || 'Now Playing';
@@ -71,13 +72,12 @@ export default function PlayerScreen() {
   const year         = (contentData as any)?.releaseYear || (contentData as any)?.year || '';
   const genre        = (contentData as any)?.genre || '';
 
-  // Series এ episodes সরাসরি নয়, seasons[].episodes[] এ থাকে
   const episodes: any[] = useMemo(() => {
     const sd = seriesData as any;
     if (sd?.seasons?.length) {
       const all: any[] = [];
-      for (const season of sd.seasons) {
-        if (Array.isArray(season.episodes)) all.push(...season.episodes);
+      for (const s of sd.seasons) {
+        if (Array.isArray(s.episodes)) all.push(...s.episodes);
       }
       return all;
     }
@@ -91,7 +91,7 @@ export default function PlayerScreen() {
     return Array.isArray(d) ? d.slice(0, 12) : [];
   }, [relatedRaw]);
 
-  // ── Load stream ────────────────────────────────────────────────────────────
+  // ── Load stream ─────────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
     setSrcLoad(true); setSrcError(false); setSrcErrMsg(''); setYoutubeUrl(null);
     try {
@@ -100,7 +100,6 @@ export default function PlayerScreen() {
         const d   = res.data?.data || res.data;
         const url = d?.streamUrl || d?.stream_url || d?.videoUrl || d?.video_url || d?.url || '';
         if (!url) { setSrcErrMsg('No stream URL configured for this content.'); setSrcError(true); return; }
-        // YouTube → use embedded YouTube player
         if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
@@ -121,7 +120,6 @@ export default function PlayerScreen() {
         const ep  = allEps[epIdx] || allEps[0];
         const url = ep?.streamUrl || ep?.stream_url || ep?.videoUrl || ep?.url || '';
         if (!url) { setSrcErrMsg('No episode stream URL found.'); setSrcError(true); return; }
-        // YouTube → use embedded YouTube player
         if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
@@ -139,7 +137,7 @@ export default function PlayerScreen() {
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Navigation ──────────────────────────────────────────────────────────────
   const handleNext = episodes.length > 0 && epIdx < episodes.length - 1
     ? () => setEpIdx(i => i + 1) : undefined;
   const handlePrev = episodes.length > 0 && epIdx > 0
@@ -156,22 +154,130 @@ export default function PlayerScreen() {
     else router.replace('/(main)');
   };
 
-  // YouTube URL → show dedicated YouTube player (full screen replacement)
+  // ── Shared below-player content ─────────────────────────────────────────────
+  const belowPlayer = (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: C.bg }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+    >
+      {/* Content header */}
+      <View style={s.infoRow}>
+        {poster ? (
+          <Image source={{ uri: poster }} style={s.poster} resizeMode="cover" />
+        ) : (
+          <LinearGradient colors={[C.primary, C.accent]} style={s.poster}>
+            <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.6)" />
+          </LinearGradient>
+        )}
+        <View style={s.infoText}>
+          <Text style={s.infoTitle} numberOfLines={2}>{contentTitle}</Text>
+          <View style={s.metaRow}>
+            {year   ? <Text style={s.metaChip}>{year}</Text> : null}
+            {rating ? <Text style={[s.metaChip, { borderColor: C.accent, color: C.accent }]}>★ {rating}</Text> : null}
+            {genre  ? <Text style={s.metaChip}>{genre}</Text> : null}
+          </View>
+        </View>
+      </View>
+
+      {/* Tab bar */}
+      {(episodes.length > 0 || related.length > 0 || overview) && (
+        <View style={s.tabBar}>
+          {(['info', ...(episodes.length > 0 ? ['episodes'] : []), ...(related.length > 0 ? ['related'] : [])] as const).map(tab => (
+            <TouchableOpacity key={tab} onPress={() => setActiveTab(tab as any)} style={s.tabItem}>
+              <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>
+                {tab === 'info' ? 'INFO' : tab === 'episodes' ? 'EPISODES' : 'MORE LIKE THIS'}
+              </Text>
+              {activeTab === tab && <View style={s.tabUnderline} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Info tab */}
+      {activeTab === 'info' && overview ? (
+        <View style={s.section}>
+          <Text style={s.overviewTxt}>{overview}</Text>
+        </View>
+      ) : null}
+
+      {/* Episodes tab */}
+      {activeTab === 'episodes' && episodes.length > 0 && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Episodes</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
+            {episodes.map((_: any, i: number) => {
+              const active = i === epIdx;
+              return (
+                <TouchableOpacity key={i} onPress={() => setEpIdx(i)} style={[s.epBox, active && s.epBoxActive]}>
+                  {active ? (
+                    <LinearGradient colors={[C.primary, C.accent]} style={s.epGrad}>
+                      <Text style={s.epTxtA}>{i + 1}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <Text style={s.epTxt}>{i + 1}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Related tab */}
+      {activeTab === 'related' && related.length > 0 && (
+        <View style={s.section}>
+          <View style={s.relGrid}>
+            {related.map((item: any, i: number) => (
+              <TouchableOpacity
+                key={item.id || i}
+                onPress={() => router.push(`/player/${item.id}?type=${cType}` as any)}
+                style={s.relCard}
+              >
+                {item.posterUrl || item.thumbnailUrl ? (
+                  <Image source={{ uri: item.posterUrl || item.thumbnailUrl }} style={s.relThumb} resizeMode="cover" />
+                ) : (
+                  <LinearGradient colors={['#7C3AED', '#2563EB']} style={s.relThumb}>
+                    <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.5)" />
+                  </LinearGradient>
+                )}
+                <Text style={s.relTitle} numberOfLines={2}>{item.title || item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  // ── YouTube URL → embed player + show related below ─────────────────────────
   if (youtubeUrl) {
     return (
-      <YouTubePlayer
-        url={youtubeUrl}
-        title={contentTitle}
-        onBack={handleBack}
-      />
+      <View style={s.root}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+        {/* Back button over the player */}
+        <View style={[s.ytHeader, { paddingTop: insets.top + 4 }]}>
+          <TouchableOpacity onPress={handleBack} style={s.ytBack} hitSlop={12}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={s.ytTitle} numberOfLines={1}>{contentTitle}</Text>
+        </View>
+
+        {/* YouTube player */}
+        <YouTubeVideoBox url={youtubeUrl} />
+
+        {/* Related content below */}
+        {belowPlayer}
+      </View>
     );
   }
 
+  // ── Normal stream player ────────────────────────────────────────────────────
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {/* ── Premium Player ──────────────────────────────────────────────── */}
       <PremiumVideoPlayer
         sources={sources}
         title={contentTitle}
@@ -190,107 +296,26 @@ export default function PlayerScreen() {
         onPrev={handlePrev}
       />
 
-      {/* ── Below player (portrait content) ────────────────────────────── */}
-      <ScrollView
-        style={{ flex: 1, backgroundColor: C.bg }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-      >
-        {/* Content header */}
-        <View style={s.infoRow}>
-          {poster ? (
-            <Image source={{ uri: poster }} style={s.poster} resizeMode="cover" />
-          ) : (
-            <LinearGradient colors={[C.primary, C.accent]} style={s.poster}>
-              <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.6)" />
-            </LinearGradient>
-          )}
-          <View style={s.infoText}>
-            <Text style={s.infoTitle} numberOfLines={2}>{contentTitle}</Text>
-            <View style={s.metaRow}>
-              {year ? <Text style={s.metaChip}>{year}</Text> : null}
-              {rating ? <Text style={[s.metaChip, { borderColor: C.accent, color: C.accent }]}>★ {rating}</Text> : null}
-              {genre ? <Text style={s.metaChip}>{genre}</Text> : null}
-            </View>
-          </View>
-        </View>
-
-        {/* Tab bar */}
-        {(episodes.length > 0 || related.length > 0 || overview) && (
-          <View style={s.tabBar}>
-            {(['info', ...(episodes.length > 0 ? ['episodes'] : []), ...(related.length > 0 ? ['related'] : [])] as const).map(tab => (
-              <TouchableOpacity key={tab} onPress={() => setActiveTab(tab as any)} style={s.tabItem}>
-                <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>
-                  {tab === 'info' ? 'INFO' : tab === 'episodes' ? 'EPISODES' : 'MORE LIKE THIS'}
-                </Text>
-                {activeTab === tab && <View style={s.tabUnderline} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Info tab */}
-        {activeTab === 'info' && overview ? (
-          <View style={s.section}>
-            <Text style={s.overviewTxt}>{overview}</Text>
-          </View>
-        ) : null}
-
-        {/* Episodes tab */}
-        {activeTab === 'episodes' && episodes.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Episodes</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
-              {episodes.map((_: any, i: number) => {
-                const active = i === epIdx;
-                return (
-                  <TouchableOpacity key={i} onPress={() => setEpIdx(i)} style={[s.epBox, active && s.epBoxActive]}>
-                    {active ? (
-                      <LinearGradient colors={[C.primary, C.accent]} style={s.epGrad}>
-                        <Text style={s.epTxtA}>{i + 1}</Text>
-                      </LinearGradient>
-                    ) : (
-                      <Text style={s.epTxt}>{i + 1}</Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Related tab */}
-        {activeTab === 'related' && related.length > 0 && (
-          <View style={s.section}>
-            <View style={s.relGrid}>
-              {related.map((item: any, i: number) => (
-                <TouchableOpacity
-                  key={item.id || i}
-                  onPress={() => router.push(`/movie/${item.id}` as any)}
-                  style={s.relCard}
-                >
-                  {item.posterUrl || item.thumbnailUrl ? (
-                    <Image source={{ uri: item.posterUrl || item.thumbnailUrl }} style={s.relThumb} resizeMode="cover" />
-                  ) : (
-                    <LinearGradient colors={['#7C3AED', '#2563EB']} style={s.relThumb}>
-                      <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.5)" />
-                    </LinearGradient>
-                  )}
-                  <Text style={s.relTitle} numberOfLines={2}>{item.title || item.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-      </ScrollView>
+      {belowPlayer}
     </View>
   );
 }
 
-const { width: SW } = Dimensions.get('window');
-
 const s = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: C.bg },
+
+  // YouTube header
+  ytHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingBottom: 8, gap: 10,
+    backgroundColor: C.bg,
+  },
+  ytBack: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  ytTitle: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
 
   infoRow:   { flexDirection: 'row', padding: 14, gap: 12 },
   poster:    { width: 72, height: 100, borderRadius: 8, overflow: 'hidden', backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' },
