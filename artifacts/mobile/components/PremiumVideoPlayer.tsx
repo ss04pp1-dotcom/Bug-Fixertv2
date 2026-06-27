@@ -78,6 +78,13 @@ function detectStreamFormat(url: string): StreamFormat {
   // Common IPTV URL patterns (no extension)
   if (lower.match(/:\d{2,5}\/(live|stream|channel)\//)) return 'HLS';
   if (lower.match(/:\d{2,5}\/(movie|vod)\//)) return 'MP4';
+  // Xtream Codes API: /get.php?...type=m3u_plus or ...output=ts
+  if (lower.includes('get.php') && lower.includes('type=m3u')) return 'HLS';
+  if (lower.includes('get.php') && lower.includes('output=ts')) return 'MPEGTS';
+  // Xtream short-format: /live/user/pass/id (no slash after id, bare numeric id)
+  if (lower.match(/\/live\/[^/]+\/[^/]+\/\d+$/)) return 'HLS';
+  if (lower.match(/\/movie\/[^/]+\/[^/]+\/\d+$/)) return 'MP4';
+  if (lower.match(/\/series\/[^/]+\/[^/]+\/\d+$/)) return 'MP4';
   return 'UNKNOWN';
 }
 
@@ -166,7 +173,14 @@ async function loadWatchPosition(contentId: string): Promise<number> {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export interface StreamSource { url: string; label: string; quality: string; headers?: Record<string, string>; }
+export interface StreamSource {
+  url: string;
+  label: string;
+  quality: string;
+  headers?: Record<string, string>;
+  cookieExpired?: boolean;
+  cookieExpiresAt?: string | null;
+}
 
 export interface PremiumPlayerProps {
   sources:          StreamSource[];
@@ -590,6 +604,7 @@ export default function PremiumVideoPlayer({
 
   // ── Stream source state ────────────────────────────────────────────────────
   const [srcIdx, setSrcIdx]         = useState(0);
+  const [switching, setSwitching]   = useState(false);  // true during server-switch unmount
   const [streamFormat, setFormat]   = useState<StreamFormat>('UNKNOWN');
 
   // ── Playback state ─────────────────────────────────────────────────────────
@@ -900,6 +915,22 @@ export default function PremiumVideoPlayer({
     bumpCtrl();
   }, [srcIdx, onRefreshStream, bumpCtrl]);
 
+  // ── Smooth server switch (unmount → pause → remount) ───────────────────────
+  const switchToSource = useCallback((i: number) => {
+    if (i === srcIdx || switching) return;
+    VideoLog.info('PLAYER', `User switching to server ${i + 1}`);
+    setReady(false);
+    setBuffering(true);
+    setPlayerError(null);
+    setSwitching(true);
+    setSrcIdx(-1);  // unmount video so old stream stops immediately
+    setTimeout(() => {
+      setSrcIdx(i);
+      setSwitching(false);
+    }, 150);  // brief pause for clean teardown
+    bumpCtrl();
+  }, [srcIdx, switching, bumpCtrl]);
+
   // ── PanResponder ───────────────────────────────────────────────────────────
   const vidW = fullscreen ? Math.max(dims.width, dims.height) : dims.width;
 
@@ -1113,11 +1144,11 @@ export default function PremiumVideoPlayer({
         </View>
       )}
 
-      {/* Connecting state */}
+      {/* Connecting / switching state */}
       {!isLoading && !hasError && !src && !isHttpBlocked && (
         <View style={p.overlay} pointerEvents="none">
           <ActivityIndicator size="large" color={C.primary} />
-          <Text style={p.overlayTxt}>Connecting to stream…</Text>
+          <Text style={p.overlayTxt}>{switching ? 'Switching server…' : 'Connecting to stream…'}</Text>
         </View>
       )}
 
@@ -1175,17 +1206,26 @@ export default function PremiumVideoPlayer({
           {/* ── Server pills ─────────────────────────────────────────────── */}
           {!isLocked && sources.length > 1 && (
             <View style={p.serverRow}>
-              {sources.map((s, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => { setSrcIdx(i); bumpCtrl(); }}
-                  style={[p.pill, i === srcIdx && p.pillActive]}
-                >
-                  <Text style={[p.pillTxt, i === srcIdx && p.pillActiveTxt]}>
-                    {i === srcIdx ? '● ' : ''}{s.label || s.quality}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {sources.map((s, i) => {
+                const isActive = i === srcIdx;
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => switchToSource(i)}
+                    disabled={switching}
+                    style={[
+                      p.pill,
+                      isActive && p.pillActive,
+                      s.cookieExpired && p.pillExpired,
+                    ]}
+                  >
+                    <Text style={[p.pillTxt, isActive && p.pillActiveTxt, s.cookieExpired && p.pillExpiredTxt]}>
+                      {isActive && switching ? '⟳ ' : isActive ? '● ' : ''}{s.label || s.quality}
+                      {s.cookieExpired ? ' ⚠' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
@@ -1401,10 +1441,12 @@ const p = StyleSheet.create({
 
   // Server pills
   serverRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 14, flexWrap: 'wrap', marginTop: 2 },
-  pill:      { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 14, borderWidth: 1, borderColor: C.border },
-  pillActive: { borderColor: C.primary, backgroundColor: 'rgba(139,92,246,0.2)' },
-  pillTxt:    { color: '#ccc', fontSize: 12 },
+  pill:         { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 14, borderWidth: 1, borderColor: C.border },
+  pillActive:   { borderColor: C.primary, backgroundColor: 'rgba(139,92,246,0.2)' },
+  pillExpired:  { borderColor: 'rgba(239,68,68,0.5)', backgroundColor: 'rgba(239,68,68,0.12)' },
+  pillTxt:       { color: '#ccc', fontSize: 12 },
   pillActiveTxt: { color: C.primary, fontWeight: '700' },
+  pillExpiredTxt: { color: '#f87171' },
 
   // LIVE
   liveRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginTop: 4 },
