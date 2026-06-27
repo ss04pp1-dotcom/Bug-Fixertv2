@@ -55,7 +55,6 @@ export default function LivePlayerScreen() {
   const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportedRef        = useRef(false);
   const playbackStartRef   = useRef<number>(0);
-  const autoRefreshRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const clearPlaybackTimer = () => {
     if (playbackTimerRef.current) {
@@ -218,19 +217,6 @@ export default function LivePlayerScreen() {
   }, [id, passedUrl, buildSources]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
-
-  // ── Auto-refresh stream URL every 4 hours (live stream URLs can expire) ────
-  const AUTO_REFRESH_MS = 4 * 60 * 60 * 1000;
-  useEffect(() => {
-    if (!id) return;
-    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    autoRefreshRef.current = setInterval(() => {
-      loadStream();
-    }, AUTO_REFRESH_MS);
-    return () => {
-      if (autoRefreshRef.current) { clearInterval(autoRefreshRef.current); autoRefreshRef.current = null; }
-    };
-  }, [id, loadStream]);
 
   // ── Switch channel ─────────────────────────────────────────────────────────
   const switchChannel = useCallback((ch: typeof related[0]) => {
