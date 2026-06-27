@@ -11,7 +11,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
   ActivityIndicator, StatusBar, Platform, PanResponder, Modal,
-  BackHandler, Alert,
+  BackHandler, Alert, AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -831,16 +831,37 @@ export default function PremiumVideoPlayer({
     return () => { off?.(); };
   }, []);
 
-  // ── Android back button for fullscreen ─────────────────────────────────────
+  // ── Android back button: fullscreen exit → PiP → back ─────────────────────
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (fullscreen) { setFullscreen(false); return true; }
+      // If video is playing, enter PiP instead of navigating away
+      if (!pip && isReady && !hasError) {
+        setPip(true);
+        return true;
+      }
       if (pip) { setPip(false); return true; }
       return false;
     });
     return () => sub.remove();
-  }, [fullscreen, pip]);
+  }, [fullscreen, pip, isReady, hasError]);
+
+  // ── Auto PiP when app goes to background ───────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS !== 'android' || IS_WEB) return;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      // When app goes to background and video is ready/playing → enter PiP
+      if (nextState === 'background' && isReady && !hasError && !pip) {
+        setPip(true);
+      }
+      // When app comes back to foreground, exit PiP
+      if (nextState === 'active' && pip) {
+        setPip(false);
+      }
+    });
+    return () => sub.remove();
+  }, [isReady, hasError, pip]);
 
   // ── Auto-hide controls ─────────────────────────────────────────────────────
   const setCtrlHidden = useCallback(() => {
