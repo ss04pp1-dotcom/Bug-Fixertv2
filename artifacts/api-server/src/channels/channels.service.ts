@@ -5,7 +5,7 @@ import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { BulkImportChannelsDto } from './dto/bulk-import-channel.dto';
 import { M3uImportService } from '../m3u-import/m3u-import.service';
-import { normalizeName } from '../github-sync/github-sync.service';
+import { normalizeName, GitHubSyncService } from '../github-sync/github-sync.service';
 
 @Injectable()
 export class ChannelsService {
@@ -14,6 +14,7 @@ export class ChannelsService {
   constructor(
     private prisma: PrismaService,
     private importService: M3uImportService,
+    private githubSyncService: GitHubSyncService,
   ) {}
 
   async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; isFeatured?: boolean }) {
@@ -500,6 +501,42 @@ export class ChannelsService {
         error: err?.name === 'AbortError' ? 'Timeout (12s)' : err?.message ?? 'Connection failed',
       };
     }
+  }
+
+  // ── Manual deduplication ────────────────────────────────────────────────────
+
+  async mergeDuplicates(): Promise<{ message: string; groupsMerged: number }> {
+    const dupeGroups = await this.prisma.$queryRaw<
+      { normalizedName: string; ids: string[] }[]
+    >`
+      SELECT
+        normalized_name AS "normalizedName",
+        array_agg(id::text ORDER BY created_at ASC) AS ids
+      FROM channels
+      WHERE normalized_name IS NOT NULL
+        AND deleted_at IS NULL
+      GROUP BY normalized_name
+      HAVING count(*) > 1
+    `;
+
+    if (dupeGroups.length === 0) {
+      return { message: 'No duplicate channels found', groupsMerged: 0 };
+    }
+
+    let merged = 0;
+    for (const group of dupeGroups) {
+      try {
+        await this.githubSyncService.mergeDuplicateGroup(group.normalizedName, group.ids, 'manual');
+        merged++;
+      } catch (e: any) {
+        this.logger.error(`Failed to merge group "${group.normalizedName}": ${e.message}`);
+      }
+    }
+
+    return {
+      message: `Merged ${merged} duplicate group(s) out of ${dupeGroups.length} found`,
+      groupsMerged: merged,
+    };
   }
 
   // ── Admin overrides ─────────────────────────────────────────────────────────

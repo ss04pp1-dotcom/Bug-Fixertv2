@@ -81,6 +81,12 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Bulk import channels' })
   bulkImport(@Body() dto: BulkImportChannelsDto) { return this.channelsService.bulkImport(dto); }
 
+  @Post('merge-duplicates')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Merge duplicate channels by normalized name' })
+  mergeDuplicates() { return this.channelsService.mergeDuplicates(); }
+
   @Post('parse-playlist')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')

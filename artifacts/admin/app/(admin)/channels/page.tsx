@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight,
-  Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare, Settings2,
+  Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare, Settings2, GitMerge,
 } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
@@ -56,6 +56,7 @@ export default function Channels() {
   const [manageId,   setManageId]   = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
@@ -107,6 +108,22 @@ export default function Channels() {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(channels.map(c => c.id)));
+    }
+  };
+
+  const handleMergeDuplicates = async () => {
+    if (!confirm("এটি সব duplicate চ্যানেল খুঁজে বের করে সার্ভার হিসেবে মার্জ করবে। চালিয়ে যাবেন?")) return;
+    setMerging(true);
+    try {
+      const res = await apiClient.post<any>("/v1/channels/merge-duplicates");
+      const result = res.data?.data ?? res.data;
+      alert(result?.message ?? "Merge complete");
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Merge failed";
+      alert(typeof msg === "string" ? msg : "Merge failed");
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -223,6 +240,15 @@ export default function Channels() {
             )}
           </div>
 
+          <button
+            onClick={handleMergeDuplicates}
+            disabled={merging}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-semibold hover:bg-orange-500/20 disabled:opacity-50"
+            title="Find all channels with the same name and merge them into one"
+          >
+            <GitMerge size={13} className={merging ? "animate-pulse" : ""} />
+            {merging ? "Merging…" : "Merge Duplicates"}
+          </button>
           <button onClick={() => setImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20">
             <Upload size={13} /> Bulk Import
           </button>
