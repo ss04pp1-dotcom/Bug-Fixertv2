@@ -82,8 +82,8 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
-  # Pin expo-updates to SDK 54 compatible version (56.x is for SDK 56 and breaks expo-modules-core 3.x)
-  "expo-updates": "~54.0.0"
+  # Pin expo-updates to SDK 54 compatible version (29.0.18 is Expo's tag for SDK 54)
+  "expo-updates": "~29.0.18"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
