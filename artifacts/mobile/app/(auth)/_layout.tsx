@@ -13,6 +13,7 @@ export default function AuthLayout() {
       }}
     >
       <Stack.Screen name="splash" />
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="forgot-password" />

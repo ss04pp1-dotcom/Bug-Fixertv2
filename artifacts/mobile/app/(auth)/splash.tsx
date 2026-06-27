@@ -8,13 +8,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 const { width: W, height: H } = Dimensions.get('window');
-
-SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function SplashScreenComponent() {
   const logoScale = useRef(new RNAnimated.Value(0.5)).current;
@@ -23,8 +20,6 @@ export default function SplashScreenComponent() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
   useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-
     RNAnimated.parallel([
       RNAnimated.spring(logoScale, {
         toValue: 1,

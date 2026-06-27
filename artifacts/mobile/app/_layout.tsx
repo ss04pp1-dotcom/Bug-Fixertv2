@@ -8,7 +8,6 @@ import { useFonts } from 'expo-font';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
-import { useAuthStore } from '@/lib/auth-store';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,15 +28,15 @@ export const useFeatureFlagsContext = () => useContext(FeatureFlagsContext);
 // ─── App Guards (inside QueryClientProvider) ──────────────────────────────────
 function AppGuards({ children }: { children: React.ReactNode }) {
   const unwrap = (r: any) => r?.data?.data;
-  const checkAuth = useAuthStore((s) => s.checkAuth);
 
   useEffect(() => {
-    // Register safe navigation handler now that router is mounted
+    // Register safe navigation handler now that router is mounted.
+    // checkAuth() is intentionally NOT called here — the splash screen
+    // owns the initial auth check and navigation to avoid race conditions.
     setUnauthenticatedHandler(() => {
       try { router.replace('/(auth)/login'); } catch {}
     });
-    checkAuth();
-  }, [checkAuth]);
+  }, []);
 
   const { data: forceUpdate } = useQuery({
     queryKey: ['force-update'],
