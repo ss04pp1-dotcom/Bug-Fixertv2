@@ -1,6 +1,7 @@
 import React, { useEffect, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
 import OtaUpdateBanner from '@/components/OtaUpdateBanner';
+import MiniPlayer from '@/components/MiniPlayer';
 import { Slot, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -133,6 +134,7 @@ export default function RootLayout() {
             <Slot />
           </AppGuards>
           <OtaUpdateBanner />
+          <MiniPlayer />
         </View>
       </QueryClientProvider>
     </SafeAreaProvider>

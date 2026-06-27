@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
+import { usePlayerStore } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -25,8 +26,9 @@ export default function LivePlayerScreen() {
     streamUrl: passedUrl,
     logo: passedLogo,
     cat: passedCat,
+    fromMini,
   } = useLocalSearchParams<{
-    id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
+    id: string; title?: string; streamUrl?: string; logo?: string; cat?: string; fromMini?: string;
   }>();
 
   const insets = useSafeAreaInsets();
@@ -42,14 +44,35 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
-  // ── Hardware back button → go back to Live TV, not Home ───────────────────
+  const openMiniPlayer = usePlayerStore((s) => s.open);
+  const closeMiniPlayer = usePlayerStore((s) => s.close);
+
+  // Close mini player when opening full player screen
+  useEffect(() => { closeMiniPlayer(); }, [id]);
+
+  // ── Minimize to mini player instead of navigating away ────────────────────
+  const minimizeToMini = useCallback(() => {
+    if (sources.length > 0) {
+      openMiniPlayer({
+        title: contentTitle,
+        logo: logoUrl,
+        contentId: id,
+        contentType: 'channel',
+        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+        isLive: true,
+      });
+    }
+    router.replace('/(main)/live-tv');
+  }, [sources, contentTitle, logoUrl, id, openMiniPlayer]);
+
+  // ── Hardware back button → minimize to mini player ─────────────────────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      router.replace('/(main)/live-tv');
+      minimizeToMini();
       return true;
     });
     return () => sub.remove();
-  }, []);
+  }, [minimizeToMini]);
 
   // ── Playback reporting ─────────────────────────────────────────────────────
   const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -242,7 +265,7 @@ export default function LivePlayerScreen() {
         isLive
         isLoading={fetchLoading}
         hasError={fetchError}
-        onBack={() => router.replace('/(main)/live-tv')}
+        onBack={minimizeToMini}
         onRetry={loadStream}
         onRefreshStream={loadStream}
         contentId={id}

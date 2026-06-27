@@ -831,21 +831,16 @@ export default function PremiumVideoPlayer({
     return () => { off?.(); };
   }, []);
 
-  // ── Android back button: fullscreen exit → PiP → back ─────────────────────
+  // ── Android back button: fullscreen exit only (in-app mini player handles minimize) ──
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (fullscreen) { setFullscreen(false); return true; }
-      // If video is playing, enter PiP instead of navigating away
-      if (!pip && isReady && !hasError) {
-        setPip(true);
-        return true;
-      }
       if (pip) { setPip(false); return true; }
-      return false;
+      return false;  // let parent screen handle (mini player minimize)
     });
     return () => sub.remove();
-  }, [fullscreen, pip, isReady, hasError]);
+  }, [fullscreen, pip]);
 
   // ── Auto PiP when app goes to background ───────────────────────────────────
   useEffect(() => {

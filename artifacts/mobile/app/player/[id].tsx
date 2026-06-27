@@ -11,6 +11,7 @@ import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
 import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
+import { usePlayerStore } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -189,10 +190,26 @@ export default function PlayerScreen() {
     number: ep.episodeNumber || i + 1,
   }));
 
-  const handleBack = () => {
+  const openMiniPlayer = usePlayerStore((s) => s.open);
+  const closeMiniPlayer = usePlayerStore((s) => s.close);
+
+  // Close mini player when full player opens
+  useEffect(() => { closeMiniPlayer(); }, [id]);
+
+  const handleBack = useCallback(() => {
+    if (sources.length > 0) {
+      openMiniPlayer({
+        title: contentTitle,
+        logo: poster,
+        contentId: id,
+        contentType: cType,
+        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+        isLive: false,
+      });
+    }
     if (router.canGoBack()) router.back();
     else router.replace('/(main)');
-  };
+  }, [sources, contentTitle, poster, id, cType, openMiniPlayer]);
 
   // ── Shared below-player content ─────────────────────────────────────────────
   const belowPlayer = (
