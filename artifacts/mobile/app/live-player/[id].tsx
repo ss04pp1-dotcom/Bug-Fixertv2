@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Image, FlatList, useWindowDimensions,
+  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +42,16 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
+  const autoRefreshRef                = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Hardware back button → go back to Live TV, not Home ───────────────────
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace('/(main)/live-tv');
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // ── Playback reporting ─────────────────────────────────────────────────────
   const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -209,6 +219,19 @@ export default function LivePlayerScreen() {
   }, [id, passedUrl, buildSources]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
+
+  // ── Auto-refresh stream URL every 4 hours (live stream URLs can expire) ────
+  const AUTO_REFRESH_MS = 4 * 60 * 60 * 1000;
+  useEffect(() => {
+    if (!id) return;
+    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    autoRefreshRef.current = setInterval(() => {
+      loadStream();
+    }, AUTO_REFRESH_MS);
+    return () => {
+      if (autoRefreshRef.current) { clearInterval(autoRefreshRef.current); autoRefreshRef.current = null; }
+    };
+  }, [id, loadStream]);
 
   // ── Switch channel ─────────────────────────────────────────────────────────
   const switchChannel = useCallback((ch: typeof related[0]) => {

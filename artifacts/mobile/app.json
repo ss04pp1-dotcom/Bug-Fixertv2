@@ -65,10 +65,12 @@
         "react-native-video",
         {
           "enableNotificationControls": true,
-          "enableBackgroundPlayback": false
+          "enableBackgroundPlayback": true,
+          "enablePictureInPicture": true
         }
       ],
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      "./plugins/withPipSupport"
     ],
     "updates": {
       "enabled": true,

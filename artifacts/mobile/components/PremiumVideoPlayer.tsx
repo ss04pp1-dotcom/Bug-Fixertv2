@@ -49,10 +49,10 @@ const DEFAULT_HEADERS = {
 
 // ─── Buffer configs ───────────────────────────────────────────────────────────
 const BUFFER_LIVE = {
-  minBufferMs: 5000,
-  maxBufferMs: 20000,
-  bufferForPlaybackMs: 2000,
-  bufferForPlaybackAfterRebufferMs: 3000,
+  minBufferMs: 8000,
+  maxBufferMs: 50000,
+  bufferForPlaybackMs: 3000,
+  bufferForPlaybackAfterRebufferMs: 6000,
 };
 const BUFFER_VOD = {
   minBufferMs: 15000,
@@ -893,8 +893,8 @@ export default function PremiumVideoPlayer({
     durationRef.current = 0;
   }, [sources]);
 
-  // ── Stall detection: auto-switch if buffering > 15s with no data ───────────
-  const STALL_MS = 15_000;
+  // ── Stall detection: auto-switch if buffering > 30s with no data ───────────
+  const STALL_MS = 30_000;
   useEffect(() => {
     if (buffering && !playerError && src && !isLoading && !hasError) {
       stallTimerRef.current = setTimeout(() => {
