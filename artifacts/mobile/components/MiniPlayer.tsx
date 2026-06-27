@@ -1,21 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
   Platform, Dimensions, AppState, type AppStateStatus,
 } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/lib/player-store';
 
-const { width: SW } = Dimensions.get('window');
-const PLAYER_H = 110;
-const TAB_BAR_H = 68;
+// ─── Constants ────────────────────────────────────────────────────────────────
 
+const { width: SW, height: SH } = Dimensions.get('window');
+
+/** PiP window size — 16:9 landscape */
+const PIP_W   = 210;
+const PIP_H   = 118;   // ≈ 16:9
+const TITLE_H = 36;
+const MARGIN  = 12;
+const TAB_BAR = 72;    // rough tab-bar + bottom safe-area
+
+const SNAP_LEFT  = MARGIN;
+const SNAP_RIGHT = SW - PIP_W - MARGIN;
+
+// ─── Expo-Go / web guard ──────────────────────────────────────────────────────
 const IS_EXPO_GO = (() => {
   try {
     const C = require('expo-constants').default;
@@ -23,6 +35,7 @@ const IS_EXPO_GO = (() => {
   } catch { return false; }
 })();
 
+// ─── Inline native-video component ───────────────────────────────────────────
 function NativeVideo({
   uri, headers, paused, pip, onPipChange,
 }: {
@@ -34,6 +47,7 @@ function NativeVideo({
 }) {
   if (IS_EXPO_GO || Platform.OS === 'web') return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Video = require('react-native-video').default;
     return (
       <Video
@@ -62,48 +76,121 @@ function NativeVideo({
   } catch { return null; }
 }
 
+// ─── MiniPlayer (YouTube-style draggable PiP) ─────────────────────────────────
 export default function MiniPlayer() {
   const insets = useSafeAreaInsets();
+
   const {
     active, title, logo, contentId, contentType,
     sources, srcIdx, isLive, isPlaying, close, setPlaying,
   } = usePlayerStore();
 
-  const [pip, setPip] = useState(false);
+  const [showCtrl, setShowCtrl] = React.useState(true);
+  const [pip, setPip]           = React.useState(false);
 
-  const translateY = useSharedValue(200);
-  const opacity = useSharedValue(0);
+  const ctrlTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  // ── Animated values ───────────────────────────────────────────────────────
+  const posX  = useSharedValue(SNAP_RIGHT);
+  const posY  = useSharedValue(SH * 0.60);
+  const scale = useSharedValue(0);
+  const opac  = useSharedValue(0);
+
+  // saved at drag-start
+  const sx = useSharedValue(SNAP_RIGHT);
+  const sy = useSharedValue(SH * 0.60);
+
+  // safe-area clamp stored as shared values (worklets can't read JS refs)
+  const clampMinY = useSharedValue(40 + MARGIN);
+  const clampMaxY = useSharedValue(SH - PIP_H - TITLE_H - TAB_BAR - MARGIN);
+
+  useEffect(() => {
+    clampMinY.value = (insets.top  || 20) + MARGIN;
+    clampMaxY.value = SH - PIP_H - TITLE_H - TAB_BAR - (insets.bottom || 0) - MARGIN;
+  }, [insets.top, insets.bottom]);
+
+  // ── Enter / leave animation ───────────────────────────────────────────────
   useEffect(() => {
     if (active) {
       setPip(false);
-      translateY.value = withSpring(0, { damping: 20, stiffness: 180 });
-      opacity.value = withTiming(1, { duration: 220 });
+      posX.value = SNAP_RIGHT;
+      posY.value = SH * 0.60;
+      sx.value   = SNAP_RIGHT;
+      sy.value   = SH * 0.60;
+      scale.value = withSpring(1, { damping: 20, stiffness: 260 });
+      opac.value  = withTiming(1, { duration: 200 });
+      setShowCtrl(true);
+      clearTimeout(ctrlTimer.current);
+      ctrlTimer.current = setTimeout(() => setShowCtrl(false), 3000);
     } else {
-      translateY.value = withTiming(200, { duration: 250 });
-      opacity.value = withTiming(0, { duration: 200 });
+      scale.value = withSpring(0, { damping: 20, stiffness: 260 });
+      opac.value  = withTiming(0, { duration: 180 });
     }
+    return () => clearTimeout(ctrlTimer.current);
   }, [active]);
 
-  // System PiP when app goes to background
+  // ── System PiP — Android background ──────────────────────────────────────
   useEffect(() => {
     if (!active || Platform.OS !== 'android' || IS_EXPO_GO) return;
-    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state === 'background' || state === 'inactive') setPip(true);
-      else if (state === 'active') setPip(false);
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'background' || s === 'inactive') setPip(true);
+      else if (s === 'active') setPip(false);
     });
     return () => sub.remove();
   }, [active]);
 
+  // ── Show controls briefly ─────────────────────────────────────────────────
+  const showControlsBriefly = useCallback(() => {
+    setShowCtrl(true);
+    clearTimeout(ctrlTimer.current);
+    ctrlTimer.current = setTimeout(() => setShowCtrl(false), 2500);
+  }, []);
+
+  // ── Pan gesture (drag + edge-snap) ───────────────────────────────────────
+  // minDistance(8): taps < 8 px pass through to inner TouchableOpacity
+  const panGesture = Gesture.Pan()
+    .minDistance(8)
+    .onStart(() => {
+      sx.value = posX.value;
+      sy.value = posY.value;
+    })
+    .onUpdate((e) => {
+      posX.value = sx.value + e.translationX;
+      posY.value = sy.value + e.translationY;
+    })
+    .onEnd((e) => {
+      // Snap to nearest left / right edge
+      const centerX = posX.value + PIP_W / 2;
+      const snapX   = centerX < SW / 2 ? SNAP_LEFT : SNAP_RIGHT;
+
+      // Velocity-based fling overrides center check
+      const flingX = e.velocityX > 600
+        ? SNAP_RIGHT
+        : e.velocityX < -600
+        ? SNAP_LEFT
+        : snapX;
+
+      // Clamp Y
+      const clampedY = Math.max(
+        clampMinY.value,
+        Math.min(clampMaxY.value, posY.value),
+      );
+
+      posX.value = withSpring(flingX,   { damping: 22, stiffness: 240 });
+      posY.value = withSpring(clampedY, { damping: 22, stiffness: 240 });
+    });
+
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
+    transform: [
+      { translateX: posX.value },
+      { translateY: posY.value },
+      { scale: scale.value },
+    ],
+    opacity: opac.value,
   }));
 
-  const src = sources[srcIdx];
-  const bottom = TAB_BAR_H + Math.max(insets.bottom, 4) + 8;
-
-  const handleExpand = () => {
+  // ── Expand to full player ─────────────────────────────────────────────────
+  const handleExpand = useCallback(() => {
     if (!contentId) return;
     setPip(false);
     if (contentType === 'channel') {
@@ -114,188 +201,212 @@ export default function MiniPlayer() {
     } else {
       router.push(`/player/${contentId}?type=${contentType}` as any);
     }
-  };
+  }, [contentId, contentType, title, logo]);
 
   if (!active) return null;
 
+  const src = sources[srcIdx];
+
   return (
-    <Animated.View style={[styles.wrapper, { bottom }, animStyle]}>
-      <View style={styles.card}>
-        {/* ── Left: video thumbnail area ──────────────── */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={handleExpand}
-          style={styles.thumbArea}
-        >
-          {/* Video player */}
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[s.root, animStyle]}>
+
+        {/* ══ Video window ══════════════════════════════════════════════════ */}
+        <View style={s.videoBox}>
+
+          {/* Video stream */}
           {src?.url ? (
             <NativeVideo
               uri={src.url}
               headers={src.headers}
               paused={!isPlaying}
               pip={pip}
-              onPipChange={(isActive) => { if (!isActive) setPip(false); }}
+              onPipChange={(active) => { if (!active) setPip(false); }}
             />
-          ) : null}
-
-          {/* Channel logo overlay (top-left) */}
-          {logo ? (
-            <Image source={{ uri: logo }} style={styles.logoSmall} resizeMode="contain" />
+          ) : logo ? (
+            <Image
+              source={{ uri: logo }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+            />
           ) : (
-            <LinearGradient colors={['#8B5CF6', '#EC4899']} style={StyleSheet.absoluteFill}>
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="tv" size={28} color="rgba(255,255,255,0.8)" />
-              </View>
+            <LinearGradient
+              colors={['#8B5CF6', '#EC4899']}
+              style={[StyleSheet.absoluteFill, s.gradCenter]}
+            >
+              <Ionicons name="tv-outline" size={28} color="rgba(255,255,255,0.7)" />
             </LinearGradient>
           )}
 
-          {/* Expand icon (center) */}
-          <View style={styles.expandIcon}>
-            <Ionicons name="expand" size={18} color="rgba(255,255,255,0.85)" />
-          </View>
-
           {/* LIVE badge */}
           {isLive && (
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveTxt}>LIVE</Text>
+            <View style={s.liveBadge} pointerEvents="none">
+              <View style={s.liveDot} />
+              <Text style={s.liveTxt}>LIVE</Text>
             </View>
           )}
-        </TouchableOpacity>
 
-        {/* ── Right: info + controls ───────────────────── */}
-        <View style={styles.infoCol}>
-          <Text style={styles.titleTxt} numberOfLines={1}>{title}</Text>
-          <Text style={styles.subTxt} numberOfLines={1}>
-            {isLive ? '● Live Streaming' : 'Playing now'}
-          </Text>
+          {/* Tap-area — shows / hides controls */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={StyleSheet.absoluteFill}
+            onPress={showControlsBriefly}
+          >
+            {/* Controls overlay */}
+            {showCtrl && (
+              <View style={s.overlay}>
 
-          {/* Buttons row */}
-          <View style={styles.btnRow}>
-            <TouchableOpacity
-              style={styles.ctrlBtn}
-              onPress={() => setPlaying(!isPlaying)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons
-                name={isPlaying ? 'pause-circle' : 'play-circle'}
-                size={34}
-                color="#8B5CF6"
-              />
-            </TouchableOpacity>
+                {/* ✕ close — top-right */}
+                <TouchableOpacity
+                  style={s.closeBtn}
+                  onPress={close}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={13} color="#fff" />
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.ctrlBtn}
-              onPress={close}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="close-circle" size={30} color="rgba(255,255,255,0.5)" />
-            </TouchableOpacity>
-          </View>
+                {/* Center: play/pause + expand */}
+                <View style={s.centerRow}>
+                  <TouchableOpacity
+                    style={s.ctrlBtn}
+                    onPress={() => { setPlaying(!isPlaying); showControlsBriefly(); }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons
+                      name={isPlaying ? 'pause' : 'play'}
+                      size={22}
+                      color="#fff"
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={s.ctrlBtn}
+                    onPress={handleExpand}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="expand-outline" size={19} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Bottom progress strip */}
-      {!isLive && (
-        <View style={styles.progressBar}>
-          <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ height: '100%', width: '40%', borderRadius: 2 }}
-          />
+        {/* ══ Title bar ═════════════════════════════════════════════════════ */}
+        <View style={s.titleBar}>
+          {logo ? (
+            <Image source={{ uri: logo }} style={s.titleLogo} resizeMode="contain" />
+          ) : (
+            <LinearGradient colors={['#8B5CF6', '#EC4899']} style={s.titleLogo} />
+          )}
+
+          <Text style={s.titleTxt} numberOfLines={1}>{title}</Text>
+
+          {/* Always-visible play/pause in title bar */}
+          <TouchableOpacity
+            style={s.titleBtn}
+            onPress={() => setPlaying(!isPlaying)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={14}
+              color="rgba(255,255,255,0.78)"
+            />
+          </TouchableOpacity>
         </View>
-      )}
-    </Animated.View>
+
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: {
     position: 'absolute',
-    left: 10,
-    right: 10,
+    top: 0,
+    left: 0,
+    width: PIP_W,
     zIndex: 9999,
-    elevation: 20,
-  },
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#0E0E1A',
-    borderRadius: 16,
-    height: PLAYER_H,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.35)',
+    elevation: 30,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.70,
+    shadowRadius: 24,
   },
 
-  /* Left video thumbnail */
-  thumbArea: {
-    width: 155,
-    height: PLAYER_H,
-    backgroundColor: '#050510',
+  // ── Video box ──────────────────────────────────────────────────────────────
+  videoBox: {
+    width: PIP_W,
+    height: PIP_H,
+    backgroundColor: '#030310',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     overflow: 'hidden',
+    borderWidth: 1.5,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(139,92,246,0.65)',
   },
-  logoSmall: {
-    position: 'absolute',
-    top: 6, left: 6,
-    width: 32, height: 32,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  expandIcon: {
-    position: 'absolute',
-    bottom: 8, right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 6,
-    padding: 3,
-  },
-  liveBadge: {
-    position: 'absolute',
-    top: 6, right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(220,38,38,0.92)',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    gap: 3,
-  },
-  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  liveTxt: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
-
-  /* Right info column */
-  infoCol: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    justifyContent: 'space-between',
-  },
-  titleTxt: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
-  subTxt: { color: '#8B5CF6', fontSize: 11, marginTop: 2 },
-
-  /* Buttons */
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  ctrlBtn: {
+  gradCenter: {
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  /* Progress */
-  progressBar: {
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    overflow: 'hidden',
+  // ── LIVE badge ─────────────────────────────────────────────────────────────
+  liveBadge: {
+    position: 'absolute', top: 7, left: 7,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(220,38,38,0.95)',
+    borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2, gap: 3,
+    zIndex: 2,
+  },
+  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
+  liveTxt: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+
+  // ── Controls overlay ───────────────────────────────────────────────────────
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeBtn: {
+    position: 'absolute', top: 6, right: 6,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.68)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  centerRow: {
+    flexDirection: 'row', gap: 18, alignItems: 'center',
+  },
+  ctrlBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  // ── Title bar ──────────────────────────────────────────────────────────────
+  titleBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingHorizontal: 9,
+    height: TITLE_H,
+    backgroundColor: '#0D0D1F',
+    borderBottomLeftRadius: 14, borderBottomRightRadius: 14,
+    borderWidth: 1.5, borderTopWidth: 0,
+    borderColor: 'rgba(139,92,246,0.65)',
+  },
+  titleLogo: {
+    width: 20, height: 20, borderRadius: 4,
+  },
+  titleTxt: {
+    flex: 1, color: '#EFEFEF',
+    fontSize: 10.5, fontWeight: '600', letterSpacing: 0.1,
+  },
+  titleBtn: {
+    width: 24, height: 24,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 2,
   },
 });

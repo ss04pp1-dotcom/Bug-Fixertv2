@@ -1,5 +1,6 @@
 import React, { useEffect, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import OtaUpdateBanner from '@/components/OtaUpdateBanner';
 import MiniPlayer from '@/components/MiniPlayer';
 import { Slot, router } from 'expo-router';
@@ -127,17 +128,19 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <View style={styles.container}>
-          <AppGuards>
-            <Slot />
-          </AppGuards>
-          <OtaUpdateBanner />
-          <MiniPlayer />
-        </View>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <View style={styles.container}>
+            <AppGuards>
+              <Slot />
+            </AppGuards>
+            <OtaUpdateBanner />
+            <MiniPlayer />
+          </View>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

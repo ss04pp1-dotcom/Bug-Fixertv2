@@ -94,7 +94,7 @@ export class GitHubSourcesService {
 
   async syncAll(force = false) {
     const sources = await this.prisma.gitHubSource.findMany({
-      where: { enabled: true, deletedAt: null },
+      where: { enabled: true },
       select: { id: true, name: true, isSyncing: true },
     });
 
