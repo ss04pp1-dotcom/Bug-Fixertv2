@@ -39,30 +39,27 @@ const C = {
 };
 
 // ─── IPTV User-Agent ──────────────────────────────────────────────────────────
-const IPTV_UA =
-  'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-
-const DEFAULT_HEADERS = {
-  'User-Agent': IPTV_UA,
-};
+// We intentionally do NOT force a User-Agent in DEFAULT_HEADERS.
+// IPTV servers (Toffee, Digijadoo, etc.) detect and throttle browser UAs.
+// ExoPlayer/OkHttp sends its own native UA ("okhttp/4.x.x") by default,
+// which these servers treat as a media player and serve at full bitrate.
+// Only apply a UA if the stream source explicitly provides one in its headers.
+const DEFAULT_HEADERS: Record<string, string> = {};
 
 // ─── Buffer configs ───────────────────────────────────────────────────────────
-// Live: keep buffer small so ExoPlayer doesn't try to fetch too many
-// segments at once — large maxBufferMs causes connection exhaustion on
-// IPTV servers, producing ERROR_CODE_IO_NETWORK_CONNECTION_FAILED even
-// though the manifest returns HTTP 200.
+// Live: balanced buffer — large enough for smooth playback, small enough not
+// to trigger server per-connection rate limits.
 const BUFFER_LIVE = {
-  minBufferMs: 2000,
-  maxBufferMs: 8000,
-  bufferForPlaybackMs: 1000,
-  bufferForPlaybackAfterRebufferMs: 2000,
-};
-const BUFFER_VOD = {
-  minBufferMs: 10000,
-  maxBufferMs: 30000,
+  minBufferMs: 5000,
+  maxBufferMs: 20000,
   bufferForPlaybackMs: 2000,
   bufferForPlaybackAfterRebufferMs: 4000,
+};
+const BUFFER_VOD = {
+  minBufferMs: 15000,
+  maxBufferMs: 50000,
+  bufferForPlaybackMs: 2500,
+  bufferForPlaybackAfterRebufferMs: 5000,
 };
 
 // ─── Stream type detection ────────────────────────────────────────────────────

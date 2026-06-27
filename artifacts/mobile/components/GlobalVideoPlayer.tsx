@@ -48,7 +48,9 @@ const BUFFER_VOD = {
   bufferForPlaybackMs: 2500, bufferForPlaybackAfterRebufferMs: 5000,
 };
 
-const IPTV_UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+// Do NOT force a browser User-Agent — IPTV servers throttle browser UAs.
+// Let ExoPlayer/OkHttp use its native UA for full bitrate delivery.
+const IPTV_UA = '';
 
 function fmt(s: number) {
   if (!s || isNaN(s) || !isFinite(s)) return '0:00';
@@ -264,7 +266,7 @@ export default function GlobalVideoPlayer() {
     if (!src?.url) return null;
     return {
       uri: src.url,
-      headers: { 'User-Agent': IPTV_UA, ...(src.headers ?? {}) },
+      headers: { ...(IPTV_UA ? { 'User-Agent': IPTV_UA } : {}), ...(src.headers ?? {}) },
     };
   }, [src?.url, src?.headers]);
 
