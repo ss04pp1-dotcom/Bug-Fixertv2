@@ -177,7 +177,7 @@ export class GitHubSyncService implements OnModuleInit {
 
     // Presence set: "githubSourceId::link"
     const keeperServerKeys = new Set(
-      keeperServers.map(s => `${s.githubSourceId ?? ''}::${s.link}`),
+      keeperServers.map((s: { githubSourceId: string | null; link: string }) => `${s.githubSourceId ?? ''}::${s.link}`),
     );
 
     const dupeServers = await this.prisma.channelServer.findMany({
@@ -402,7 +402,7 @@ export class GitHubSyncService implements OnModuleInit {
     });
     const byNorm = new Map<string, string>();   // normalizedName → channelId
     const byGhId = new Map<string, string>();   // githubChannelId → channelId
-    const slugSet = new Set<string>(allChannels.map(c => c.slug));
+    const slugSet = new Set<string>(allChannels.map((c: { id: string; normalizedName: string | null; githubChannelId: string | null; slug: string }) => c.slug));
     for (const ch of allChannels) {
       if (ch.normalizedName) byNorm.set(ch.normalizedName, ch.id);
       if (ch.githubChannelId) byGhId.set(ch.githubChannelId, ch.id);
@@ -537,8 +537,8 @@ export class GitHubSyncService implements OnModuleInit {
           channelId = winner.id;
         }
 
-        byNorm.set(normalized, channelId);
-        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
+        byNorm.set(normalized, channelId as string);
+        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId as string);
       }
     } else {
       // Channel already exists — sync non-overridden metadata from source

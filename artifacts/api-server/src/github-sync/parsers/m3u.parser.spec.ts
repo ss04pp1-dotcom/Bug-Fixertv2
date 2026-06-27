@@ -110,12 +110,14 @@ describe('M3uParser', () => {
       expect(result[0].link).toBe('http://s/a');
     });
 
-    it('skips an EXTINF entry that has no following URL', () => {
-      const m3u = '#EXTM3U\n#EXTINF:-1,Orphan Channel\n#EXTINF:-1,Real Channel\nhttp://s/real';
+    it('skips a trailing EXTINF entry that has no URL after it', () => {
+      // Channel A is valid (URL follows it). The trailing EXTINF has no URL and
+      // should be silently dropped.
+      const m3u = '#EXTM3U\n#EXTINF:-1,Channel A\nhttp://s/a\n#EXTINF:-1,Trailing No URL';
       const result = parser.parse(m3u);
-      // Orphan has no URL; only Real Channel should be parsed
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Real Channel');
+      expect(result[0].name).toBe('Channel A');
+      expect(result[0].link).toBe('http://s/a');
     });
 
     it('returns empty array when content has no valid entries', () => {

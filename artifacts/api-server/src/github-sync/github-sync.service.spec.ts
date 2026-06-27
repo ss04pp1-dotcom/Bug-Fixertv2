@@ -1,7 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GitHubSyncService, normalizeName } from './github-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { GitHubSyncStatus } from '@prisma/client';
+
+// Use string constants instead of @prisma/client enum so tests run even when
+// `prisma generate` has not yet been executed in the current environment.
+const GitHubSyncStatus = {
+  success: 'success',
+  failed:  'failed',
+  running: 'running',
+} as const;
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -682,7 +689,8 @@ describe('GitHubSyncService', () => {
       const active = makeServer({ id: 'active-srv', channelId: 'c1', githubSourceId: SOURCE_ID });
       mockPrisma.channelServer.findMany.mockResolvedValue([active]);
       jest.spyOn(service as any, 'processItem').mockImplementation(
-        async (_item: any, _src: any, _existing: any, seenIds: Set<string>) => {
+        async (...args: any[]) => {
+          const seenIds = args[3] as Set<string>;
           seenIds.add('active-srv');
         },
       );
@@ -694,7 +702,7 @@ describe('GitHubSyncService', () => {
     });
 
     it('processItem failure increments stats.failed without stopping the batch', async () => {
-      jest.spyOn(service as any, 'processItem')
+      (jest.spyOn(service as any, 'processItem') as jest.Mock)
         .mockRejectedValueOnce(new Error('bad item'))
         .mockResolvedValue(undefined);
 

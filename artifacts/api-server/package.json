@@ -27,7 +27,7 @@
         "transform": {
             "^.+\\.(t|j)s$": [
                 "ts-jest",
-                {}
+                { "diagnostics": false }
             ]
         },
         "collectCoverageFrom": [
@@ -36,7 +36,10 @@
             "!**/main.ts"
         ],
         "coverageDirectory": "../coverage",
-        "testEnvironment": "node"
+        "testEnvironment": "node",
+        "moduleNameMapper": {
+            "@prisma/client": "<rootDir>/__mocks__/@prisma/client.ts"
+        }
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.1068.0",
