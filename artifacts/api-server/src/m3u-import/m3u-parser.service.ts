@@ -48,15 +48,26 @@ export class M3uParserService {
   }
 
   private extractChannelName(extinfLine: string): string {
-    // Format: #EXTINF:-1 tvg-id="..." tvg-name="..." ...,Channel Name
-    // The name is after the last comma
+    // Standard M3U: channel name is after the last comma on the #EXTINF line
     const commaIndex = extinfLine.lastIndexOf(',');
-    if (commaIndex !== -1) {
-      const name = extinfLine.substring(commaIndex + 1).trim();
-      if (name) return name;
+    let name = commaIndex !== -1 ? extinfLine.substring(commaIndex + 1).trim() : '';
+
+    // Some M3U generators (e.g. Toffee Live) embed a poster path in the name field:
+    //   "q_75f_webp/.../poster.png'Ekhon TV"  or  "/posters/abc.png Ekhon TV"
+    // Strip the image-path prefix that ends with a known extension then ' or whitespace.
+    const imgPrefix = name.match(/^[^\s'"]*\.(png|jpg|jpeg|webp|gif|svg)['\s]+(.+)$/i);
+    if (imgPrefix) {
+      name = imgPrefix[2].trim();
     }
-    // Fallback to tvg-name attribute
+
+    if (name) return name;
+
+    // Fallback: prefer tvg-name if it looks like a real channel name (not a URL/path)
     const tvgName = this.extractAttribute(extinfLine, 'tvg-name');
+    if (tvgName && !tvgName.includes('/') && !tvgName.startsWith('http')) {
+      return tvgName.trim();
+    }
+
     return tvgName || 'Unknown Channel';
   }
 
