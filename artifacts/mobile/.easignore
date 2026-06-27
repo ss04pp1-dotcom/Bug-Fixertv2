@@ -1,15 +1,51 @@
-# Dependencies (installed fresh during build)
+# ── node_modules everywhere ────────────────────────────────────────────────
 node_modules/
+**/node_modules/
 
-# Test & dev files
+# ── Other workspace packages (not needed for mobile build) ────────────────
+../api-server/
+../admin/
+../mockup-sandbox/
+../../artifacts/api-server/
+../../artifacts/admin/
+../../artifacts/mockup-sandbox/
+
+# ── Monorepo root files ────────────────────────────────────────────────────
+../../node_modules/
+../../.git/
+../../.local/
+../../tools/
+../../pnpm-lock.yaml
+../../pnpm-workspace.yaml
+../../package.json
+../../tsconfig.json
+../../replit.md
+../../*.md
+
+# ── Git ───────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Build output & cache ──────────────────────────────────────────────────
+dist/
+build/
+.expo/
+web-build/
+.metro-health-check*
+android/
+ios/
+
+# ── Test & dev files ──────────────────────────────────────────────────────
 __tests__/
 __mocks__/
 *.test.ts
 *.test.tsx
 *.spec.ts
 *.spec.tsx
+coverage/
 
-# Docs & repo files
+# ── Docs & unnecessary text ───────────────────────────────────────────────
 *.md
 *.mdx
 CHANGELOG*
@@ -17,34 +53,25 @@ LICENSE*
 .github/
 docs/
 
-# IDE & OS files
+# ── IDE & OS files ────────────────────────────────────────────────────────
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 *.log
 
-# Local env files (never include in build)
+# ── Local env files (never include in build) ──────────────────────────────
 .env.local
 .env.development
+.env.test
 .env*.local
 
-# Build output & cache
-dist/
-build/
-.expo/
-web-build/
-.metro-health-check*
-
-# Git
-.git/
-.gitignore
-
-# Replit-specific
+# ── Replit-specific ───────────────────────────────────────────────────────
 .replit
 replit.nix
 .local/
+attached_assets/
 
-# Large assets not needed for build
+# ── Large assets not needed for JS bundle ─────────────────────────────────
 assets/videos/
 assets/raw/
