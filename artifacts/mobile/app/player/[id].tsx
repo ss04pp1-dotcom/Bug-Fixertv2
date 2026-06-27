@@ -91,6 +91,44 @@ export default function PlayerScreen() {
     return Array.isArray(d) ? d.slice(0, 12) : [];
   }, [relatedRaw]);
 
+  // ── Build headers from stream source data ────────────────────────────────────
+  // Also handles URL-pipe format: "http://stream.url|User-Agent=...&Cookie=..."
+  const buildStreamSource = useCallback((
+    rawUrl: string,
+    label: string,
+    quality: string,
+    data?: { cookie?: string; userAgent?: string; referer?: string; origin?: string },
+  ): StreamSource => {
+    let url = rawUrl;
+    let pipeHeaders: Record<string, string> = {};
+
+    // Parse URL-pipe headers (common IPTV format)
+    if (url.includes('|')) {
+      const pipeIdx = url.indexOf('|');
+      const rawPipe = url.substring(pipeIdx + 1);
+      url = url.substring(0, pipeIdx).trim();
+      for (const pair of rawPipe.split('&')) {
+        const eq = pair.indexOf('=');
+        if (eq === -1) continue;
+        const k = decodeURIComponent(pair.substring(0, eq).trim()).toLowerCase();
+        const v = decodeURIComponent(pair.substring(eq + 1).trim());
+        if (k && v) pipeHeaders[k] = v;
+      }
+    }
+
+    const headers: Record<string, string> = {};
+    const cookie    = data?.cookie    || pipeHeaders['cookie'];
+    const userAgent = data?.userAgent || pipeHeaders['user-agent'];
+    const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
+    const origin    = data?.origin    || pipeHeaders['origin'];
+    if (cookie)    headers['Cookie']     = cookie;
+    if (userAgent) headers['User-Agent'] = userAgent;
+    if (referer)   headers['Referer']    = referer;
+    if (origin)    headers['Origin']     = origin;
+
+    return { label, url, quality, ...(Object.keys(headers).length ? { headers } : {}) };
+  }, []);
+
   // ── Load stream ─────────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
     setSrcLoad(true); setSrcError(false); setSrcErrMsg(''); setYoutubeUrl(null);
@@ -103,9 +141,10 @@ export default function PlayerScreen() {
         if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
-        const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
+        const headerData = { cookie: d?.cookie, userAgent: d?.userAgent || d?.user_agent, referer: d?.referer, origin: d?.origin };
+        const srcs: StreamSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
         if (d?.backupStreamUrl && d.backupStreamUrl !== url)
-          srcs.push({ label: 'Server 2', url: d.backupStreamUrl, quality: 'SD' });
+          srcs.push(buildStreamSource(d.backupStreamUrl, 'Server 2', 'SD', headerData));
         setSources(srcs);
       } else {
         const res = await apiClient.get(`/series/${id}`);
@@ -123,9 +162,10 @@ export default function PlayerScreen() {
         if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
-        const srcs = [{ label: 'Server 1', url, quality: 'HD' }];
+        const headerData = { cookie: ep?.cookie, userAgent: ep?.userAgent || ep?.user_agent, referer: ep?.referer, origin: ep?.origin };
+        const srcs: StreamSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
         if (ep?.backupStreamUrl && ep.backupStreamUrl !== url)
-          srcs.push({ label: 'Server 2', url: ep.backupStreamUrl, quality: 'SD' });
+          srcs.push(buildStreamSource(ep.backupStreamUrl, 'Server 2', 'SD', headerData));
         setSources(srcs);
       }
     } catch {
@@ -133,7 +173,7 @@ export default function PlayerScreen() {
     } finally {
       setSrcLoad(false);
     }
-  }, [id, cType, epIdx]);
+  }, [id, cType, epIdx, buildStreamSource]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 

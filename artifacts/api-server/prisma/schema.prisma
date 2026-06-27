@@ -440,7 +440,12 @@ model Movie {
   poster      String?
   banner      String?
   trailerUrl  String?   @map("trailer_url")
-  streamUrl   String?   @map("stream_url")
+  streamUrl      String?   @map("stream_url")
+  backupStreamUrl String?  @map("backup_stream_url")
+  cookie         String?
+  userAgent      String?   @map("user_agent")
+  referer        String?
+  origin         String?
   categoryId  String?   @map("category_id") @db.Uuid
   genres      String[]
   cast        String[]
@@ -535,6 +540,11 @@ model Episode {
   description   String?
   thumbnail     String?
   streamUrl     String?   @map("stream_url")
+  backupStreamUrl String? @map("backup_stream_url")
+  cookie        String?
+  userAgent     String?   @map("user_agent")
+  referer       String?
+  origin        String?
   duration      Int?
   ageRating     String?   @map("age_rating")
   isPremium     Boolean   @default(false) @map("is_premium")

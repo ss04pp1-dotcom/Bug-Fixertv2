@@ -38,6 +38,11 @@ export class CreateEpisodeDto {
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() thumbnail?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() streamUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() backupStreamUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() cookie?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() userAgent?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() referer?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() origin?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() duration?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() ageRating?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isPremium?: boolean;

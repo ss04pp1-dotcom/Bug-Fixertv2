@@ -15,6 +15,11 @@ export class CreateMovieDto {
   @ApiPropertyOptional() @IsOptional() @IsString() banner?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() trailerUrl?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() streamUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() backupStreamUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() cookie?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() userAgent?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() referer?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() origin?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() categoryId?: string;
   @ApiPropertyOptional() @IsOptional() @IsArray() genres?: string[];
   @ApiPropertyOptional() @IsOptional() @IsArray() cast?: string[];
