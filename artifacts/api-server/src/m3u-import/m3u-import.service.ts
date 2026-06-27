@@ -7,7 +7,8 @@ import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { StreamType, ChannelStreamStatus, ImportJobStatus, ImportChannelStatus } from '@prisma/client';
+import { StreamType, ChannelStreamStatus, ImportJobStatus, ImportChannelStatus, ServerSourceType } from '@prisma/client';
+import { normalizeName } from '../github-sync/github-sync.service';
 
 export const QUEUE_M3U_IMPORT = 'm3u-import';
 export const QUEUE_HEALTH_CHECK = 'health-check';
@@ -281,51 +282,92 @@ export class M3uImportService {
         });
         channelId = existing.id;
       } else {
-        // Check for duplicate by name — if same name channel exists and is OFFLINE, replace it
-        const sameNameOffline = await this.prisma.channel.findFirst({
-          where: {
-            name: importChannel.channelName,
-            deletedAt: null,
-            streamStatus: { in: [ChannelStreamStatus.offline, ChannelStreamStatus.failed] },
-          },
-          include: { category: { select: { name: true } } },
-        });
+        // Check for same normalized name — if found (active), add as a new server instead of new channel
+        const normalized = normalizeName(importChannel.channelName);
+        const sameNameActive = normalized
+          ? await this.prisma.channel.findFirst({
+              where: { normalizedName: normalized, deletedAt: null },
+            })
+          : null;
 
-        if (sameNameOffline) {
-          // Log the offline duplicate before hard-deleting it
-          await this.logDeletedChannel(sameNameOffline, 'duplicate_replaced_by_working');
-          await this.prisma.channel.delete({ where: { id: sameNameOffline.id } });
-        }
-
-        // Create new channel with race-condition-safe slug generation
-        const baseSlug = importChannel.channelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'channel';
-        let channelCreated = false;
-        let slugAttempt = 0;
-        while (!channelCreated) {
-          const slug = slugAttempt === 0 ? baseSlug
-            : slugAttempt <= 100 ? `${baseSlug}-${slugAttempt}`
-            : `${baseSlug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-          try {
-            const newChannel = await this.prisma.channel.create({
+        if (sameNameActive) {
+          // Channel exists — add the new stream URL as a ChannelServer (avoid duplicate server links)
+          const existingServer = await this.prisma.channelServer.findFirst({
+            where: { channelId: sameNameActive.id, link: importChannel.streamUrl, deletedAt: null },
+          });
+          if (!existingServer) {
+            await this.prisma.channelServer.create({
               data: {
-                name: importChannel.channelName,
-                slug,
-                logo: importChannel.logoUrl || undefined,
-                primaryStreamUrl: importChannel.streamUrl,
-                categoryId,
-                streamType: StreamType.HLS,
-                streamStatus: ChannelStreamStatus.active,
-                isActive: true,
-                lastActiveAt: new Date(),
+                channelId: sameNameActive.id,
+                link: importChannel.streamUrl,
+                priority: 100,
+                sourceType: ServerSourceType.ADMIN,
+                healthCheckEnabled: true,
+                enabled: true,
+                createdBySync: false,
               },
             });
-            channelId = newChannel.id;
-            channelCreated = true;
-          } catch (err: any) {
-            if (err?.code === 'P2002' && slugAttempt < 105) {
-              slugAttempt++;
-            } else {
-              throw err;
+          }
+          // Update logo/category if missing on the parent channel
+          await this.prisma.channel.update({
+            where: { id: sameNameActive.id },
+            data: {
+              logo: importChannel.logoUrl || sameNameActive.logo || undefined,
+              categoryId: categoryId || sameNameActive.categoryId || undefined,
+              streamStatus: ChannelStreamStatus.active,
+              isActive: true,
+              lastActiveAt: new Date(),
+            },
+          });
+          channelId = sameNameActive.id;
+        } else {
+          // Check for duplicate by name — if same name channel exists and is OFFLINE, replace it
+          const sameNameOffline = await this.prisma.channel.findFirst({
+            where: {
+              name: importChannel.channelName,
+              deletedAt: null,
+              streamStatus: { in: [ChannelStreamStatus.offline, ChannelStreamStatus.failed] },
+            },
+            include: { category: { select: { name: true } } },
+          });
+
+          if (sameNameOffline) {
+            // Log the offline duplicate before hard-deleting it
+            await this.logDeletedChannel(sameNameOffline, 'duplicate_replaced_by_working');
+            await this.prisma.channel.delete({ where: { id: sameNameOffline.id } });
+          }
+
+          // Create new channel with race-condition-safe slug generation
+          const baseSlug = importChannel.channelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'channel';
+          let channelCreated = false;
+          let slugAttempt = 0;
+          while (!channelCreated) {
+            const slug = slugAttempt === 0 ? baseSlug
+              : slugAttempt <= 100 ? `${baseSlug}-${slugAttempt}`
+              : `${baseSlug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            try {
+              const newChannel = await this.prisma.channel.create({
+                data: {
+                  name: importChannel.channelName,
+                  slug,
+                  normalizedName: normalized || undefined,
+                  logo: importChannel.logoUrl || undefined,
+                  primaryStreamUrl: importChannel.streamUrl,
+                  categoryId,
+                  streamType: StreamType.HLS,
+                  streamStatus: ChannelStreamStatus.active,
+                  isActive: true,
+                  lastActiveAt: new Date(),
+                },
+              });
+              channelId = newChannel.id;
+              channelCreated = true;
+            } catch (err: any) {
+              if (err?.code === 'P2002' && slugAttempt < 105) {
+                slugAttempt++;
+              } else {
+                throw err;
+              }
             }
           }
         }
