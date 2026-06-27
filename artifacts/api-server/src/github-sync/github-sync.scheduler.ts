@@ -50,14 +50,10 @@ export class GitHubSyncScheduler implements OnApplicationBootstrap {
   @Cron('* * * * *', { name: 'github-sync-tick' })
   async tick(): Promise<void> {
     // Startup deduplication must complete before any sync runs.
-    // OnModuleInit is guaranteed to finish before the first cron fires, but
-    // this guard makes the invariant explicit and safe against future refactors.
     if (!this.syncService.isDedupReady()) {
       this.logger.log('Startup deduplication not yet complete — skipping sync tick');
       return;
     }
-
-    const now = new Date();
 
     const sources = await this.prisma.gitHubSource.findMany({
       where: { enabled: true, isSyncing: false },
@@ -70,7 +66,21 @@ export class GitHubSyncScheduler implements OnApplicationBootstrap {
       const due = Date.now() - lastSync >= intervalMs;
 
       if (due) {
-        this.logger.log(`Due sync: ${source.name}`);
+        this.logger.log(`Due sync (force): ${source.name}`);
+
+        // Always force-sync on schedule: clear ETag so content is always
+        // re-fetched and re-processed regardless of whether the remote file
+        // has changed. This ensures stream URLs stay fresh even when the
+        // GitHub file itself reports as unchanged via ETag/Last-Modified.
+        try {
+          await this.prisma.gitHubSource.update({
+            where: { id: source.id },
+            data: { etag: null, lastModified: null },
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not clear ETag for ${source.name}: ${err?.message}`);
+        }
+
         this.syncService.syncSource(source.id).catch(err =>
           this.logger.error(`Unhandled sync error for ${source.name}: ${err.message}`),
         );
