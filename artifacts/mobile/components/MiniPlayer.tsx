@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
   Platform, Dimensions, AppState, type AppStateStatus,
@@ -13,17 +13,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/lib/player-store';
 
 const { width: SW } = Dimensions.get('window');
-const PLAYER_W = SW - 24;
-const PLAYER_H = 68;
+const PLAYER_H = 110;
 const TAB_BAR_H = 68;
 
 const IS_EXPO_GO = (() => {
   try {
-    const Constants = require('expo-constants').default;
-    return (
-      Constants.appOwnership === 'expo' ||
-      (Constants as any).executionEnvironment === 'storeClient'
-    );
+    const C = require('expo-constants').default;
+    return C.appOwnership === 'expo' || (C as any).executionEnvironment === 'storeClient';
   } catch { return false; }
 })();
 
@@ -34,7 +30,7 @@ function NativeVideo({
   headers?: Record<string, string>;
   paused: boolean;
   pip: boolean;
-  onPipChange?: (isActive: boolean) => void;
+  onPipChange?: (active: boolean) => void;
 }) {
   if (IS_EXPO_GO || Platform.OS === 'web') return null;
   try {
@@ -52,9 +48,9 @@ function NativeVideo({
         playInBackground
         playWhenInactive
         pictureInPicture={pip}
-        onPictureInPictureStatusChanged={({ isActive }: { isActive: boolean }) => {
-          onPipChange?.(isActive);
-        }}
+        onPictureInPictureStatusChanged={({ isActive }: { isActive: boolean }) =>
+          onPipChange?.(isActive)
+        }
         bufferConfig={{
           minBufferMs: 5000,
           maxBufferMs: 30000,
@@ -75,30 +71,26 @@ export default function MiniPlayer() {
 
   const [pip, setPip] = useState(false);
 
-  const translateY = useSharedValue(120);
+  const translateY = useSharedValue(200);
   const opacity = useSharedValue(0);
 
-  // Slide in/out animation
   useEffect(() => {
     if (active) {
       setPip(false);
-      translateY.value = withSpring(0, { damping: 18, stiffness: 200 });
-      opacity.value = withTiming(1, { duration: 200 });
+      translateY.value = withSpring(0, { damping: 20, stiffness: 180 });
+      opacity.value = withTiming(1, { duration: 220 });
     } else {
-      translateY.value = withTiming(120, { duration: 250 });
+      translateY.value = withTiming(200, { duration: 250 });
       opacity.value = withTiming(0, { duration: 200 });
     }
   }, [active]);
 
-  // Auto system PiP when app goes to background
+  // System PiP when app goes to background
   useEffect(() => {
     if (!active || Platform.OS !== 'android' || IS_EXPO_GO) return;
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state === 'background' || state === 'inactive') {
-        setPip(true);
-      } else if (state === 'active') {
-        setPip(false);
-      }
+      if (state === 'background' || state === 'inactive') setPip(true);
+      else if (state === 'active') setPip(false);
     });
     return () => sub.remove();
   }, [active]);
@@ -109,7 +101,7 @@ export default function MiniPlayer() {
   }));
 
   const src = sources[srcIdx];
-  const bottom = TAB_BAR_H + Math.max(insets.bottom, 8) + 8;
+  const bottom = TAB_BAR_H + Math.max(insets.bottom, 4) + 8;
 
   const handleExpand = () => {
     if (!contentId) return;
@@ -127,63 +119,83 @@ export default function MiniPlayer() {
   if (!active) return null;
 
   return (
-    <Animated.View style={[styles.wrapper, { bottom }, animStyle]} pointerEvents="box-none">
-      <TouchableOpacity activeOpacity={0.95} onPress={handleExpand} style={styles.card}>
-        {/* Video thumbnail / live preview */}
-        <View style={styles.thumb}>
+    <Animated.View style={[styles.wrapper, { bottom }, animStyle]}>
+      <View style={styles.card}>
+        {/* ── Left: video thumbnail area ──────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleExpand}
+          style={styles.thumbArea}
+        >
+          {/* Video player */}
           {src?.url ? (
             <NativeVideo
               uri={src.url}
               headers={src.headers}
               paused={!isPlaying}
               pip={pip}
-              onPipChange={(isActive) => {
-                if (!isActive) setPip(false);
-              }}
+              onPipChange={(isActive) => { if (!isActive) setPip(false); }}
             />
           ) : null}
-          {/* Logo fallback overlay */}
+
+          {/* Channel logo overlay (top-left) */}
           {logo ? (
-            <Image source={{ uri: logo }} style={styles.logoOverlay} resizeMode="contain" />
+            <Image source={{ uri: logo }} style={styles.logoSmall} resizeMode="contain" />
           ) : (
             <LinearGradient colors={['#8B5CF6', '#EC4899']} style={StyleSheet.absoluteFill}>
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="tv" size={22} color="rgba(255,255,255,0.7)" />
+                <Ionicons name="tv" size={28} color="rgba(255,255,255,0.8)" />
               </View>
             </LinearGradient>
           )}
+
+          {/* Expand icon (center) */}
+          <View style={styles.expandIcon}>
+            <Ionicons name="expand" size={18} color="rgba(255,255,255,0.85)" />
+          </View>
+
+          {/* LIVE badge */}
           {isLive && (
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
               <Text style={styles.liveTxt}>LIVE</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
-        {/* Title */}
-        <View style={styles.info}>
+        {/* ── Right: info + controls ───────────────────── */}
+        <View style={styles.infoCol}>
           <Text style={styles.titleTxt} numberOfLines={1}>{title}</Text>
           <Text style={styles.subTxt} numberOfLines={1}>
             {isLive ? '● Live Streaming' : 'Playing now'}
           </Text>
-        </View>
 
-        {/* Controls */}
-        <View style={styles.controls}>
-          <TouchableOpacity
-            onPress={() => setPlaying(!isPlaying)}
-            style={styles.ctrlBtn}
-            hitSlop={10}
-          >
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={close} style={styles.ctrlBtn} hitSlop={10}>
-            <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+          {/* Buttons row */}
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={styles.ctrlBtn}
+              onPress={() => setPlaying(!isPlaying)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons
+                name={isPlaying ? 'pause-circle' : 'play-circle'}
+                size={34}
+                color="#8B5CF6"
+              />
+            </TouchableOpacity>
 
-      {/* Progress bar for non-live */}
+            <TouchableOpacity
+              style={styles.ctrlBtn}
+              onPress={close}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close-circle" size={30} color="rgba(255,255,255,0.5)" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Bottom progress strip */}
       {!isLive && (
         <View style={styles.progressBar}>
           <LinearGradient
@@ -201,65 +213,89 @@ export default function MiniPlayer() {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 10,
+    right: 10,
     zIndex: 9999,
     elevation: 20,
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#12121F',
-    borderRadius: 14,
+    backgroundColor: '#0E0E1A',
+    borderRadius: 16,
     height: PLAYER_H,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.3)',
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
+    borderColor: 'rgba(139,92,246,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 16,
   },
-  thumb: {
-    width: 100,
+
+  /* Left video thumbnail */
+  thumbArea: {
+    width: 155,
     height: PLAYER_H,
     backgroundColor: '#050510',
     overflow: 'hidden',
-    position: 'relative',
   },
-  logoOverlay: {
+  logoSmall: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 6, left: 6,
+    width: 32, height: 32,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  expandIcon: {
+    position: 'absolute',
+    bottom: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 6,
+    padding: 3,
   },
   liveBadge: {
     position: 'absolute',
-    bottom: 5,
-    left: 5,
+    top: 6, right: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239,68,68,0.9)',
+    backgroundColor: 'rgba(220,38,38,0.92)',
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 2,
     gap: 3,
   },
   liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  liveTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
-  info: { flex: 1, paddingHorizontal: 12 },
-  titleTxt: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  subTxt: { color: '#8B5CF6', fontSize: 11, marginTop: 3 },
-  controls: { flexDirection: 'row', alignItems: 'center', paddingRight: 10, gap: 4 },
-  ctrlBtn: {
-    width: 36, height: 36,
-    justifyContent: 'center', alignItems: 'center',
-    borderRadius: 18,
+  liveTxt: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+
+  /* Right info column */
+  infoCol: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
   },
+  titleTxt: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  subTxt: { color: '#8B5CF6', fontSize: 11, marginTop: 2 },
+
+  /* Buttons */
+  btnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  ctrlBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Progress */
   progressBar: {
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     overflow: 'hidden',
   },
 });
