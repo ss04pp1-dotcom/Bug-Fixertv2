@@ -17,9 +17,34 @@ export class M3uParser implements ChannelParser {
 
       if (line.startsWith('#EXTINF')) {
         const parsed = this.parseExtinf(line);
-        // Next non-comment line is the URL
+
+        // Scan forward: collect any #EXTVLCOPT directives, then find the URL
         let j = i + 1;
-        while (j < lines.length && lines[j].startsWith('#')) j++;
+        let vlcUserAgent: string | undefined;
+        let vlcReferer: string | undefined;
+        let vlcCookie: string | undefined;
+
+        while (j < lines.length && lines[j].startsWith('#')) {
+          const commentLine = lines[j];
+
+          // #EXTVLCOPT:http-user-agent=...
+          // #EXTVLCOPT:http-referrer=...
+          // #EXTVLCOPT:http-cookie=...
+          if (commentLine.startsWith('#EXTVLCOPT:')) {
+            const opts = commentLine.substring('#EXTVLCOPT:'.length);
+            // Each option is key=value; a single #EXTVLCOPT line can carry one pair
+            const uaMatch = opts.match(/^http-user-agent=(.+)$/i);
+            const refMatch = opts.match(/^http-referrer?=(.+)$/i);
+            const ckMatch = opts.match(/^http-cookie=(.+)$/i);
+
+            if (uaMatch) vlcUserAgent = uaMatch[1].trim();
+            if (refMatch) vlcReferer = refMatch[1].trim();
+            if (ckMatch) vlcCookie = ckMatch[1].trim();
+          }
+
+          j++;
+        }
+
         const link = lines[j];
 
         if (link && !link.startsWith('#') && parsed.name) {
@@ -27,9 +52,10 @@ export class M3uParser implements ChannelParser {
             name: parsed.name,
             link: link,
             logo: parsed.logo,
-            userAgent: parsed.userAgent,
-            referer: parsed.referer,
-            cookie: parsed.cookie,
+            // #EXTVLCOPT values take priority over inline #EXTINF attributes
+            userAgent: vlcUserAgent ?? parsed.userAgent,
+            referer: vlcReferer ?? parsed.referer,
+            cookie: vlcCookie ?? parsed.cookie,
             origin: parsed.origin,
             githubChannelId: parsed.tvgId,
           });
