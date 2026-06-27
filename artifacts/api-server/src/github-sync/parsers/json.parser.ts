@@ -38,6 +38,7 @@ export class JsonParser implements ChannelParser {
         name: String(name).trim(),
         link: String(link).trim(),
         logo: item.logo ?? item.logoUrl ?? item.logo_url ?? item.thumbnail ?? undefined,
+        groupCategory: item['group-title'] ?? item.group ?? item.groupTitle ?? item.group_title ?? item.category ?? undefined,
         cookie: item.cookie ?? undefined,
         userAgent: item.userAgent ?? item.user_agent ?? undefined,
         referer: item.referer ?? item.referrer ?? undefined,

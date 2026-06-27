@@ -408,6 +408,8 @@ export class GitHubSyncService implements OnModuleInit {
       if (ch.githubChannelId) byGhId.set(ch.githubChannelId, ch.id);
     }
 
+    const categoryCache = new Map<string, string>(); // groupName → categoryId
+
     const BATCH = 100;
     for (let i = 0; i < parsed.length; i += BATCH) {
       await this.processBatch(
@@ -419,6 +421,7 @@ export class GitHubSyncService implements OnModuleInit {
         byGhId,
         slugSet,
         stats,
+        categoryCache,
       );
     }
 
@@ -451,11 +454,12 @@ export class GitHubSyncService implements OnModuleInit {
     byGhId: Map<string, string>,
     slugSet: Set<string>,
     stats: { added: number; updated: number; deleted: number; failed: number },
+    categoryCache: Map<string, string>,
   ): Promise<void> {
     for (const item of batch) {
       try {
         await this.processItem(
-          item, sourceId, existingServers, seenServerIds, byNorm, byGhId, slugSet, stats,
+          item, sourceId, existingServers, seenServerIds, byNorm, byGhId, slugSet, stats, categoryCache,
         );
       } catch (e: any) {
         this.logger.warn(`Failed to process "${item.name}": ${e.message}`);
@@ -487,9 +491,16 @@ export class GitHubSyncService implements OnModuleInit {
     byGhId: Map<string, string>,
     slugSet: Set<string>,
     stats: { added: number; updated: number; deleted: number; failed: number },
+    categoryCache: Map<string, string>,
   ): Promise<void> {
     const normalized = normalizeName(item.name);
     if (!normalized) return;
+
+    // ── 0. Resolve Category (if group-title present) ─────────────────────────
+    let categoryId: string | null = null;
+    if (item.groupCategory) {
+      categoryId = await this.resolveCategory(item.groupCategory, categoryCache);
+    }
 
     // ── 1. Resolve Channel ───────────────────────────────────────────────────
 
@@ -521,6 +532,7 @@ export class GitHubSyncService implements OnModuleInit {
               logo: item.logo ?? null,
               primaryStreamUrl: item.link,
               isActive: true,
+              ...(categoryId ? { categoryId } : {}),
             },
             select: { id: true },
           });
@@ -549,6 +561,7 @@ export class GitHubSyncService implements OnModuleInit {
       const updateData: Record<string, unknown> = { normalizedName: normalized };
       if (!ch?.adminNameOverride) updateData.name = item.name;
       if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
+      if (categoryId) updateData.categoryId = categoryId;
       await this.prisma.channel.update({ where: { id: channelId }, data: updateData });
     }
 
@@ -609,6 +622,59 @@ export class GitHubSyncService implements OnModuleInit {
         githubChannelId: item.githubChannelId ?? null,
       });
       stats.updated++;
+    }
+  }
+
+  /**
+   * Find or create a Category by its display name.
+   * Uses an in-memory cache (per sync run) to avoid N+1 DB hits.
+   * The slug is derived from the group name; conflicts fall back to the
+   * existing row so this method is safe to call concurrently.
+   */
+  private async resolveCategory(groupName: string, cache: Map<string, string>): Promise<string | null> {
+    const key = groupName.trim().toLowerCase();
+    if (cache.has(key)) return cache.get(key)!;
+
+    const slug = groupName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 90) || 'uncategorized';
+
+    try {
+      let category = await this.prisma.category.findFirst({
+        where: { slug, deletedAt: null },
+        select: { id: true },
+      });
+
+      if (!category) {
+        category = await this.prisma.category.create({
+          data: {
+            name: groupName.trim(),
+            slug,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        this.logger.log(`Created category "${groupName}" (slug: ${slug})`);
+      }
+
+      cache.set(key, category.id);
+      return category.id;
+    } catch (e: any) {
+      // Unique constraint race — another sync created it first
+      if (e?.code === 'P2002') {
+        const existing = await this.prisma.category.findFirst({
+          where: { slug, deletedAt: null },
+          select: { id: true },
+        });
+        if (existing) {
+          cache.set(key, existing.id);
+          return existing.id;
+        }
+      }
+      this.logger.warn(`Could not resolve category "${groupName}": ${e.message}`);
+      return null;
     }
   }
 

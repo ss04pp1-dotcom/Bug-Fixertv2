@@ -52,6 +52,7 @@ export class M3uParser implements ChannelParser {
             name: parsed.name,
             link: link,
             logo: parsed.logo,
+            groupCategory: parsed.groupCategory,
             // #EXTVLCOPT values take priority over inline #EXTINF attributes
             userAgent: vlcUserAgent ?? parsed.userAgent,
             referer: vlcReferer ?? parsed.referer,
@@ -70,7 +71,7 @@ export class M3uParser implements ChannelParser {
   }
 
   private parseExtinf(line: string): {
-    name: string; logo?: string; userAgent?: string;
+    name: string; logo?: string; groupCategory?: string; userAgent?: string;
     referer?: string; cookie?: string; origin?: string; tvgId?: string;
   } {
     // Match attributes in both double-quotes and single-quotes
@@ -101,6 +102,7 @@ export class M3uParser implements ChannelParser {
       name,
       logo: attr('tvg-logo'),
       tvgId: attr('tvg-id'),
+      groupCategory: attr('group-title') || undefined,
       userAgent: attr('user-agent') || attr('useragent'),
       referer: attr('referrer') || attr('referer'),
       cookie: attr('cookie'),

@@ -2,6 +2,7 @@ export interface ParsedChannel {
   name: string;
   link: string;
   logo?: string;
+  groupCategory?: string;
   cookie?: string;
   userAgent?: string;
   referer?: string;
