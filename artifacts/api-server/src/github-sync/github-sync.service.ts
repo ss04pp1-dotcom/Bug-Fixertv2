@@ -595,33 +595,64 @@ export class GitHubSyncService implements OnModuleInit {
       seenServerIds.add(existingServer.id);
       stats.updated++;
     } else {
-      const newServer = await this.prisma.channelServer.create({
-        data: {
-          channelId,
-          link: item.link,
-          cookie: item.cookie ?? null,
-          userAgent: item.userAgent ?? null,
-          referer: item.referer ?? null,
-          origin: item.origin ?? null,
-          priority: 100,
-          sourceType: ServerSourceType.GITHUB,
-          githubSourceId: sourceId,
-          githubChannelId: item.githubChannelId ?? null,
-          healthCheckEnabled: false,
-          createdBySync: true,
-          lastSeenAt: new Date(),
-          enabled: true,
-        },
+      // Global dedup: check across ALL sources — same (channelId + link) must not
+      // be created twice even if a different GitHub source owns it.
+      const globalExisting = await this.prisma.channelServer.findFirst({
+        where: { channelId, link: item.link, deletedAt: null },
         select: { id: true },
       });
-      seenServerIds.add(newServer.id);
-      existingServers.push({
-        id: newServer.id,
-        channelId,
-        link: item.link,
-        githubChannelId: item.githubChannelId ?? null,
-      });
-      stats.updated++;
+
+      if (globalExisting) {
+        // Another source already tracks this URL for this channel — update headers/cookie only
+        await this.prisma.channelServer.update({
+          where: { id: globalExisting.id },
+          data: {
+            cookie: item.cookie ?? null,
+            userAgent: item.userAgent ?? null,
+            referer: item.referer ?? null,
+            origin: item.origin ?? null,
+            lastSeenAt: new Date(),
+            deletedAt: null,
+            enabled: true,
+          },
+        });
+        seenServerIds.add(globalExisting.id);
+        existingServers.push({
+          id: globalExisting.id,
+          channelId,
+          link: item.link,
+          githubChannelId: item.githubChannelId ?? null,
+        });
+        stats.updated++;
+      } else {
+        const newServer = await this.prisma.channelServer.create({
+          data: {
+            channelId,
+            link: item.link,
+            cookie: item.cookie ?? null,
+            userAgent: item.userAgent ?? null,
+            referer: item.referer ?? null,
+            origin: item.origin ?? null,
+            priority: 100,
+            sourceType: ServerSourceType.GITHUB,
+            githubSourceId: sourceId,
+            githubChannelId: item.githubChannelId ?? null,
+            healthCheckEnabled: false,
+            createdBySync: true,
+            lastSeenAt: new Date(),
+            enabled: true,
+          },
+          select: { id: true },
+        });
+        seenServerIds.add(newServer.id);
+        existingServers.push({
+          id: newServer.id,
+          channelId,
+          link: item.link,
+          githubChannelId: item.githubChannelId ?? null,
+        });
+        stats.updated++;
+      }
     }
   }
 

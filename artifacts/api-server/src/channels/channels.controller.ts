@@ -81,6 +81,12 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Bulk import channels' })
   bulkImport(@Body() dto: BulkImportChannelsDto) { return this.channelsService.bulkImport(dto); }
 
+  @Post('bulk-import')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor')
+  @ApiOperation({ summary: 'Bulk import channels (alias for /bulk)' })
+  bulkImportAlias(@Body() dto: BulkImportChannelsDto) { return this.channelsService.bulkImport(dto); }
+
   @Post('merge-duplicates')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin')
