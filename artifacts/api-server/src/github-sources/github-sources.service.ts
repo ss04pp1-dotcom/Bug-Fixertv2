@@ -75,11 +75,21 @@ export class GitHubSourcesService {
     return { message: 'GitHub source deleted' };
   }
 
-  async syncNow(id: string) {
+  async syncNow(id: string, force = false) {
     const source = await this.findOne(id);
     if (source.isSyncing) return { message: 'Sync already in progress' };
+
+    // Force re-fetch by clearing the cached ETag and Last-Modified headers
+    // so the server won't skip processing when content appears unchanged.
+    if (force) {
+      await this.prisma.gitHubSource.update({
+        where: { id },
+        data: { etag: null, lastModified: null },
+      });
+    }
+
     this.syncService.syncSource(id).catch(() => {});
-    return { message: 'Sync started' };
+    return { message: force ? 'Force sync started (ETag cleared)' : 'Sync started' };
   }
 
   async getLogs(id: string, limit = 50) {

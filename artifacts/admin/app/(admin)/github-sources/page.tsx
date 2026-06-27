@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import {
   Github, Plus, RefreshCw, Trash2, Edit, ToggleLeft, ToggleRight,
   CheckCircle, XCircle, Clock, Loader2, ExternalLink, ChevronDown, ChevronUp,
-  Server, Tv, AlertTriangle,
+  Server, Tv, AlertTriangle, Zap,
 } from "lucide-react";
 import { useApiQuery, useApiMutation, useApiCallState, useInvalidate } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
@@ -131,10 +131,11 @@ export default function GitHubSourcesPage() {
     await invalidate(KEY);
   }
 
-  async function handleSyncNow(id: string) {
+  async function handleSyncNow(id: string, force = false) {
     setSyncingIds(prev => new Set(prev).add(id));
     try {
-      await apiClient.post(`/v1/github-sources/${id}/sync`);
+      const endpoint = force ? `/v1/github-sources/${id}/force-sync` : `/v1/github-sources/${id}/sync`;
+      await apiClient.post(endpoint);
       setTimeout(() => {
         invalidate(KEY);
         setSyncingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
@@ -276,12 +277,20 @@ export default function GitHubSourcesPage() {
                             {source.enabled ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                           </button>
                           <button
-                            onClick={() => handleSyncNow(source.id)}
+                            onClick={() => handleSyncNow(source.id, false)}
                             disabled={isSyncing}
                             className="text-[#8B92A5] hover:text-white disabled:opacity-50 transition-colors"
                             title="Sync now"
                           >
                             <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                          </button>
+                          <button
+                            onClick={() => handleSyncNow(source.id, true)}
+                            disabled={isSyncing}
+                            className="text-[#8B92A5] hover:text-yellow-400 disabled:opacity-50 transition-colors"
+                            title="Force sync (clears ETag cache — re-processes all channels)"
+                          >
+                            <Zap size={14} />
                           </button>
                           <button
                             onClick={() => openEdit(source)}

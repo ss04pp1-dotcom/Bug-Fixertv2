@@ -57,6 +57,7 @@ export default function Channels() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
@@ -124,6 +125,22 @@ export default function Channels() {
       alert(typeof msg === "string" ? msg : "Merge failed");
     } finally {
       setMerging(false);
+    }
+  };
+
+  const handleCleanupBadNames = async () => {
+    if (!confirm("এটি image URL-এর মতো ভুল নামের চ্যানেলগুলো ডিলিট করবে। GitHub re-sync করলে সঠিক নামে ফিরে আসবে। চালিয়ে যাবেন?")) return;
+    setCleaning(true);
+    try {
+      const res = await apiClient.post<any>("/v1/channels/cleanup-bad-names");
+      const result = res.data?.data ?? res.data;
+      alert(`Cleaned: ${result?.deleted ?? 0} channels deleted, ${result?.preserved ?? 0} preserved`);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Cleanup failed";
+      alert(typeof msg === "string" ? msg : "Cleanup failed");
+    } finally {
+      setCleaning(false);
     }
   };
 
@@ -248,6 +265,15 @@ export default function Channels() {
           >
             <GitMerge size={13} className={merging ? "animate-pulse" : ""} />
             {merging ? "Merging…" : "Merge Duplicates"}
+          </button>
+          <button
+            onClick={handleCleanupBadNames}
+            disabled={cleaning}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 disabled:opacity-50"
+            title="Remove channels with image-URL names (broken M3U parse artifacts)"
+          >
+            <RefreshCw size={13} className={cleaning ? "animate-spin" : ""} />
+            {cleaning ? "Cleaning…" : "Fix Bad Names"}
           </button>
           <button onClick={() => setImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20">
             <Upload size={13} /> Bulk Import

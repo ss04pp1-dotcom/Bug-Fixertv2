@@ -579,6 +579,53 @@ export class ChannelsService {
     };
   }
 
+  // ── Bad-name cleanup ────────────────────────────────────────────────────────
+
+  /**
+   * Find channels whose name looks like an image-URL artifact (e.g.
+   * "q_75,f_webp/.../poster.png'Channel Name") from the old broken M3U parser,
+   * and soft-delete them so a fresh GitHub sync can recreate them with correct names.
+   * Channels that have admin-managed servers or admin name overrides are preserved.
+   */
+  async cleanupBadChannelNames(): Promise<{ deleted: number; preserved: number; names: string[] }> {
+    const BAD_NAME_PATTERN = /\.(png|jpg|jpeg|webp|gif|svg)['"]/i;
+
+    const candidates = await this.prisma.channel.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        adminNameOverride: true,
+        servers: {
+          where: { deletedAt: null, sourceType: ServerSourceType.ADMIN },
+          select: { id: true },
+        },
+      },
+    });
+
+    const badOnes = candidates.filter(c => BAD_NAME_PATTERN.test(c.name));
+    let deleted = 0;
+    let preserved = 0;
+    const deletedNames: string[] = [];
+
+    for (const ch of badOnes) {
+      // Preserve channels that have admin-set overrides or manually-added servers
+      if (ch.adminNameOverride || ch.servers.length > 0) {
+        preserved++;
+        continue;
+      }
+      await this.prisma.channel.update({
+        where: { id: ch.id },
+        data: { deletedAt: new Date() },
+      });
+      deletedNames.push(ch.name.slice(0, 80));
+      deleted++;
+    }
+
+    this.logger.log(`Bad-name cleanup: deleted=${deleted}, preserved=${preserved}`);
+    return { deleted, preserved, names: deletedNames };
+  }
+
   // ── Admin overrides ─────────────────────────────────────────────────────────
 
   async updateOverrides(channelId: string, dto: {

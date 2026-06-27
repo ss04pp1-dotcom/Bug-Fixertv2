@@ -50,7 +50,13 @@ export class GitHubSourcesController {
   @Post(':id/sync')
   @ApiOperation({ summary: 'Trigger an immediate sync for this source' })
   syncNow(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.syncNow(id);
+    return this.service.syncNow(id, false);
+  }
+
+  @Post(':id/force-sync')
+  @ApiOperation({ summary: 'Force a full re-fetch and reprocess (clears ETag cache)' })
+  forceSyncNow(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.syncNow(id, true);
   }
 
   @Get(':id/logs')

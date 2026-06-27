@@ -87,6 +87,12 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Merge duplicate channels by normalized name' })
   mergeDuplicates() { return this.channelsService.mergeDuplicates(); }
 
+  @Post('cleanup-bad-names')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Soft-delete channels with image-URL-style names from broken M3U parsing' })
+  cleanupBadNames() { return this.channelsService.cleanupBadChannelNames(); }
+
   @Post('parse-playlist')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
