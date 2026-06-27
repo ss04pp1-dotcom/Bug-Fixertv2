@@ -105,7 +105,7 @@ export default function SearchScreen() {
     if (item.type === 'movie') router.push(`/movie/${item.id}`);
     else if (item.type === 'series') router.push(`/series/${item.id}`);
     else if (item.type === 'channel') {
-      router.push({ pathname: `/live-player/${item.id}`, params: { title: item.title } });
+      router.push({ pathname: `/live-player/${item.id}` as any, params: { title: item.title } });
     }
   }, []);
 

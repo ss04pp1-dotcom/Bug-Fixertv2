@@ -621,6 +621,7 @@ export default function PremiumVideoPlayer({
   const [selectedSubIdx, setSelSub]   = useState(-1);  // -1 = off
 
   // ── Gesture feedback ───────────────────────────────────────────────────────
+  const [urlCheck, setUrlCheck]       = useState<string | null>(null);
   const [seekSide, setSeekSide]       = useState<{ side: 'left' | 'right'; secs: number } | null>(null);
   const [swipeType, setSwipeType]     = useState<'volume' | 'brightness' | null>(null);
   const [swipeValue, setSwipeValue]   = useState(0.7);

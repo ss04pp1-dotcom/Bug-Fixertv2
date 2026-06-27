@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req,
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto, UpsertGatewayDto } from './dto/payments.dto';
+import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto, UpsertGatewayDto, PaymentsQueryDto } from './dto/payments.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -18,7 +18,7 @@ export class PaymentsController {
   constructor(private svc: PaymentsService) {}
 
   @Get() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Get all payments' })
-  findAll(@Query() query: PaginationDto) { return this.svc.findAll(query); }
+  findAll(@Query() query: PaymentsQueryDto) { return this.svc.findAll(query); }
 
   @Get('stats') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Payment stats' })
   getStats() { return this.svc.getStats(); }

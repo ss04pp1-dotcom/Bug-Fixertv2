@@ -1,4 +1,11 @@
 import { IsString, IsNumber, IsOptional, IsBoolean, IsObject, IsArray } from 'class-validator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+
+export class PaymentsQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
 
 export class CreatePaymentDto {
   @IsOptional() @IsString()

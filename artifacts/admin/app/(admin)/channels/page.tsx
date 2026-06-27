@@ -511,7 +511,7 @@ export default function Channels() {
       )}
 
       {showImport && (
-        <BulkImportModal onClose={() => setImport(false)} onSuccess={() => { setImport(false); refetch(); }} />
+        <BulkImportModal categories={categories} onClose={() => setImport(false)} onImported={() => { setImport(false); refetch(); }} />
       )}
     </>
   );
