@@ -856,11 +856,13 @@ export default function PremiumVideoPlayer({
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (fullscreen) { setFullscreen(false); return true; }
-      if (pip) { setPip(false); return true; }
+      // pipActive (not pip) is the authoritative signal — pip resets to false
+      // 600ms after entry, but PiP window stays open until OS dismisses it.
+      if (pipActive) { return true; }  // swallow back press while in PiP
       return false;  // let parent screen handle (mini player minimize)
     });
     return () => sub.remove();
-  }, [fullscreen, pip]);
+  }, [fullscreen, pipActive]);
 
   // ── Auto PiP when app goes to background (YouTube-style) ──────────────────
   // NOTE: On Android, AppState NEVER emits 'inactive' — it goes directly
@@ -874,13 +876,12 @@ export default function PremiumVideoPlayer({
       if (nextState === 'background' && isReady && !hasError && !playerError) {
         // Trigger PiP entry for Android < 12.
         // Android 12+ enters PiP automatically via manifest autoEnterPictureInPicture.
-        // Setting this prop calls enterPictureInPictureMode() in react-native-video.
         setPip(true);
+        // Reset the pip prop after PiP is established (same one-shot pattern as
+        // the manual button). This prevents a reload when the user returns from PiP
+        // because the pictureInPicture prop is already false by then (no flip).
+        setTimeout(() => setPip(false), 600);
       }
-      // Do NOT call setPip(false) or reset any player state here when returning
-      // to 'active'. The onPipChange callback (onPictureInPictureStatusChanged)
-      // is the authoritative signal that PiP has ended — handling it here too
-      // causes a double state update and can trigger unnecessary re-renders.
     });
     return () => sub.remove();
   // playerError intentionally included so PiP isn't triggered on error screens
@@ -1183,12 +1184,11 @@ export default function PremiumVideoPlayer({
               onTextTracks={setTextTracks}
               onPipChange={(active) => {
                 setPipActive(active);
-                // Sync pip prop when OS dismisses PiP (user taps expand/close).
-                // Do NOT reset source, seek position, or any player state here —
-                // the player instance stays alive and continues from where it was.
-                if (!active) {
-                  setPip(false);
-                }
+                // pip prop is already reset to false via setTimeout in the button
+                // handler (600ms after entry), so we do NOT touch pip here.
+                // Calling setPip(false) here would flip pictureInPicture true→false
+                // at the moment PiP exits, causing react-native-video to reload the
+                // stream. Only update pipActive to sync the UI.
               }}
             />
           )
@@ -1320,8 +1320,18 @@ export default function PremiumVideoPlayer({
                 )}
                 {/* PiP */}
                 {Platform.OS !== 'web' && (
-                  <TouchableOpacity style={p.iconBtn} onPress={() => setPip(v => !v)}>
-                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
+                  <TouchableOpacity style={p.iconBtn} onPress={() => {
+                    if (!pipActive) {
+                      setPip(true);
+                      // Reset pip prop after PiP entry is established.
+                      // The OS holds the PiP window open even after the prop
+                      // reverts to false, so this prevents a reload when the
+                      // user later returns from PiP (prop stays false → no flip).
+                      setTimeout(() => setPip(false), 600);
+                    }
+                    bumpCtrl();
+                  }}>
+                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pipActive ? C.primary : '#fff'} />
                   </TouchableOpacity>
                 )}
                 {/* Refresh */}

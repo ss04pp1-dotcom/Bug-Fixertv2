@@ -240,7 +240,10 @@ export default function GlobalVideoPlayer() {
   useEffect(() => {
     if (Platform.OS !== 'android' || mode === 'hidden') return;
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'background' && isReady && !playerError) setPip(true);
+      if (s === 'background' && isReady && !playerError) {
+        setPip(true);
+        setTimeout(() => setPip(false), 600);
+      }
     });
     return () => sub.remove();
   }, [mode, isReady, playerError]);
@@ -345,7 +348,7 @@ export default function GlobalVideoPlayer() {
                   else setError(err?.error?.localizedDescription || 'Stream error');
                 }}
                 onEnd={() => {}}
-                onPipChange={(active) => { setPipActive(active); if (!active) setPip(false); }}
+                onPipChange={(active) => { setPipActive(active); }}
               />
             )}
             {/* Buffering */}
@@ -434,7 +437,7 @@ export default function GlobalVideoPlayer() {
             }
           }}
           onEnd={() => { setPlaying(false); }}
-          onPipChange={(active) => { setPipActive(active); if (!active) setPip(false); }}
+          onPipChange={(active) => { setPipActive(active); }}
         />
       )}
 
@@ -501,8 +504,14 @@ export default function GlobalVideoPlayer() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {/* PiP button */}
               {Platform.OS === 'android' && (
-                <TouchableOpacity style={g.iconBtn} onPress={() => setPip(v => !v)}>
-                  <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
+                <TouchableOpacity style={g.iconBtn} onPress={() => {
+                  if (!pipActive) {
+                    setPip(true);
+                    setTimeout(() => setPip(false), 600);
+                  }
+                  bumpCtrl();
+                }}>
+                  <MaterialIcons name="picture-in-picture-alt" size={20} color={pipActive ? C.primary : '#fff'} />
                 </TouchableOpacity>
               )}
               {/* Refresh */}
