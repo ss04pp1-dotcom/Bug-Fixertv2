@@ -1,11 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
-  Platform, Dimensions, PanResponder,
+  Platform, Dimensions, AppState, type AppStateStatus,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,20 +17,25 @@ const PLAYER_W = SW - 24;
 const PLAYER_H = 68;
 const TAB_BAR_H = 68;
 
-const IS_EXPO_GO =
-  (() => {
-    try {
-      const Constants = require('expo-constants').default;
-      return (
-        Constants.appOwnership === 'expo' ||
-        (Constants as any).executionEnvironment === 'storeClient'
-      );
-    } catch {
-      return false;
-    }
-  })();
+const IS_EXPO_GO = (() => {
+  try {
+    const Constants = require('expo-constants').default;
+    return (
+      Constants.appOwnership === 'expo' ||
+      (Constants as any).executionEnvironment === 'storeClient'
+    );
+  } catch { return false; }
+})();
 
-function NativeVideo({ uri, headers, paused }: { uri: string; headers?: Record<string, string>; paused: boolean }) {
+function NativeVideo({
+  uri, headers, paused, pip, onPipChange,
+}: {
+  uri: string;
+  headers?: Record<string, string>;
+  paused: boolean;
+  pip: boolean;
+  onPipChange?: (isActive: boolean) => void;
+}) {
   if (IS_EXPO_GO || Platform.OS === 'web') return null;
   try {
     const Video = require('react-native-video').default;
@@ -47,30 +51,56 @@ function NativeVideo({ uri, headers, paused }: { uri: string; headers?: Record<s
         ignoreSilentSwitch="ignore"
         playInBackground
         playWhenInactive
-        bufferConfig={{ minBufferMs: 5000, maxBufferMs: 30000, bufferForPlaybackMs: 2000, bufferForPlaybackAfterRebufferMs: 3000 }}
+        pictureInPicture={pip}
+        onPictureInPictureStatusChanged={({ isActive }: { isActive: boolean }) => {
+          onPipChange?.(isActive);
+        }}
+        bufferConfig={{
+          minBufferMs: 5000,
+          maxBufferMs: 30000,
+          bufferForPlaybackMs: 2000,
+          bufferForPlaybackAfterRebufferMs: 3000,
+        }}
       />
     );
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export default function MiniPlayer() {
   const insets = useSafeAreaInsets();
-  const { active, title, logo, contentId, contentType, sources, srcIdx, isLive, isPlaying, close, setPlaying } =
-    usePlayerStore();
+  const {
+    active, title, logo, contentId, contentType,
+    sources, srcIdx, isLive, isPlaying, close, setPlaying,
+  } = usePlayerStore();
+
+  const [pip, setPip] = useState(false);
 
   const translateY = useSharedValue(120);
   const opacity = useSharedValue(0);
 
+  // Slide in/out animation
   useEffect(() => {
     if (active) {
+      setPip(false);
       translateY.value = withSpring(0, { damping: 18, stiffness: 200 });
       opacity.value = withTiming(1, { duration: 200 });
     } else {
       translateY.value = withTiming(120, { duration: 250 });
       opacity.value = withTiming(0, { duration: 200 });
     }
+  }, [active]);
+
+  // Auto system PiP when app goes to background
+  useEffect(() => {
+    if (!active || Platform.OS !== 'android' || IS_EXPO_GO) return;
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        setPip(true);
+      } else if (state === 'active') {
+        setPip(false);
+      }
+    });
+    return () => sub.remove();
   }, [active]);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -83,6 +113,7 @@ export default function MiniPlayer() {
 
   const handleExpand = () => {
     if (!contentId) return;
+    setPip(false);
     if (contentType === 'channel') {
       router.push({
         pathname: `/live-player/${contentId}` as any,
@@ -101,15 +132,19 @@ export default function MiniPlayer() {
         {/* Video thumbnail / live preview */}
         <View style={styles.thumb}>
           {src?.url ? (
-            <NativeVideo uri={src.url} headers={src.headers} paused={!isPlaying} />
+            <NativeVideo
+              uri={src.url}
+              headers={src.headers}
+              paused={!isPlaying}
+              pip={pip}
+              onPipChange={(isActive) => {
+                if (!isActive) setPip(false);
+              }}
+            />
           ) : null}
           {/* Logo fallback overlay */}
           {logo ? (
-            <Image
-              source={{ uri: logo }}
-              style={styles.logoOverlay}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: logo }} style={styles.logoOverlay} resizeMode="contain" />
           ) : (
             <LinearGradient colors={['#8B5CF6', '#EC4899']} style={StyleSheet.absoluteFill}>
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -140,17 +175,9 @@ export default function MiniPlayer() {
             style={styles.ctrlBtn}
             hitSlop={10}
           >
-            <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={22}
-              color="#fff"
-            />
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={close}
-            style={styles.ctrlBtn}
-            hitSlop={10}
-          >
+          <TouchableOpacity onPress={close} style={styles.ctrlBtn} hitSlop={10}>
             <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
         </View>
