@@ -1,16 +1,16 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler,
+  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler, ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
-import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
-import { usePlayerStore } from '@/lib/player-store';
+import { type StreamSource } from '@/components/PremiumVideoPlayer';
+import { useGlobalPlayer } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -44,28 +44,36 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
-  const openMiniPlayer = usePlayerStore((s) => s.open);
-  const closeMiniPlayer = usePlayerStore((s) => s.close);
+  const enterFullscreen = useGlobalPlayer((s) => s.enterFullscreen);
+  const enterMini       = useGlobalPlayer((s) => s.enterMini);
 
-  // Close mini player when opening full player screen
-  useEffect(() => { closeMiniPlayer(); }, [id]);
-
-  // ── Minimize to mini player instead of navigating away ────────────────────
-  const minimizeToMini = useCallback(() => {
-    if (sources.length > 0) {
-      openMiniPlayer({
-        title: contentTitle,
-        logo: logoUrl,
-        contentId: id,
-        contentType: 'channel',
-        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-        isLive: true,
-      });
+  // When sources are ready or channel changes, push to global player.
+  // If the global player already has THIS channel (returning from mini), just
+  // switch to fullscreen — do NOT reload.
+  useEffect(() => {
+    if (sources.length === 0) return;
+    const g = useGlobalPlayer.getState();
+    if (g.contentId === id && g.mode !== 'hidden') {
+      useGlobalPlayer.setState({ mode: 'fullscreen' });
+      return;
     }
-    router.replace('/(main)/live-tv');
-  }, [sources, contentTitle, logoUrl, id, openMiniPlayer]);
+    enterFullscreen({
+      sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+      title: contentTitle,
+      logo: logoUrl,
+      contentId: id,
+      contentType: 'channel',
+      isLive: true,
+    });
+  }, [sources, id]);
 
-  // ── Hardware back button → minimize to mini player ─────────────────────────
+  // Minimize to mini (no navigation — GlobalVideoPlayer stays mounted at root)
+  const minimizeToMini = useCallback(() => {
+    enterMini();
+    router.replace('/(main)/live-tv');
+  }, [enterMini]);
+
+  // ── Hardware back button → minimize to mini ────────────────────────────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       minimizeToMini();
@@ -258,21 +266,22 @@ export default function LivePlayerScreen() {
     <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* ── Premium Player ──────────────────────────────────────────────── */}
-      <PremiumVideoPlayer
-        sources={sources}
-        title={contentTitle}
-        isLive
-        isLoading={fetchLoading}
-        hasError={fetchError}
-        onBack={minimizeToMini}
-        onRetry={loadStream}
-        onRefreshStream={loadStream}
-        contentId={id}
-        contentType="channel"
-        onPlaybackStart={onPlaybackStart}
-        onPlaybackError={onPlaybackError}
-      />
+      {/* ── Video is rendered by GlobalVideoPlayer at root layout level ──── */}
+      {/* Placeholder keeps layout space for the video area */}
+      {fetchLoading && (
+        <View style={s.videoPlaceholder}>
+          <ActivityIndicator size="large" color={C.primary} />
+        </View>
+      )}
+      {fetchError && !fetchLoading && (
+        <View style={s.videoPlaceholder}>
+          <Ionicons name="alert-circle-outline" size={40} color={C.live} />
+          <Text style={{ color: '#fff', marginTop: 8, fontSize: 14 }}>Stream load failed</Text>
+          <TouchableOpacity onPress={loadStream} style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, backgroundColor: C.primary, borderRadius: 20 }}>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Below player (portrait) ─────────────────────────────────────── */}
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -397,6 +406,11 @@ const CARD_W = Math.floor((SW - 14 * 2 - 10) / 2);
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  videoPlaceholder: {
+    width: '100%', aspectRatio: 16 / 9,
+    backgroundColor: '#0D0D1F',
+    justifyContent: 'center', alignItems: 'center',
+  },
 
   channelHeader: {
     flexDirection: 'row', alignItems: 'center',

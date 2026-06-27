@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Platform, Image,
+  ScrollView, StatusBar, Platform, Image, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,9 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
-import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
+import { type StreamSource } from '@/components/PremiumVideoPlayer';
 import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
-import { usePlayerStore } from '@/lib/player-store';
+import { useGlobalPlayer } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -190,26 +190,36 @@ export default function PlayerScreen() {
     number: ep.episodeNumber || i + 1,
   }));
 
-  const openMiniPlayer = usePlayerStore((s) => s.open);
-  const closeMiniPlayer = usePlayerStore((s) => s.close);
+  const enterFullscreen = useGlobalPlayer((s) => s.enterFullscreen);
+  const enterMini       = useGlobalPlayer((s) => s.enterMini);
 
-  // Close mini player when full player opens
-  useEffect(() => { closeMiniPlayer(); }, [id]);
+  // Push to global player when sources are ready.
+  // If global player already has THIS content (returning from mini), just
+  // switch to fullscreen — do NOT reload.
+  useEffect(() => {
+    if (sources.length === 0 || youtubeUrl) return;
+    const g = useGlobalPlayer.getState();
+    if (g.contentId === id && g.mode !== 'hidden') {
+      useGlobalPlayer.setState({ mode: 'fullscreen' });
+      return;
+    }
+    enterFullscreen({
+      sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+      title: contentTitle,
+      logo: poster,
+      contentId: id,
+      contentType: cType,
+      isLive: false,
+    });
+  }, [sources, id, youtubeUrl]);
 
   const handleBack = useCallback(() => {
     if (sources.length > 0) {
-      openMiniPlayer({
-        title: contentTitle,
-        logo: poster,
-        contentId: id,
-        contentType: cType,
-        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-        isLive: false,
-      });
+      enterMini();
     }
     if (router.canGoBack()) router.back();
     else router.replace('/(main)');
-  }, [sources, contentTitle, poster, id, cType, openMiniPlayer]);
+  }, [sources, enterMini]);
 
   // ── Shared below-player content ─────────────────────────────────────────────
   const belowPlayer = (
@@ -335,23 +345,21 @@ export default function PlayerScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      <PremiumVideoPlayer
-        sources={sources}
-        title={contentTitle}
-        isLoading={srcLoading}
-        hasError={srcError}
-        errorMessage={srcErrorMsg}
-        onBack={handleBack}
-        onRetry={loadStream}
-        onRefreshStream={loadStream}
-        contentId={cType === 'series' && episodes[epIdx]?.id ? episodes[epIdx].id : id}
-        contentType={cType}
-        episodes={epList}
-        currentEpIdx={epIdx}
-        onEpisodeChange={setEpIdx}
-        onNext={handleNext}
-        onPrev={handlePrev}
-      />
+      {/* Video is rendered by GlobalVideoPlayer at root layout level */}
+      {srcLoading && (
+        <View style={s.videoPlaceholder}>
+          <ActivityIndicator size="large" color={C.primary} />
+        </View>
+      )}
+      {srcError && !srcLoading && (
+        <View style={s.videoPlaceholder}>
+          <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
+          <Text style={{ color: '#fff', marginTop: 8, fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>{srcErrorMsg || 'Playback failed'}</Text>
+          <TouchableOpacity onPress={loadStream} style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, backgroundColor: C.primary, borderRadius: 20 }}>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {belowPlayer}
     </View>
@@ -360,6 +368,12 @@ export default function PlayerScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  videoPlaceholder: {
+    width: '100%', aspectRatio: 16 / 9,
+    backgroundColor: '#0D0D1F',
+    justifyContent: 'center', alignItems: 'center',
+    gap: 8,
+  },
 
   // YouTube header
   ytHeader: {
