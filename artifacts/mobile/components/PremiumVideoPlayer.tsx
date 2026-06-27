@@ -48,17 +48,21 @@ const DEFAULT_HEADERS = {
 };
 
 // ─── Buffer configs ───────────────────────────────────────────────────────────
+// Live: keep buffer small so ExoPlayer doesn't try to fetch too many
+// segments at once — large maxBufferMs causes connection exhaustion on
+// IPTV servers, producing ERROR_CODE_IO_NETWORK_CONNECTION_FAILED even
+// though the manifest returns HTTP 200.
 const BUFFER_LIVE = {
-  minBufferMs: 8000,
-  maxBufferMs: 50000,
-  bufferForPlaybackMs: 3000,
-  bufferForPlaybackAfterRebufferMs: 6000,
+  minBufferMs: 2000,
+  maxBufferMs: 8000,
+  bufferForPlaybackMs: 1000,
+  bufferForPlaybackAfterRebufferMs: 2000,
 };
 const BUFFER_VOD = {
-  minBufferMs: 15000,
-  maxBufferMs: 60000,
-  bufferForPlaybackMs: 2500,
-  bufferForPlaybackAfterRebufferMs: 5000,
+  minBufferMs: 10000,
+  maxBufferMs: 30000,
+  bufferForPlaybackMs: 2000,
+  bufferForPlaybackAfterRebufferMs: 4000,
 };
 
 // ─── Stream type detection ────────────────────────────────────────────────────
@@ -686,9 +690,11 @@ export default function PremiumVideoPlayer({
   const swipeSide       = useRef<'left' | 'right'>('right');
   const currentTimeRef  = useRef(0);
   const durationRef     = useRef(0);
-  const trackWidthRef   = useRef(200);  // FIX: track actual progress bar width via onLayout
+  const trackWidthRef   = useRef(200);
   const stallTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourcesRef      = useRef(sources);
+  const networkRetryRef = useRef(0);   // retry same source on transient network errors
+  const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Animated controls ─────────────────────────────────────────────────────
   const ctrlOpacity = useSharedValue(1);
@@ -928,6 +934,8 @@ export default function PremiumVideoPlayer({
 
   // ── Reset source index when sources list changes (new channel/content) ──────
   useEffect(() => {
+    networkRetryRef.current = 0;
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
     setSrcIdx(0);
     setPlayerError(null);
     setReady(false);
@@ -936,10 +944,13 @@ export default function PremiumVideoPlayer({
     setDuration(0);
     currentTimeRef.current = 0;
     durationRef.current = 0;
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
   }, [sources]);
 
-  // ── Stall detection: auto-switch if buffering > 30s with no data ───────────
-  const STALL_MS = 30_000;
+  // ── Stall detection: auto-switch if buffering > N seconds with no data ──────
+  const STALL_MS = isLive ? 12_000 : 20_000;
   useEffect(() => {
     if (buffering && !playerError && src && !isLoading && !hasError) {
       stallTimerRef.current = setTimeout(() => {
@@ -1147,6 +1158,8 @@ export default function PremiumVideoPlayer({
               selectedTextTrack={selectedTextTrack}
               onLoadStart={() => { setBuffering(true); setReady(false); }}
               onLoad={(data) => {
+                networkRetryRef.current = 0; // clear retry counter on successful load
+                if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
                 setDuration(data?.duration || 0);
                 durationRef.current = data?.duration || 0;
                 setBuffering(false); setReady(true); setEnded(false); setPlayerError(null);
@@ -1164,18 +1177,52 @@ export default function PremiumVideoPlayer({
               }}
               onBuffer={setBuffering}
               onError={(error) => {
-                const desc = error?.error?.localizedDescription || error?.error?.errorString || 'Unknown error';
-                VideoLog.error('PLAYER', `Error: ${desc}`);
-                // FIX: auto-fallback to next server before showing error UI
-                if (srcIdx < sources.length - 1) {
-                  VideoLog.info('PLAYER', `Auto-switching to server ${srcIdx + 2}`);
-                  setSrcIdx(i => i + 1);
+                const code: string = error?.error?.code ?? '';
+                const desc: string = error?.error?.localizedDescription || error?.error?.errorString || String(code) || 'Unknown error';
+                VideoLog.error('PLAYER', `Error: ${desc}`, { code });
+
+                // Transient network errors (IO_NETWORK_CONNECTION_FAILED,
+                // IO_NETWORK_CONNECTION_TIMEOUT, IO_READ_POSITION_OUT_OF_RANGE)
+                // are common on IPTV servers — retry the SAME source up to 3 times
+                // before falling back to the next server.
+                const isNetworkErr =
+                  typeof code === 'number'
+                    ? (code === -1009 || code === -1001 || code === -1004) // iOS NSURLError
+                    : (
+                      String(code).includes('IO_NETWORK') ||
+                      String(code).includes('IO_READ') ||
+                      desc.includes('NETWORK_CONNECTION') ||
+                      desc.includes('network') ||
+                      desc.includes('timed out') ||
+                      desc.includes('timeout')
+                    );
+
+                if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+
+                if (isNetworkErr && networkRetryRef.current < 3) {
+                  networkRetryRef.current += 1;
+                  VideoLog.warn('PLAYER', `Network error — retry ${networkRetryRef.current}/3 in 1.5s`);
                   setBuffering(true);
                   setPlayerError(null);
+                  // Soft reload: unmount the Video component then remount it
+                  // at the same source index so ExoPlayer starts a fresh connection.
+                  const stayIdx = srcIdx;
+                  retryTimerRef.current = setTimeout(() => {
+                    setSrcIdx(-1);
+                    setTimeout(() => setSrcIdx(stayIdx), 150);
+                  }, 1500);
                 } else {
-                  setPlayerError(desc);
-                  setBuffering(false);
-                  onPlaybackError?.();
+                  networkRetryRef.current = 0;
+                  if (srcIdx < sources.length - 1) {
+                    VideoLog.info('PLAYER', `Switching to server ${srcIdx + 2}`);
+                    setSrcIdx(i => i + 1);
+                    setBuffering(true);
+                    setPlayerError(null);
+                  } else {
+                    setPlayerError(desc);
+                    setBuffering(false);
+                    onPlaybackError?.();
+                  }
                 }
               }}
               onEnd={() => { setEnded(true); setPlaying(false); onNext?.(); }}
