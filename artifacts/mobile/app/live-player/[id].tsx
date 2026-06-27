@@ -88,21 +88,51 @@ export default function LivePlayerScreen() {
 
   useEffect(() => () => clearPlaybackTimer(), []);
 
-  // ── Related channels ───────────────────────────────────────────────────────
-  const { data: relatedRaw } = useLiveChannels({ limit: 20 });
+  // ── Current channel metadata (for related-channel ranking) ────────────────
+  const [currentCatId, setCurrentCatId]     = useState<string | null>(null);
+  const [currentCatName, setCurrentCatName] = useState<string | null>(null);
+  const [currentLang, setCurrentLang]       = useState<string | null>(null);
+
+  // ── Related channels — large pool, smart-sorted ────────────────────────────
+  const { data: relatedRaw } = useLiveChannels({ limit: 200, isActive: true });
+
   const related = useMemo(() => {
     if (!relatedRaw || !Array.isArray(relatedRaw)) return [];
-    return (relatedRaw as any[])
-      .filter((ch: any) => ch.id !== id)
-      .slice(0, 16)
-      .map((ch: any) => ({
+
+    const pool = (relatedRaw as any[]).filter((ch: any) => ch.id !== id);
+
+    // Scoring: same category = 3pts, same language = 2pts, has logo = 1pt
+    const scored = pool.map((ch: any) => {
+      const chCatId   = ch.categoryId || ch.category?.id || null;
+      const chCatName = ch.category?.name || ch.category || '';
+      const chLang    = (ch.language || '').toLowerCase();
+
+      let score = 0;
+      if (currentCatId   && chCatId   && chCatId   === currentCatId)           score += 3;
+      else if (currentCatName && chCatName && chCatName.toLowerCase() === currentCatName.toLowerCase()) score += 3;
+      if (currentLang    && chLang    && chLang    === currentLang.toLowerCase()) score += 2;
+      if (ch.logoUrl || ch.logo) score += 1;
+
+      return {
+        _score:    score,
+        _sameCat:  score >= 3,
         id:        ch.id || '',
         name:      ch.name || '',
         logo:      ch.logoUrl || ch.logo || '',
         cat:       ch.category?.name || ch.category || ch.language || 'Live TV',
+        language:  ch.language || '',
         streamUrl: ch.primaryStreamUrl || ch.streamUrl || '',
-      }));
-  }, [relatedRaw, id]);
+      };
+    });
+
+    // Sort: highest score first, then alphabetically within same score
+    scored.sort((a, b) => {
+      if (b._score !== a._score) return b._score - a._score;
+      return a.name.localeCompare(b.name);
+    });
+
+    return scored.slice(0, 30);
+  }, [relatedRaw, id, currentCatId, currentCatName, currentLang]);
 
   // ── Build sources from channel response ───────────────────────────────────
   const buildSources = useCallback((ch: any, overrideFirstUrl?: string): StreamSource[] => {
@@ -155,6 +185,10 @@ export default function LivePlayerScreen() {
     try {
       const res = await apiClient.get(`/channels/${id}`);
       const ch  = res.data?.data || res.data;
+      // Save metadata for related-channel ranking
+      setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
+      setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
+      setCurrentLang((ch?.language || '').toLowerCase() || null);
       const srcs = buildSources(ch, passedUrl || undefined);
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
@@ -249,7 +283,17 @@ export default function LivePlayerScreen() {
             contentContainerStyle={s.grid}
             columnWrapperStyle={s.columnWrapper}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
+            ListHeaderComponent={related.length > 0 ? () => (
+              <View style={s.relatedHeader}>
+                <Ionicons name="tv-outline" size={13} color={C.primary} />
+                <Text style={s.relatedHeaderTxt}>
+                  {related.filter((r: any) => r._sameCat).length > 0
+                    ? `${related.filter((r: any) => r._sameCat).length} same category · `
+                    : ''}{related.length} channels
+                </Text>
+              </View>
+            ) : null}
+            renderItem={({ item }: { item: any }) => (
               <TouchableOpacity style={s.chCard} onPress={() => switchChannel(item)} activeOpacity={0.75}>
                 <View style={s.chThumb}>
                   {item.logo ? (
@@ -261,10 +305,17 @@ export default function LivePlayerScreen() {
                       </View>
                     </LinearGradient>
                   )}
+                  {/* LIVE badge */}
                   <View style={s.chLiveBadge}>
                     <View style={s.liveDotSmall} />
                     <Text style={s.chLiveTxt}>LIVE</Text>
                   </View>
+                  {/* Same-category badge */}
+                  {item._sameCat && (
+                    <View style={s.chSameCatBadge}>
+                      <Text style={s.chSameCatTxt}>●</Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={s.chName} numberOfLines={1}>{item.name}</Text>
                 <Text style={s.chCat} numberOfLines={1}>{item.cat}</Text>
@@ -351,6 +402,16 @@ const s = StyleSheet.create({
   chLiveTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
   chName:    { color: '#fff', fontSize: 13, fontWeight: '600' },
   chCat:     { color: C.dim, fontSize: 11, marginTop: 2 },
+
+  relatedHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
+  relatedHeaderTxt: { color: C.dim, fontSize: 12 },
+
+  chSameCatBadge: {
+    position: 'absolute', top: 6, right: 6,
+    backgroundColor: C.primary, borderRadius: 10,
+    paddingHorizontal: 5, paddingVertical: 2,
+  },
+  chSameCatTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
 
   emptyBox: { flex: 1, alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt: { color: C.dim, fontSize: 14 },
