@@ -655,6 +655,8 @@ export default function PremiumVideoPlayer({
   const currentTimeRef  = useRef(0);
   const durationRef     = useRef(0);
   const trackWidthRef   = useRef(200);  // FIX: track actual progress bar width via onLayout
+  const stallTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sourcesRef      = useRef(sources);
 
   // ── Animated controls ─────────────────────────────────────────────────────
   const ctrlOpacity = useSharedValue(1);
@@ -856,6 +858,9 @@ export default function PremiumVideoPlayer({
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [startHide]);
 
+  // ── Keep sourcesRef in sync ────────────────────────────────────────────────
+  useEffect(() => { sourcesRef.current = sources; }, [sources]);
+
   // ── Reset source index when sources list changes (new channel/content) ──────
   useEffect(() => {
     setSrcIdx(0);
@@ -867,6 +872,33 @@ export default function PremiumVideoPlayer({
     currentTimeRef.current = 0;
     durationRef.current = 0;
   }, [sources]);
+
+  // ── Stall detection: auto-switch if buffering > 15s with no data ───────────
+  const STALL_MS = 15_000;
+  useEffect(() => {
+    if (buffering && !playerError && src && !isLoading && !hasError) {
+      stallTimerRef.current = setTimeout(() => {
+        const srcs = sourcesRef.current;
+        setSrcIdx(cur => {
+          if (cur >= 0 && cur < srcs.length - 1) {
+            VideoLog.warn('STALL', `No data for ${STALL_MS / 1000}s — auto-switching to server ${cur + 2}`);
+            setBuffering(true);
+            setPlayerError(null);
+            return cur + 1;
+          }
+          VideoLog.error('STALL', 'Stall detected — no more servers to try');
+          setPlayerError('Stream stalled. No data received. Try refreshing.');
+          setBuffering(false);
+          return cur;
+        });
+      }, STALL_MS);
+    } else {
+      if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
+    }
+    return () => {
+      if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
+    };
+  }, [buffering, playerError, src, isLoading, hasError]);
 
   // ── Watch history auto-save ────────────────────────────────────────────────
   useEffect(() => {
