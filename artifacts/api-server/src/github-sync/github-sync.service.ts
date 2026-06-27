@@ -577,16 +577,22 @@ export class GitHubSyncService implements OnModuleInit {
         : undefined) ??
       existingServers.find(s => s.channelId === channelId && s.link === item.link);
 
+    // Build header fields: if source provides a value → use it (even empty string clears it).
+    // If source has no value (undefined) → omit the key so the DB retains whatever was there.
+    const headerFields = (src: typeof item) => ({
+      ...(src.cookie     !== undefined ? { cookie:     src.cookie     || null } : {}),
+      ...(src.userAgent  !== undefined ? { userAgent:  src.userAgent  || null } : {}),
+      ...(src.referer    !== undefined ? { referer:    src.referer    || null } : {}),
+      ...(src.origin     !== undefined ? { origin:     src.origin     || null } : {}),
+    });
+
     if (existingServer) {
       await this.prisma.channelServer.update({
         where: { id: existingServer.id },
         data: {
           channelId,
           link: item.link,
-          cookie: item.cookie ?? null,
-          userAgent: item.userAgent ?? null,
-          referer: item.referer ?? null,
-          origin: item.origin ?? null,
+          ...headerFields(item),
           lastSeenAt: new Date(),
           deletedAt: null,
           enabled: true,
@@ -607,10 +613,7 @@ export class GitHubSyncService implements OnModuleInit {
         await this.prisma.channelServer.update({
           where: { id: globalExisting.id },
           data: {
-            cookie: item.cookie ?? null,
-            userAgent: item.userAgent ?? null,
-            referer: item.referer ?? null,
-            origin: item.origin ?? null,
+            ...headerFields(item),
             lastSeenAt: new Date(),
             deletedAt: null,
             enabled: true,

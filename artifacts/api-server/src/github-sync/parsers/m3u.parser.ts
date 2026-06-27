@@ -18,46 +18,107 @@ export class M3uParser implements ChannelParser {
       if (line.startsWith('#EXTINF')) {
         const parsed = this.parseExtinf(line);
 
-        // Scan forward: collect any #EXTVLCOPT directives, then find the URL
+        // Scan forward: collect directive lines (#EXTVLCOPT, #KODIPROP, #EXTHTTP), then find the URL
         let j = i + 1;
         let vlcUserAgent: string | undefined;
         let vlcReferer: string | undefined;
         let vlcCookie: string | undefined;
+        let kodiHeaders: Record<string, string> = {};
+        let extHttpHeaders: Record<string, string> = {};
 
         while (j < lines.length && lines[j].startsWith('#')) {
           const commentLine = lines[j];
 
-          // #EXTVLCOPT:http-user-agent=...
-          // #EXTVLCOPT:http-referrer=...
-          // #EXTVLCOPT:http-cookie=...
+          // ── #EXTVLCOPT:http-user-agent=... ───────────────────────────────
           if (commentLine.startsWith('#EXTVLCOPT:')) {
             const opts = commentLine.substring('#EXTVLCOPT:'.length);
-            // Each option is key=value; a single #EXTVLCOPT line can carry one pair
-            const uaMatch = opts.match(/^http-user-agent=(.+)$/i);
+            const uaMatch  = opts.match(/^http-user-agent=(.+)$/i);
             const refMatch = opts.match(/^http-referrer?=(.+)$/i);
-            const ckMatch = opts.match(/^http-cookie=(.+)$/i);
+            const ckMatch  = opts.match(/^http-cookie=(.+)$/i);
+            if (uaMatch)  vlcUserAgent = uaMatch[1].trim();
+            if (refMatch) vlcReferer   = refMatch[1].trim();
+            if (ckMatch)  vlcCookie    = ckMatch[1].trim();
+          }
 
-            if (uaMatch) vlcUserAgent = uaMatch[1].trim();
-            if (refMatch) vlcReferer = refMatch[1].trim();
-            if (ckMatch) vlcCookie = ckMatch[1].trim();
+          // ── #KODIPROP:inputstream.adaptive.stream_headers=User-Agent=...&Cookie=... ──
+          // Also handles manifest_headers and license_key_headers
+          if (commentLine.startsWith('#KODIPROP:')) {
+            const kodi = commentLine.substring('#KODIPROP:'.length);
+            const headersMatch = kodi.match(
+              /^inputstream\.adaptive\.(?:stream_headers|manifest_headers|license_key_headers)=(.+)$/i,
+            );
+            if (headersMatch) {
+              kodiHeaders = {
+                ...kodiHeaders,
+                ...this.parseUrlEncodedHeaders(headersMatch[1].trim()),
+              };
+            }
+          }
+
+          // ── #EXTHTTP:{"Cookie":"...","User-Agent":"..."} ──────────────────
+          if (commentLine.startsWith('#EXTHTTP:')) {
+            try {
+              const json = commentLine.substring('#EXTHTTP:'.length).trim();
+              const obj = JSON.parse(json);
+              if (obj && typeof obj === 'object') {
+                for (const [k, v] of Object.entries(obj)) {
+                  if (typeof v === 'string') extHttpHeaders[k.toLowerCase()] = v;
+                }
+              }
+            } catch { /* ignore malformed JSON */ }
           }
 
           j++;
         }
 
-        const link = lines[j];
+        let link = lines[j] ?? '';
+
+        // ── URL-pipe headers: http://stream.url|User-Agent=...&Cookie=... ──
+        let pipeHeaders: Record<string, string> = {};
+        if (link && !link.startsWith('#') && link.includes('|')) {
+          const pipeIdx = link.indexOf('|');
+          pipeHeaders = this.parseUrlEncodedHeaders(link.substring(pipeIdx + 1));
+          link = link.substring(0, pipeIdx).trim();
+        }
 
         if (link && !link.startsWith('#') && parsed.name) {
+          // Priority (highest → lowest):
+          //   #EXTVLCOPT > #KODIPROP > #EXTHTTP > pipe-headers > inline #EXTINF attrs
+          const ua = vlcUserAgent
+            ?? kodiHeaders['user-agent']
+            ?? extHttpHeaders['user-agent']
+            ?? pipeHeaders['user-agent']
+            ?? parsed.userAgent;
+
+          const ref = vlcReferer
+            ?? kodiHeaders['referer']
+            ?? kodiHeaders['referrer']
+            ?? extHttpHeaders['referer']
+            ?? extHttpHeaders['referrer']
+            ?? pipeHeaders['referer']
+            ?? pipeHeaders['referrer']
+            ?? parsed.referer;
+
+          const ck = vlcCookie
+            ?? kodiHeaders['cookie']
+            ?? extHttpHeaders['cookie']
+            ?? pipeHeaders['cookie']
+            ?? parsed.cookie;
+
+          const origin = kodiHeaders['origin']
+            ?? extHttpHeaders['origin']
+            ?? pipeHeaders['origin']
+            ?? parsed.origin;
+
           channels.push({
             name: parsed.name,
-            link: link,
+            link,
             logo: parsed.logo,
             groupCategory: parsed.groupCategory,
-            // #EXTVLCOPT values take priority over inline #EXTINF attributes
-            userAgent: vlcUserAgent ?? parsed.userAgent,
-            referer: vlcReferer ?? parsed.referer,
-            cookie: vlcCookie ?? parsed.cookie,
-            origin: parsed.origin,
+            userAgent: ua || undefined,
+            referer: ref || undefined,
+            cookie: ck || undefined,
+            origin: origin || undefined,
             githubChannelId: parsed.tvgId,
           });
           i = j + 1;
@@ -70,11 +131,25 @@ export class M3uParser implements ChannelParser {
     return channels;
   }
 
+  // ── Parse URL-encoded header string: "User-Agent=foo&Cookie=bar" ─────────
+  private parseUrlEncodedHeaders(raw: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    try {
+      for (const pair of raw.split('&')) {
+        const eq = pair.indexOf('=');
+        if (eq === -1) continue;
+        const key = decodeURIComponent(pair.substring(0, eq).trim()).toLowerCase();
+        const val = decodeURIComponent(pair.substring(eq + 1).trim());
+        if (key && val) out[key] = val;
+      }
+    } catch { /* ignore decode errors */ }
+    return out;
+  }
+
   private parseExtinf(line: string): {
     name: string; logo?: string; groupCategory?: string; userAgent?: string;
     referer?: string; cookie?: string; origin?: string; tvgId?: string;
   } {
-    // Match attributes in both double-quotes and single-quotes
     const attr = (key: string): string | undefined => {
       const reDouble = new RegExp(`${key}="([^"]*)"`, 'i');
       const reSingle = new RegExp(`${key}='([^']*)'`, 'i');
@@ -82,21 +157,12 @@ export class M3uParser implements ChannelParser {
       return m?.[1] || undefined;
     };
 
-    // Standard M3U: channel name is always the text after the LAST comma.
-    // We must use lastIndexOf to avoid being misled by commas that appear
-    // inside attribute values (e.g. Cloudinary URLs like tvg-logo="…q_75,f_webp/…").
     const lastCommaIdx = line.lastIndexOf(',');
     let name = lastCommaIdx !== -1 ? line.substring(lastCommaIdx + 1).trim() : '';
 
-    // Some M3U generators (e.g. Toffee Live) embed the poster path directly
-    // in the display-name field:
-    //   "q_75f_webp/.../poster.png'Ekhon TV"  or  "/posters/abc.png Ekhon TV"
-    // Strip the leading image-path prefix (anything up to a known image extension
-    // followed by a single-quote or whitespace) to recover the real name.
+    // Strip embedded image-path prefix (e.g. Toffee Live generator quirk)
     const imgPrefix = name.match(/^[^\s'"]*\.(png|jpg|jpeg|webp|gif|svg)['\s]+(.+)$/i);
-    if (imgPrefix) {
-      name = imgPrefix[2].trim();
-    }
+    if (imgPrefix) name = imgPrefix[2].trim();
 
     return {
       name,
