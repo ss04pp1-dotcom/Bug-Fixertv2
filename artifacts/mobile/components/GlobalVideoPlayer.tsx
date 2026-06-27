@@ -109,6 +109,7 @@ function NativeIPTVPlayer({
         playInBackground={true}
         playWhenInactive={true}
         pictureInPicture={pip}
+        useTextureView={true}
         hideShutterView={true}
         bufferConfig={isLive ? BUFFER_LIVE : BUFFER_VOD}
         onLoadStart={onLoadStart}
@@ -243,9 +244,9 @@ export default function GlobalVideoPlayer() {
     if (Platform.OS !== 'android' || mode === 'hidden') return;
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'background' && isReady && !playerError) {
-        setPip(true);
-        setTimeout(() => setPip(false), 600);
+        setPip(true); // useTextureView={true} prevents reload on PiP entry
       }
+      // onPipChange(false) resets pip when user returns from PiP
     });
     return () => sub.remove();
   }, [mode, isReady, playerError]);
@@ -350,7 +351,7 @@ export default function GlobalVideoPlayer() {
                   else setError(err?.error?.localizedDescription || 'Stream error');
                 }}
                 onEnd={() => {}}
-                onPipChange={(active) => { setPipActive(active); }}
+                onPipChange={(active) => { setPipActive(active); setPip(active); }}
               />
             )}
             {/* Buffering */}
@@ -439,7 +440,7 @@ export default function GlobalVideoPlayer() {
             }
           }}
           onEnd={() => { setPlaying(false); }}
-          onPipChange={(active) => { setPipActive(active); }}
+          onPipChange={(active) => { setPipActive(active); setPip(active); }}
         />
       )}
 
@@ -507,13 +508,10 @@ export default function GlobalVideoPlayer() {
               {/* PiP button */}
               {Platform.OS === 'android' && (
                 <TouchableOpacity style={g.iconBtn} onPress={() => {
-                  if (!pipActive) {
-                    setPip(true);
-                    setTimeout(() => setPip(false), 600);
-                  }
+                  setPip(v => !v);
                   bumpCtrl();
                 }}>
-                  <MaterialIcons name="picture-in-picture-alt" size={20} color={pipActive ? C.primary : '#fff'} />
+                  <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
                 </TouchableOpacity>
               )}
               {/* Refresh */}

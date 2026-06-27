@@ -382,7 +382,7 @@ function NativeIPTVPlayer({
         playInBackground={true}
         playWhenInactive={true}
         pictureInPicture={pip}
-        useTextureView={false}
+        useTextureView={true}
         hideShutterView={true}
         bufferConfig={isLive ? BUFFER_LIVE : BUFFER_VOD}
         selectedVideoTrack={selectedVideoTrack ?? { type: 'auto' }}
@@ -575,45 +575,56 @@ const sf = StyleSheet.create({
   txt: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });
 
-// ─── Swipe Indicator ──────────────────────────────────────────────────────────
-function volumeIcon(v: number): any {
-  if (v === 0) return 'volume-mute';
-  if (v < 0.35) return 'volume-low';
-  if (v < 0.70) return 'volume-medium';
+// ─── Swipe Indicator (0–10 step display) ──────────────────────────────────────
+function volumeIcon(step: number): any {
+  if (step === 0) return 'volume-mute';
+  if (step <= 3)  return 'volume-low';
+  if (step <= 6)  return 'volume-medium';
   return 'volume-high';
 }
 
+// value is always 0–1 internally; displayed as 0–10 steps
 function SwipeIndicator({ type, value }: { type: 'volume' | 'brightness'; value: number }) {
-  const pct = Math.round(value * 100);
-  const side = type === 'brightness' ? { left: 16 } : { right: 16 };
-  const icon = type === 'volume' ? volumeIcon(value) : (value < 0.4 ? 'moon' : 'sunny');
+  const step  = Math.round(value * 10);          // 0-10
+  const side  = type === 'brightness' ? { left: 16 } : { right: 16 };
+  const icon  = type === 'volume' ? volumeIcon(step) : (step <= 3 ? 'moon' : 'sunny');
   const color = type === 'volume' ? C.primary : '#FBBF24';
   return (
     <View style={[sw.wrap, side]}>
       <Ionicons name={icon} size={20} color={color} />
       <View style={sw.track}>
-        <View style={[sw.fill, { height: `${pct}%` as any, backgroundColor: color }]} />
+        {/* Draw 10 discrete blocks */}
+        {Array.from({ length: 10 }).map((_, i) => (
+          <View
+            key={i}
+            style={[
+              sw.block,
+              { backgroundColor: i < step ? color : 'rgba(255,255,255,0.12)' },
+            ]}
+          />
+        ))}
       </View>
-      <Text style={sw.val}>{pct}%</Text>
+      <Text style={sw.val}>{step}</Text>
     </View>
   );
 }
 const sw = StyleSheet.create({
   wrap: {
-    position: 'absolute', top: '22%',
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    position: 'absolute', top: '20%',
+    backgroundColor: 'rgba(0,0,0,0.78)',
     borderRadius: 16, padding: 12,
     alignItems: 'center', gap: 8,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-    width: 56,
+    width: 58,
   },
   track: {
-    width: 7, height: 90,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 4, overflow: 'hidden', justifyContent: 'flex-end',
+    width: 8, height: 100,
+    gap: 2,
+    flexDirection: 'column-reverse',
+    alignItems: 'center',
   },
-  fill: { width: '100%', borderRadius: 4 },
-  val: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  block: { width: 8, height: 7, borderRadius: 2 },
+  val: { color: '#fff', fontSize: 13, fontWeight: '800' },
 });
 
 // ─── Main Player ──────────────────────────────────────────────────────────────
@@ -879,12 +890,10 @@ export default function PremiumVideoPlayer({
       if (nextState === 'background' && isReady && !hasError && !playerError) {
         // Trigger PiP entry for Android < 12.
         // Android 12+ enters PiP automatically via manifest autoEnterPictureInPicture.
+        // useTextureView={true} ensures no reload on PiP entry/exit.
         setPip(true);
-        // Reset the pip prop after PiP is established (same one-shot pattern as
-        // the manual button). This prevents a reload when the user returns from PiP
-        // because the pictureInPicture prop is already false by then (no flip).
-        setTimeout(() => setPip(false), 600);
       }
+      // When returning to foreground, onPipChange(false) fires and resets pip.
     });
     return () => sub.remove();
   // playerError intentionally included so PiP isn't triggered on error screens
@@ -1050,17 +1059,18 @@ export default function PremiumVideoPlayer({
     },
     onPanResponderMove: (_, gs) => {
       if (Math.abs(gs.dy) < 8) return;
-      // divisor 900 → ~100px swipe = ~11% change (smooth 10-15% per gesture)
-      // full range 0→100% needs ~8-10 swipes — feels natural like OTT apps
-      const delta = -gs.dy / 900;
+      // ~150px swipe = 5 steps change (each step = 30px) — responsive & natural
+      // snap to 0.1 increments so indicator always shows a whole number 0-10
+      const snap10 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 10) / 10;
+      const delta    = -gs.dy / 300;
       const sideType = swipeSide.current === 'left' ? 'brightness' : 'volume';
       setSwipeType(sideType);
       if (sideType === 'volume') {
-        const newVol = Math.max(0, Math.min(1, swipeStartV.current + delta));
+        const newVol = snap10(swipeStartV.current + delta);
         setSwipeValue(newVol);
         setVideoVolume(newVol);
       } else {
-        const newBri = Math.max(0, Math.min(1, swipeStartB.current + delta));
+        const newBri = snap10(swipeStartB.current + delta);
         setSwipeValue(newBri);
         setBrightness(newBri);
       }
@@ -1227,12 +1237,10 @@ export default function PremiumVideoPlayer({
               onAudioTracks={setAudioTracks}
               onTextTracks={setTextTracks}
               onPipChange={(active) => {
+                // useTextureView={true} prevents surface detach on PiP
+                // transitions, so we can safely sync pip with pipActive.
                 setPipActive(active);
-                // pip prop is already reset to false via setTimeout in the button
-                // handler (600ms after entry), so we do NOT touch pip here.
-                // Calling setPip(false) here would flip pictureInPicture true→false
-                // at the moment PiP exits, causing react-native-video to reload the
-                // stream. Only update pipActive to sync the UI.
+                setPip(active);
               }}
             />
           )
@@ -1365,17 +1373,12 @@ export default function PremiumVideoPlayer({
                 {/* PiP */}
                 {Platform.OS !== 'web' && (
                   <TouchableOpacity style={p.iconBtn} onPress={() => {
-                    if (!pipActive) {
-                      setPip(true);
-                      // Reset pip prop after PiP entry is established.
-                      // The OS holds the PiP window open even after the prop
-                      // reverts to false, so this prevents a reload when the
-                      // user later returns from PiP (prop stays false → no flip).
-                      setTimeout(() => setPip(false), 600);
-                    }
+                    // Toggle PiP. useTextureView={true} ensures no reload on
+                    // surface transition — pip state stays synced with pipActive.
+                    setPip(v => !v);
                     bumpCtrl();
                   }}>
-                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pipActive ? C.primary : '#fff'} />
+                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
                   </TouchableOpacity>
                 )}
                 {/* Refresh */}
