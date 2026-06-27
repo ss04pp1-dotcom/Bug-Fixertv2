@@ -575,26 +575,44 @@ const sf = StyleSheet.create({
 });
 
 // ─── Swipe Indicator ──────────────────────────────────────────────────────────
-const MAX_SWIPE = 0.15;  // cap both brightness and volume at 15%
+function volumeIcon(v: number): any {
+  if (v === 0) return 'volume-mute';
+  if (v < 0.35) return 'volume-low';
+  if (v < 0.70) return 'volume-medium';
+  return 'volume-high';
+}
 
 function SwipeIndicator({ type, value }: { type: 'volume' | 'brightness'; value: number }) {
-  const pct = Math.round((value / MAX_SWIPE) * 100);
+  const pct = Math.round(value * 100);
   const side = type === 'brightness' ? { left: 16 } : { right: 16 };
+  const icon = type === 'volume' ? volumeIcon(value) : (value < 0.4 ? 'moon' : 'sunny');
+  const color = type === 'volume' ? C.primary : '#FBBF24';
   return (
     <View style={[sw.wrap, side]}>
-      <Ionicons name={type === 'volume' ? 'volume-high' : 'sunny'} size={18} color="#fff" />
+      <Ionicons name={icon} size={20} color={color} />
       <View style={sw.track}>
-        <View style={[sw.fill, { height: `${pct}%` as any }]} />
+        <View style={[sw.fill, { height: `${pct}%` as any, backgroundColor: color }]} />
       </View>
       <Text style={sw.val}>{pct}%</Text>
     </View>
   );
 }
 const sw = StyleSheet.create({
-  wrap: { position: 'absolute', top: '20%', backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 14, padding: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border, width: 52 },
-  track: { width: 6, height: 80, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 3, overflow: 'hidden', justifyContent: 'flex-end' },
-  fill: { width: '100%', backgroundColor: C.primary, borderRadius: 3 },
-  val: { color: '#fff', fontSize: 10, fontWeight: '600' },
+  wrap: {
+    position: 'absolute', top: '22%',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 16, padding: 12,
+    alignItems: 'center', gap: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    width: 56,
+  },
+  track: {
+    width: 7, height: 90,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 4, overflow: 'hidden', justifyContent: 'flex-end',
+  },
+  fill: { width: '100%', borderRadius: 4 },
+  val: { color: '#fff', fontSize: 11, fontWeight: '700' },
 });
 
 // ─── Main Player ──────────────────────────────────────────────────────────────
@@ -651,8 +669,9 @@ export default function PremiumVideoPlayer({
   const [urlCheck, setUrlCheck]       = useState<string | null>(null);
   const [seekSide, setSeekSide]       = useState<{ side: 'left' | 'right'; secs: number } | null>(null);
   const [swipeType, setSwipeType]     = useState<'volume' | 'brightness' | null>(null);
-  const [swipeValue, setSwipeValue]   = useState(0.10);  // start at 10% (within 0–MAX_SWIPE range)
-  const [videoVolume, setVideoVolume] = useState(0.10);  // start at 10% volume
+  const [swipeValue, setSwipeValue]   = useState(1.0);
+  const [videoVolume, setVideoVolume] = useState(1.0);
+  const [brightness, setBrightness]   = useState(1.0);  // 0=dark overlay, 1=no overlay
   const [isAtLiveEdge, setAtLiveEdge] = useState(true);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
@@ -662,7 +681,8 @@ export default function PremiumVideoPlayer({
   const saveTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef      = useRef<{ time: number; x: number } | null>(null);
   const swipeStartY     = useRef(0);
-  const swipeStartV     = useRef(0.10);
+  const swipeStartV     = useRef(1.0);
+  const swipeStartB     = useRef(1.0);
   const swipeSide       = useRef<'left' | 'right'>('right');
   const currentTimeRef  = useRef(0);
   const durationRef     = useRef(0);
@@ -1004,22 +1024,29 @@ export default function PremiumVideoPlayer({
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 8 && Math.abs(gs.dy) > Math.abs(gs.dx),
     onPanResponderGrant: (evt) => {
       swipeStartY.current = evt.nativeEvent.pageY;
-      swipeStartV.current = swipeValue;
+      swipeStartV.current = videoVolume;
+      swipeStartB.current = brightness;
       swipeSide.current = evt.nativeEvent.locationX < vidW / 2 ? 'left' : 'right';
     },
     onPanResponderMove: (_, gs) => {
-      if (Math.abs(gs.dy) < 10) return;
-      // Smooth: divisor 1500 → small precise steps per swipe
-      // Cap: clamp within [0, MAX_SWIPE] so neither brightness nor volume exceed 15%
-      const delta = -gs.dy / 1500;
-      const newVal = Math.max(0, Math.min(MAX_SWIPE, swipeStartV.current + delta));
-      setSwipeValue(newVal);
+      if (Math.abs(gs.dy) < 8) return;
+      // divisor 400 → full screen height (~700px) covers ~175% range
+      // so ~400px swipe = 0→100%, smooth with ~15-20 swipe gestures
+      const delta = -gs.dy / 400;
       const sideType = swipeSide.current === 'left' ? 'brightness' : 'volume';
       setSwipeType(sideType);
-      if (sideType === 'volume') setVideoVolume(newVal);
+      if (sideType === 'volume') {
+        const newVol = Math.max(0, Math.min(1, swipeStartV.current + delta));
+        setSwipeValue(newVol);
+        setVideoVolume(newVol);
+      } else {
+        const newBri = Math.max(0, Math.min(1, swipeStartB.current + delta));
+        setSwipeValue(newBri);
+        setBrightness(newBri);
+      }
     },
     onPanResponderRelease: (evt, gs) => {
       if (Math.abs(gs.dy) < 8 && Math.abs(gs.dx) < 8) {
@@ -1050,7 +1077,7 @@ export default function PremiumVideoPlayer({
       setTimeout(() => setSwipeType(null), 1200);
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [vidW, swipeValue, seek, bumpCtrl, hideCtrlNow]);
+  }), [vidW, videoVolume, brightness, seek, bumpCtrl, hideCtrlNow]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
@@ -1224,6 +1251,17 @@ export default function PremiumVideoPlayer({
           <ActivityIndicator size="large" color={C.primary} />
           <Text style={p.overlayTxt}>{switching ? 'Switching server…' : 'Connecting to stream…'}</Text>
         </View>
+      )}
+
+      {/* ── Brightness overlay (dark layer, 0=fully dark, 1=no overlay) ── */}
+      {brightness < 1 && (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: `rgba(0,0,0,${(1 - brightness) * 0.85})` },
+          ]}
+        />
       )}
 
       {/* ── Gesture layer ───────────────────────────────────────────────── */}
