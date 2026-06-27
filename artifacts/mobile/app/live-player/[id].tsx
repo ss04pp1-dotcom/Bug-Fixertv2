@@ -1,16 +1,16 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler, ActivityIndicator,
+  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
-import { type StreamSource } from '@/components/PremiumVideoPlayer';
-import { useGlobalPlayer } from '@/lib/player-store';
+import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
+import { usePlayerStore } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -44,36 +44,28 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
-  const enterFullscreen = useGlobalPlayer((s) => s.enterFullscreen);
-  const enterMini       = useGlobalPlayer((s) => s.enterMini);
+  const openMiniPlayer = usePlayerStore((s) => s.open);
+  const closeMiniPlayer = usePlayerStore((s) => s.close);
 
-  // When sources are ready or channel changes, push to global player.
-  // If the global player already has THIS channel (returning from mini), just
-  // switch to fullscreen — do NOT reload.
-  useEffect(() => {
-    if (sources.length === 0) return;
-    const g = useGlobalPlayer.getState();
-    if (g.contentId === id && g.mode !== 'hidden') {
-      useGlobalPlayer.setState({ mode: 'fullscreen' });
-      return;
-    }
-    enterFullscreen({
-      sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-      title: contentTitle,
-      logo: logoUrl,
-      contentId: id,
-      contentType: 'channel',
-      isLive: true,
-    });
-  }, [sources, id]);
+  // Close mini player when opening full player screen
+  useEffect(() => { closeMiniPlayer(); }, [id]);
 
-  // Minimize to mini (no navigation — GlobalVideoPlayer stays mounted at root)
+  // ── Minimize to mini player instead of navigating away ────────────────────
   const minimizeToMini = useCallback(() => {
-    enterMini();
+    if (sources.length > 0) {
+      openMiniPlayer({
+        title: contentTitle,
+        logo: logoUrl,
+        contentId: id,
+        contentType: 'channel',
+        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+        isLive: true,
+      });
+    }
     router.replace('/(main)/live-tv');
-  }, [enterMini]);
+  }, [sources, contentTitle, logoUrl, id, openMiniPlayer]);
 
-  // ── Hardware back button → minimize to mini ────────────────────────────────
+  // ── Hardware back button → minimize to mini player ─────────────────────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       minimizeToMini();
@@ -140,7 +132,6 @@ export default function LivePlayerScreen() {
 
     const pool = (relatedRaw as any[]).filter((ch: any) => ch.id !== id);
 
-    // Scoring: same category = 3pts, same language = 2pts, has logo = 1pt
     const scored = pool.map((ch: any) => {
       const chCatId   = ch.categoryId || ch.category?.id || null;
       const chCatName = ch.category?.name || ch.category || '';
@@ -164,7 +155,6 @@ export default function LivePlayerScreen() {
       };
     });
 
-    // Sort: highest score first, then alphabetically within same score
     scored.sort((a, b) => {
       if (b._score !== a._score) return b._score - a._score;
       return a.name.localeCompare(b.name);
@@ -177,7 +167,6 @@ export default function LivePlayerScreen() {
   const buildSources = useCallback((ch: any, overrideFirstUrl?: string): StreamSource[] => {
     const srcs: StreamSource[] = [];
 
-    // Prefer new servers[] array (sorted by priority — Admin first, GitHub fallback)
     if (Array.isArray(ch?.servers) && ch.servers.length > 0) {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
@@ -197,7 +186,6 @@ export default function LivePlayerScreen() {
         });
       });
     } else {
-      // Backward compat: legacy admin channels with hardcoded URL fields
       if (ch?.primaryStreamUrl) srcs.push({ url: ch.primaryStreamUrl, label: 'Server 1', quality: ch.streamType || 'HD' });
       if (ch?.backupStreamUrl && ch.backupStreamUrl !== ch.primaryStreamUrl)
         srcs.push({ url: ch.backupStreamUrl, label: 'Server 2', quality: 'SD' });
@@ -205,10 +193,6 @@ export default function LivePlayerScreen() {
         srcs.push({ url: ch.thirdBackupUrl, label: 'Server 3', quality: 'SD' });
     }
 
-    // If navigated with a direct URL AND we have no DB servers, use it as a bare fallback.
-    // Do NOT prepend it when servers[] is already populated — the passed URL is
-    // the bare primaryStreamUrl (no headers) and inserting it first causes the player
-    // to try the header-less URL before the properly-authenticated server URLs.
     const hasServerSources = Array.isArray(ch?.servers) && ch.servers.length > 0;
     if (overrideFirstUrl && !hasServerSources && !srcs.find(s => s.url === overrideFirstUrl)) {
       srcs.unshift({ url: overrideFirstUrl, label: 'Server 1', quality: 'HD' });
@@ -228,7 +212,6 @@ export default function LivePlayerScreen() {
     try {
       const res = await apiClient.get(`/channels/${id}`);
       const ch  = res.data?.data || res.data;
-      // Save metadata for related-channel ranking
       setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
       setCurrentLang((ch?.language || '').toLowerCase() || null);
@@ -236,7 +219,6 @@ export default function LivePlayerScreen() {
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
     } catch {
-      // Fallback: if API fails but we have a passedUrl, play it directly
       if (passedUrl) {
         setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
       } else {
@@ -266,22 +248,21 @@ export default function LivePlayerScreen() {
     <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* ── Video is rendered by GlobalVideoPlayer at root layout level ──── */}
-      {/* Placeholder keeps layout space for the video area */}
-      {fetchLoading && (
-        <View style={s.videoPlaceholder}>
-          <ActivityIndicator size="large" color={C.primary} />
-        </View>
-      )}
-      {fetchError && !fetchLoading && (
-        <View style={s.videoPlaceholder}>
-          <Ionicons name="alert-circle-outline" size={40} color={C.live} />
-          <Text style={{ color: '#fff', marginTop: 8, fontSize: 14 }}>Stream load failed</Text>
-          <TouchableOpacity onPress={loadStream} style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, backgroundColor: C.primary, borderRadius: 20 }}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* ── Premium Player ──────────────────────────────────────────────── */}
+      <PremiumVideoPlayer
+        sources={sources}
+        title={contentTitle}
+        isLive
+        isLoading={fetchLoading}
+        hasError={fetchError}
+        onBack={minimizeToMini}
+        onRetry={loadStream}
+        onRefreshStream={loadStream}
+        contentId={id}
+        contentType="channel"
+        onPlaybackStart={onPlaybackStart}
+        onPlaybackError={onPlaybackError}
+      />
 
       {/* ── Below player (portrait) ─────────────────────────────────────── */}
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -349,12 +330,10 @@ export default function LivePlayerScreen() {
                       </View>
                     </LinearGradient>
                   )}
-                  {/* LIVE badge */}
                   <View style={s.chLiveBadge}>
                     <View style={s.liveDotSmall} />
                     <Text style={s.chLiveTxt}>LIVE</Text>
                   </View>
-                  {/* Same-category badge */}
                   {item._sameCat && (
                     <View style={s.chSameCatBadge}>
                       <Text style={s.chSameCatTxt}>●</Text>
@@ -406,11 +385,6 @@ const CARD_W = Math.floor((SW - 14 * 2 - 10) / 2);
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  videoPlaceholder: {
-    width: '100%', aspectRatio: 16 / 9,
-    backgroundColor: '#0D0D1F',
-    justifyContent: 'center', alignItems: 'center',
-  },
 
   channelHeader: {
     flexDirection: 'row', alignItems: 'center',

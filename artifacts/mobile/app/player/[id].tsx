@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Platform, Image, ActivityIndicator,
+  ScrollView, StatusBar, Platform, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,9 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
-import { type StreamSource } from '@/components/PremiumVideoPlayer';
+import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
 import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
-import { useGlobalPlayer } from '@/lib/player-store';
+import { usePlayerStore } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -93,7 +93,6 @@ export default function PlayerScreen() {
   }, [relatedRaw]);
 
   // ── Build headers from stream source data ────────────────────────────────────
-  // Also handles URL-pipe format: "http://stream.url|User-Agent=...&Cookie=..."
   const buildStreamSource = useCallback((
     rawUrl: string,
     label: string,
@@ -103,7 +102,6 @@ export default function PlayerScreen() {
     let url = rawUrl;
     let pipeHeaders: Record<string, string> = {};
 
-    // Parse URL-pipe headers (common IPTV format)
     if (url.includes('|')) {
       const pipeIdx = url.indexOf('|');
       const rawPipe = url.substring(pipeIdx + 1);
@@ -190,36 +188,26 @@ export default function PlayerScreen() {
     number: ep.episodeNumber || i + 1,
   }));
 
-  const enterFullscreen = useGlobalPlayer((s) => s.enterFullscreen);
-  const enterMini       = useGlobalPlayer((s) => s.enterMini);
+  const openMiniPlayer = usePlayerStore((s) => s.open);
+  const closeMiniPlayer = usePlayerStore((s) => s.close);
 
-  // Push to global player when sources are ready.
-  // If global player already has THIS content (returning from mini), just
-  // switch to fullscreen — do NOT reload.
-  useEffect(() => {
-    if (sources.length === 0 || youtubeUrl) return;
-    const g = useGlobalPlayer.getState();
-    if (g.contentId === id && g.mode !== 'hidden') {
-      useGlobalPlayer.setState({ mode: 'fullscreen' });
-      return;
-    }
-    enterFullscreen({
-      sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-      title: contentTitle,
-      logo: poster,
-      contentId: id,
-      contentType: cType,
-      isLive: false,
-    });
-  }, [sources, id, youtubeUrl]);
+  // Close mini player when full player opens
+  useEffect(() => { closeMiniPlayer(); }, [id]);
 
   const handleBack = useCallback(() => {
     if (sources.length > 0) {
-      enterMini();
+      openMiniPlayer({
+        title: contentTitle,
+        logo: poster,
+        contentId: id,
+        contentType: cType,
+        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
+        isLive: false,
+      });
     }
     if (router.canGoBack()) router.back();
     else router.replace('/(main)');
-  }, [sources, enterMini]);
+  }, [sources, contentTitle, poster, id, cType, openMiniPlayer]);
 
   // ── Shared below-player content ─────────────────────────────────────────────
   const belowPlayer = (
@@ -323,7 +311,6 @@ export default function PlayerScreen() {
       <View style={s.root}>
         <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-        {/* Back button over the player */}
         <View style={[s.ytHeader, { paddingTop: insets.top + 4 }]}>
           <TouchableOpacity onPress={handleBack} style={s.ytBack} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -331,10 +318,8 @@ export default function PlayerScreen() {
           <Text style={s.ytTitle} numberOfLines={1}>{contentTitle}</Text>
         </View>
 
-        {/* YouTube player */}
         <YouTubeVideoBox url={youtubeUrl} />
 
-        {/* Related content below */}
         {belowPlayer}
       </View>
     );
@@ -345,21 +330,23 @@ export default function PlayerScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {/* Video is rendered by GlobalVideoPlayer at root layout level */}
-      {srcLoading && (
-        <View style={s.videoPlaceholder}>
-          <ActivityIndicator size="large" color={C.primary} />
-        </View>
-      )}
-      {srcError && !srcLoading && (
-        <View style={s.videoPlaceholder}>
-          <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
-          <Text style={{ color: '#fff', marginTop: 8, fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>{srcErrorMsg || 'Playback failed'}</Text>
-          <TouchableOpacity onPress={loadStream} style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, backgroundColor: C.primary, borderRadius: 20 }}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <PremiumVideoPlayer
+        sources={sources}
+        title={contentTitle}
+        isLoading={srcLoading}
+        hasError={srcError}
+        errorMessage={srcErrorMsg}
+        onBack={handleBack}
+        onRetry={loadStream}
+        onRefreshStream={loadStream}
+        contentId={cType === 'series' && episodes[epIdx]?.id ? episodes[epIdx].id : id}
+        contentType={cType}
+        episodes={epList}
+        currentEpIdx={epIdx}
+        onEpisodeChange={setEpIdx}
+        onNext={handleNext}
+        onPrev={handlePrev}
+      />
 
       {belowPlayer}
     </View>
@@ -368,14 +355,7 @@ export default function PlayerScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  videoPlaceholder: {
-    width: '100%', aspectRatio: 16 / 9,
-    backgroundColor: '#0D0D1F',
-    justifyContent: 'center', alignItems: 'center',
-    gap: 8,
-  },
 
-  // YouTube header
   ytHeader: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingBottom: 8, gap: 10,
