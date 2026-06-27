@@ -5,6 +5,7 @@ import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { BulkImportChannelsDto } from './dto/bulk-import-channel.dto';
 import { M3uImportService } from '../m3u-import/m3u-import.service';
+import { normalizeName } from '../github-sync/github-sync.service';
 
 @Injectable()
 export class ChannelsService {
@@ -77,7 +78,10 @@ export class ChannelsService {
   async create(dto: CreateChannelDto) {
     const existing = await this.prisma.channel.findUnique({ where: { slug: dto.slug } });
     if (existing) throw new ConflictException('Slug already exists');
-    const channel = await this.prisma.channel.create({ data: dto as Prisma.ChannelCreateInput });
+    const normalized = normalizeName(dto.name);
+    const channel = await this.prisma.channel.create({
+      data: { ...(dto as Prisma.ChannelCreateInput), normalizedName: normalized },
+    });
     // NOTE: Auto health-check disabled — stream URLs may be geo-restricted and unreachable
     // from the server even if they play fine on user devices. Channels stay active (isActive=true)
     // as set during creation. Use the manual recheck endpoint to validate specific channels.
@@ -121,22 +125,64 @@ export class ChannelsService {
     const { channels } = dto;
     let imported = 0;
     let skipped = 0;
+    let addedAsServer = 0;
     const errors: string[] = [];
 
-    // Pre-fetch all existing stream URLs and TVG IDs in 2 queries (avoid N+1)
+    // Pre-fetch all existing channels for dedup
     const allExisting = await this.prisma.channel.findMany({
       where: { deletedAt: null },
-      select: { primaryStreamUrl: true, epgChannelId: true },
+      select: { id: true, normalizedName: true, primaryStreamUrl: true, epgChannelId: true, slug: true },
     });
     const existingUrls = new Set(allExisting.map(c => c.primaryStreamUrl).filter(Boolean));
     const existingTvgIds = new Set(allExisting.map(c => c.epgChannelId).filter(Boolean));
-    const existingSlugs = new Set(
-      (await this.prisma.channel.findMany({ select: { slug: true } })).map(c => c.slug),
-    );
+    const existingSlugs = new Set(allExisting.map(c => c.slug));
+    // normalizedName → channelId map for same-name dedup
+    const byNorm = new Map<string, string>();
+    for (const c of allExisting) {
+      if (c.normalizedName) byNorm.set(c.normalizedName, c.id);
+    }
 
     for (const ch of channels) {
       try {
+        if (ch.primaryStreamUrl && this.isPrivateUrl(ch.primaryStreamUrl)) {
+          errors.push(`${ch.name}: Stream URL targets a private/internal address`);
+          continue;
+        }
+
+        // Skip exact duplicate stream URL
         if (existingUrls.has(ch.primaryStreamUrl)) { skipped++; continue; }
+
+        const normalized = normalizeName(ch.name);
+        const existingChannelId = normalized ? byNorm.get(normalized) : undefined;
+
+        if (existingChannelId) {
+          // Same name → add the URL as a new server instead of creating a duplicate channel
+          if (ch.primaryStreamUrl) {
+            const existingServer = await this.prisma.channelServer.findFirst({
+              where: { channelId: existingChannelId, link: ch.primaryStreamUrl, deletedAt: null },
+            });
+            if (!existingServer) {
+              await this.prisma.channelServer.create({
+                data: {
+                  channelId: existingChannelId,
+                  link: ch.primaryStreamUrl,
+                  priority: 100,
+                  sourceType: ServerSourceType.ADMIN,
+                  healthCheckEnabled: true,
+                  enabled: true,
+                  createdBySync: false,
+                },
+              });
+              existingUrls.add(ch.primaryStreamUrl);
+              addedAsServer++;
+            } else {
+              skipped++;
+            }
+          } else {
+            skipped++;
+          }
+          continue;
+        }
 
         if (ch.epgChannelId && existingTvgIds.has(ch.epgChannelId)) { skipped++; continue; }
 
@@ -153,15 +199,11 @@ export class ChannelsService {
           slug = `${baseSlug}-${attempt}`;
         }
 
-        if (ch.primaryStreamUrl && this.isPrivateUrl(ch.primaryStreamUrl)) {
-          errors.push(`${ch.name}: Stream URL targets a private/internal address`);
-          continue;
-        }
-
         const created = await this.prisma.channel.create({
           data: {
             name: ch.name,
             slug,
+            normalizedName: normalized || undefined,
             logo: ch.logo || undefined,
             primaryStreamUrl: ch.primaryStreamUrl,
             categoryId: ch.categoryId || undefined,
@@ -178,13 +220,14 @@ export class ChannelsService {
         existingUrls.add(created.primaryStreamUrl);
         if (created.epgChannelId) existingTvgIds.add(created.epgChannelId);
         existingSlugs.add(created.slug);
+        if (normalized) byNorm.set(normalized, created.id);
         imported++;
       } catch (e: any) {
         errors.push(`${ch.name}: ${e?.message ?? 'Unknown error'}`);
       }
     }
 
-    return { imported, skipped, errors, total: channels.length };
+    return { imported, skipped, addedAsServer, errors, total: channels.length };
   }
 
   private isPrivateUrl(urlStr: string): boolean {

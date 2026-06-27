@@ -268,7 +268,7 @@ export default function Channels() {
           </div>
         )}
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden overflow-x-auto">
           {loading && <div className="flex items-center justify-center py-16"><RefreshCw size={20} className="text-primary animate-spin" /></div>}
           {error && !loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-2">

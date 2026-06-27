@@ -308,7 +308,7 @@ export default function BulkImportModal({ categories, onClose, onImported }: Bul
   const [parsing, setParsing]     = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; addedAsServer?: number; errors: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
   const [globalCategory, setGlobalCategory] = useState("");
   const [editIdx, setEditIdx]     = useState<number | null>(null);
@@ -771,6 +771,12 @@ export default function BulkImportModal({ categories, onClose, onImported }: Bul
                   <div className="text-2xl font-bold text-green-400">{importResult.imported}</div>
                   <div className="text-xs text-[#8B92A5]">Imported</div>
                 </div>
+                {(importResult.addedAsServer ?? 0) > 0 && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-6 py-4 text-center">
+                    <div className="text-2xl font-bold text-blue-400">{importResult.addedAsServer}</div>
+                    <div className="text-xs text-[#8B92A5]">Added as Server</div>
+                  </div>
+                )}
                 <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-6 py-4 text-center">
                   <div className="text-2xl font-bold text-yellow-400">{importResult.skipped}</div>
                   <div className="text-xs text-[#8B92A5]">Skipped (duplicates)</div>
