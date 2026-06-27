@@ -36,12 +36,24 @@ export function isYouTubeUrl(url: string): boolean {
 
 // ── PiP JS injected into native WebView ──────────────────────────────────────
 const PIP_JS = `(function(){
-  var video = document.querySelector('video');
+  // Try all video elements (YouTube iframe may have nested videos)
+  var videos = document.querySelectorAll('video');
+  var video = null;
+  for (var i = 0; i < videos.length; i++) {
+    if (videos[i].readyState > 0 || videos[i].src) { video = videos[i]; break; }
+  }
+  if (!video && videos.length > 0) video = videos[0];
   if (video) {
     if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
       video.webkitSetPresentationMode('picture-in-picture');
-    } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
-      video.requestPictureInPicture().catch(function(){});
+    } else if (document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') {
+      video.requestPictureInPicture().catch(function(e){ console.warn('PiP failed:', e); });
+    }
+  } else {
+    // Fallback: post message to YouTube iframe API
+    var iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
     }
   }
   true;
@@ -63,7 +75,7 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
   const boxH = height ?? W * (9 / 16);
 
   const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com`
     : null;
 
   if (!videoId) {

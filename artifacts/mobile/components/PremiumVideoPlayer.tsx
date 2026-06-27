@@ -370,8 +370,8 @@ function NativeIPTVPlayer({
         resizeMode={resizeMode}
         controls={false}
         ignoreSilentSwitch="ignore"
-        playInBackground={false}
-        playWhenInactive={false}
+        playInBackground={pip}
+        playWhenInactive={pip}
         pictureInPicture={pip}
         useTextureView={Platform.OS === 'android'}
         hideShutterView={true}
