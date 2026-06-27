@@ -92,6 +92,33 @@ export class GitHubSourcesService {
     return { message: force ? 'Force sync started (ETag cleared)' : 'Sync started' };
   }
 
+  async syncAll(force = false) {
+    const sources = await this.prisma.gitHubSource.findMany({
+      where: { enabled: true, deletedAt: null },
+      select: { id: true, name: true, isSyncing: true },
+    });
+
+    if (force) {
+      const ids = sources.map(s => s.id);
+      await this.prisma.gitHubSource.updateMany({
+        where: { id: { in: ids } },
+        data: { etag: null, lastModified: null },
+      });
+    }
+
+    const results: { id: string; name: string; status: string }[] = [];
+    for (const src of sources) {
+      if (src.isSyncing) {
+        results.push({ id: src.id, name: src.name, status: 'already_syncing' });
+        continue;
+      }
+      this.syncService.syncSource(src.id).catch(() => {});
+      results.push({ id: src.id, name: src.name, status: force ? 'force_sync_started' : 'sync_started' });
+    }
+
+    return { triggered: results.length, results };
+  }
+
   async getLogs(id: string, limit = 50) {
     await this.findOne(id);
     return this.prisma.gitHubSyncLog.findMany({

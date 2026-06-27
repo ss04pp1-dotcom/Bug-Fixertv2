@@ -88,12 +88,20 @@ function detectStreamFormat(url: string): StreamFormat {
   return 'UNKNOWN';
 }
 
-function getVideoType(fmt: StreamFormat): string | undefined {
+// Only force a type hint when the URL has an EXPLICIT extension — we are certain.
+// For pattern-based guesses (IPTV /live/user/pass/id) we let ExoPlayer/AVPlayer
+// auto-detect via Content-Type header, because the server may serve HLS, TS, or
+// anything else on the same URL pattern.
+function getVideoType(url: string, fmt: StreamFormat): string | undefined {
+  const lower = (url || '').toLowerCase().split('?')[0].split('#')[0];
+  const hasExplicitExtension =
+    lower.endsWith('.m3u8') || lower.includes('manifest.m3u8') ||
+    lower.endsWith('.mpd');
+  if (!hasExplicitExtension) return undefined;   // let the player sniff Content-Type
   switch (fmt) {
-    case 'HLS':    return 'm3u8';
-    case 'DASH':   return 'mpd';
-    case 'MPEGTS': return undefined; // ExoPlayer auto-detects from extension / Content-Type
-    default:       return undefined;
+    case 'HLS':  return 'm3u8';
+    case 'DASH': return 'mpd';
+    default:     return undefined;
   }
 }
 
@@ -373,7 +381,7 @@ function NativeIPTVPlayer({
         playInBackground={pip}
         playWhenInactive={pip}
         pictureInPicture={pip}
-        useTextureView={Platform.OS === 'android'}
+        useTextureView={false}
         hideShutterView={true}
         bufferConfig={isLive ? BUFFER_LIVE : BUFFER_VOD}
         selectedVideoTrack={selectedVideoTrack ?? { type: 'auto' }}
@@ -690,20 +698,28 @@ export default function PremiumVideoPlayer({
   // ── Build native source object ─────────────────────────────────────────────
   const nativeSource = useMemo(() => {
     if (!src?.url) return null;
-    const videoType = getVideoType(streamFormat);
+    // Only set type for explicit .m3u8 / .mpd extensions.
+    // For IPTV pattern-based URLs (/live/user/pass/id) we intentionally omit
+    // the type so ExoPlayer / AVPlayer sniffs Content-Type from the server —
+    // forcing 'm3u8' on a TS stream breaks playback.
+    const videoType = getVideoType(src.url, streamFormat);
     // Merge: DEFAULT_HEADERS (baseline) → src.headers (server-specific Cookie/UA/Referer/Origin)
     // Server headers take priority so they are not overwritten by hardcoded defaults.
+    const merged = {
+      ...DEFAULT_HEADERS,
+      ...(src.headers ?? {}),
+    };
     const built = {
       uri: src.url,
-      headers: {
-        ...DEFAULT_HEADERS,
-        ...(src.headers ?? {}),
-      },
+      headers: merged,
       ...(videoType ? { type: videoType } : {}),
     };
     VideoLog.info('SOURCE', 'Built native source', {
       type: videoType || 'auto-detect',
-      headerKeys: Object.keys(built.headers),
+      hasCookie: !!merged['Cookie'],
+      hasUA: !!merged['User-Agent'],
+      hasReferer: !!merged['Referer'],
+      headerKeys: Object.keys(merged),
     });
     return built;
   }, [src?.url, src?.headers, streamFormat]);

@@ -59,6 +59,18 @@ export class GitHubSourcesController {
     return this.service.syncNow(id, true);
   }
 
+  @Post('sync-all')
+  @ApiOperation({ summary: 'Trigger sync for all enabled sources' })
+  syncAll() {
+    return this.service.syncAll(false);
+  }
+
+  @Post('force-sync-all')
+  @ApiOperation({ summary: 'Force re-sync all sources — clears ETag cache, re-parses every playlist' })
+  forceSyncAll() {
+    return this.service.syncAll(true);
+  }
+
   @Get(':id/logs')
   @ApiOperation({ summary: 'Get sync logs for a GitHub source' })
   getLogs(

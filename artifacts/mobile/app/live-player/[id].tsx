@@ -166,8 +166,12 @@ export default function LivePlayerScreen() {
         srcs.push({ url: ch.thirdBackupUrl, label: 'Server 3', quality: 'SD' });
     }
 
-    // If navigated with a direct URL, ensure it's first (may differ from DB)
-    if (overrideFirstUrl && !srcs.find(s => s.url === overrideFirstUrl)) {
+    // If navigated with a direct URL AND we have no DB servers, use it as a bare fallback.
+    // Do NOT prepend it when servers[] is already populated — the passed URL is
+    // the bare primaryStreamUrl (no headers) and inserting it first causes the player
+    // to try the header-less URL before the properly-authenticated server URLs.
+    const hasServerSources = Array.isArray(ch?.servers) && ch.servers.length > 0;
+    if (overrideFirstUrl && !hasServerSources && !srcs.find(s => s.url === overrideFirstUrl)) {
       srcs.unshift({ url: overrideFirstUrl, label: 'Server 1', quality: 'HD' });
     }
 
