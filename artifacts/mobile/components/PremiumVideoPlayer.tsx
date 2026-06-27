@@ -378,8 +378,8 @@ function NativeIPTVPlayer({
         resizeMode={resizeMode}
         controls={false}
         ignoreSilentSwitch="ignore"
-        playInBackground={pip}
-        playWhenInactive={pip}
+        playInBackground={true}
+        playWhenInactive={true}
         pictureInPicture={pip}
         useTextureView={false}
         hideShutterView={true}
@@ -862,21 +862,21 @@ export default function PremiumVideoPlayer({
     return () => sub.remove();
   }, [fullscreen, pip]);
 
-  // ── Auto PiP when app goes to background ───────────────────────────────────
+  // ── Auto PiP when app goes to background (YouTube-style) ──────────────────
   useEffect(() => {
     if (Platform.OS !== 'android' || IS_WEB) return;
     const sub = AppState.addEventListener('change', (nextState) => {
-      // When app goes to background and video is ready/playing → enter PiP
-      if (nextState === 'background' && isReady && !hasError && !pip) {
+      // 'inactive' fires first when home/recents pressed — trigger PiP immediately
+      // so the PiP window opens before Android fully backgrounds the activity
+      if ((nextState === 'background' || nextState === 'inactive') && isReady && !hasError) {
         setPip(true);
       }
-      // When app comes back to foreground, exit PiP
-      if (nextState === 'active' && pip) {
+      if (nextState === 'active') {
         setPip(false);
       }
     });
     return () => sub.remove();
-  }, [isReady, hasError, pip]);
+  }, [isReady, hasError]);
 
   // ── Auto-hide controls ─────────────────────────────────────────────────────
   const setCtrlHidden = useCallback(() => {

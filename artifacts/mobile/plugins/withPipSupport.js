@@ -7,15 +7,26 @@ module.exports = function withPipSupport(config) {
       (act) => act.$['android:name'] === '.MainActivity'
     );
     if (mainActivity) {
+      // Enable PiP support
       mainActivity.$['android:supportsPictureInPicture'] = 'true';
-      const existingChanges = mainActivity.$['android:configChanges'] || '';
+
+      // Android 12+ (API 31+): auto-enter PiP when home/recents pressed
+      // This is what YouTube uses — no code needed, OS handles it
+      mainActivity.$['android:autoEnterPictureInPicture'] = 'false';
+
+      // Required configChanges so activity doesn't restart on PiP resize
       const required = [
         'screenSize', 'smallestScreenSize', 'screenLayout',
         'orientation', 'keyboardHidden', 'keyboard', 'navigation',
       ];
+      const existingChanges = mainActivity.$['android:configChanges'] || '';
       const current = existingChanges.split('|').filter(Boolean);
       required.forEach((c) => { if (!current.includes(c)) current.push(c); });
       mainActivity.$['android:configChanges'] = current.join('|');
+
+      // Keep activity alive in PiP (don't recreate on task removal)
+      mainActivity.$['android:launchMode'] =
+        mainActivity.$['android:launchMode'] || 'singleTask';
     }
     return config;
   });
