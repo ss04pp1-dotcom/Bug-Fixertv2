@@ -46,16 +46,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@CurrentUser() user: AuthenticatedUser, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.authService.refresh(user.id, user.sessionId!);
-    // Set refresh token as httpOnly cookie for XSS protection
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('streampro_refresh_token', tokens.refreshToken, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
       path: '/',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-    return tokens;
+    return { accessToken: tokens.accessToken };
   }
 
   @UseGuards(JwtAuthGuard)

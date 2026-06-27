@@ -1,39 +1,35 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-const EMAIL    = 'admin@streampro.com';
-const PASSWORD = 'Admin@StreamPro2026';
+const EMAIL    = process.env.SEED_ADMIN_EMAIL    || 'admin@streampro.com';
+const PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+
+if (!PASSWORD) {
+  console.error('❌ SEED_ADMIN_PASSWORD env var is required. Set it before running this script.');
+  process.exit(1);
+}
 
 const prisma = new PrismaClient();
 
 async function main() {
   const hash = await bcrypt.hash(PASSWORD, 12);
 
-  await prisma.$executeRawUnsafe(`
-    INSERT INTO users (id, name, email, password_hash, role, is_active, email_verified, language, created_at, updated_at)
-    VALUES (
-      gen_random_uuid(),
-      'Super Admin',
-      '${EMAIL}',
-      '${hash}',
-      'super_admin'::user_role,
-      true,
-      true,
-      'en',
-      now(),
-      now()
-    )
-    ON CONFLICT (email) DO UPDATE SET
-      password_hash = EXCLUDED.password_hash,
-      role = 'super_admin'::user_role,
-      is_active = true,
-      deleted_at = NULL,
-      updated_at = now()
-  `);
+  await prisma.user.upsert({
+    where:  { email: EMAIL },
+    update: { passwordHash: hash, role: 'super_admin', isActive: true, deletedAt: null },
+    create: {
+      name: 'Super Admin',
+      email: EMAIL,
+      passwordHash: hash,
+      role: 'super_admin',
+      isActive: true,
+      emailVerified: true,
+      language: 'en',
+    },
+  });
 
   console.log('✅ Admin user created / updated.');
-  console.log(`📧 Email:    ${EMAIL}`);
-  console.log(`🔑 Password: ${PASSWORD}`);
+  console.log(`📧 Email: ${EMAIL}`);
 }
 
 main()

@@ -72,7 +72,12 @@ export class MailerService {
     const html   = this.render(opts.template, opts.context);
 
     if (!config) {
-      this.logger.log(`[SMTP unconfigured] To: ${opts.to} | Subject: ${opts.subject}${opts.context['otp'] ? ` | OTP: ${String(opts.context['otp'])}` : ''}`);
+      const isDev = process.env['NODE_ENV'] !== 'production';
+      if (isDev && opts.context['otp']) {
+        this.logger.log(`[SMTP unconfigured — DEV ONLY] To: ${opts.to} | Subject: ${opts.subject} | OTP: ${String(opts.context['otp'])}`);
+      } else {
+        this.logger.warn(`[SMTP unconfigured] Email not sent → ${opts.to} | Subject: ${opts.subject}`);
+      }
       return;
     }
 
