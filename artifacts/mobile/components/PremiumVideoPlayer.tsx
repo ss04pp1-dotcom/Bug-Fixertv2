@@ -1033,9 +1033,9 @@ export default function PremiumVideoPlayer({
     },
     onPanResponderMove: (_, gs) => {
       if (Math.abs(gs.dy) < 8) return;
-      // divisor 400 → full screen height (~700px) covers ~175% range
-      // so ~400px swipe = 0→100%, smooth with ~15-20 swipe gestures
-      const delta = -gs.dy / 400;
+      // divisor 900 → ~100px swipe = ~11% change (smooth 10-15% per gesture)
+      // full range 0→100% needs ~8-10 swipes — feels natural like OTT apps
+      const delta = -gs.dy / 900;
       const sideType = swipeSide.current === 'left' ? 'brightness' : 'volume';
       setSwipeType(sideType);
       if (sideType === 'volume') {
