@@ -68,6 +68,7 @@ interface YouTubeVideoBoxProps {
 export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [embedBlocked, setEmbedBlocked] = useState(false);
   const webViewRef = useRef<any>(null);
   const iframeRef = useRef<any>(null);
 
@@ -173,11 +174,20 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
       {error && (
         <View style={[StyleSheet.absoluteFill, s.center]}>
           <Ionicons name="alert-circle-outline" size={48} color={C.error} />
-          <Text style={s.errTxt}>Failed to load video</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={() => setError(false)}>
-            <Ionicons name="refresh" size={16} color="#fff" />
-            <Text style={s.retryTxt}>  Retry</Text>
-          </TouchableOpacity>
+          <Text style={s.errTxt}>
+            {embedBlocked ? 'Video cannot be embedded' : 'Failed to load video'}
+          </Text>
+          <Text style={s.errSub}>
+            {embedBlocked
+              ? 'The video owner has disabled playback outside YouTube. Try a different stream URL in the admin panel.'
+              : 'Check your connection and try again.'}
+          </Text>
+          {!embedBlocked && (
+            <TouchableOpacity style={s.retryBtn} onPress={() => { setError(false); setEmbedBlocked(false); }}>
+              <Ionicons name="refresh" size={16} color="#fff" />
+              <Text style={s.retryTxt}>  Retry</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
       {!error && (
@@ -192,9 +202,31 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
           javaScriptEnabled
           domStorageEnabled
           startInLoadingState={false}
+          setSupportMultipleWindows={false}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
           onError={() => { setLoading(false); setError(true); }}
+          onHttpError={(e: any) => {
+            // Error 153 = embedding disabled — show in-app error instead of redirecting
+            setLoading(false);
+            setEmbedBlocked(true);
+            setError(true);
+          }}
+          onShouldStartLoadWithRequest={(request: any) => {
+            const url: string = request.url || '';
+            // Allow only: the embed URL itself, YouTube consent pages, Google APIs
+            if (
+              url.includes('youtube.com/embed') ||
+              url.includes('google.com/accounts') ||
+              url.includes('accounts.google.com') ||
+              url.includes('about:blank') ||
+              url.startsWith('data:')
+            ) {
+              return true;
+            }
+            // Block ALL other navigation — especially youtube.com, youtu.be app links
+            return false;
+          }}
           userAgent={
             Platform.OS === 'android'
               ? 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'

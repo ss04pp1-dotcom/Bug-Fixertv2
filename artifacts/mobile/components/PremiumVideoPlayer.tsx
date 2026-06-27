@@ -1130,7 +1130,11 @@ export default function PremiumVideoPlayer({
               onVideoTracks={setVideoTracks}
               onAudioTracks={setAudioTracks}
               onTextTracks={setTextTracks}
-              onPipChange={setPipActive}
+              onPipChange={(active) => {
+                setPipActive(active);
+                // When system dismisses PiP, sync the pip toggle back to false
+                if (!active) setPip(false);
+              }}
             />
           )
       )}
