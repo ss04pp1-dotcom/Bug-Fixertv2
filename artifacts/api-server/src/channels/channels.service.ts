@@ -505,7 +505,30 @@ export class ChannelsService {
 
   // ── Manual deduplication ────────────────────────────────────────────────────
 
-  async mergeDuplicates(): Promise<{ message: string; groupsMerged: number }> {
+  async mergeDuplicates(): Promise<{ message: string; groupsMerged: number; backfilled: number }> {
+    // Step 1 — Backfill normalizedName for channels that don't have it yet
+    // (e.g. channels imported via M3U before the dedup fix was applied)
+    const missing = await this.prisma.channel.findMany({
+      where: { normalizedName: null, deletedAt: null },
+      select: { id: true, name: true },
+    });
+
+    let backfilled = 0;
+    for (const ch of missing) {
+      const norm = normalizeName(ch.name);
+      if (norm) {
+        await this.prisma.channel.update({
+          where: { id: ch.id },
+          data: { normalizedName: norm },
+        });
+        backfilled++;
+      }
+    }
+    if (backfilled > 0) {
+      this.logger.log(`Backfilled normalizedName for ${backfilled} channel(s)`);
+    }
+
+    // Step 2 — Find groups with the same normalizedName and merge them
     const dupeGroups = await this.prisma.$queryRaw<
       { normalizedName: string; ids: string[] }[]
     >`
@@ -520,7 +543,10 @@ export class ChannelsService {
     `;
 
     if (dupeGroups.length === 0) {
-      return { message: 'No duplicate channels found', groupsMerged: 0 };
+      const msg = backfilled > 0
+        ? `নাম পূরণ করা হয়েছে ${backfilled}টি চ্যানেলে। কোনো duplicate পাওয়া যায়নি।`
+        : 'কোনো duplicate চ্যানেল পাওয়া যায়নি।';
+      return { message: msg, groupsMerged: 0, backfilled };
     }
 
     let merged = 0;
@@ -533,9 +559,14 @@ export class ChannelsService {
       }
     }
 
+    const parts: string[] = [];
+    if (backfilled > 0) parts.push(`${backfilled}টি চ্যানেলে নাম backfill`);
+    parts.push(`${merged}টি duplicate group merge হয়েছে (${dupeGroups.length}টির মধ্যে)`);
+
     return {
-      message: `Merged ${merged} duplicate group(s) out of ${dupeGroups.length} found`,
+      message: parts.join(' | '),
       groupsMerged: merged,
+      backfilled,
     };
   }
 
