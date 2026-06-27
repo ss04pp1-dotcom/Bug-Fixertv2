@@ -71,16 +71,16 @@ describe('HealthController', () => {
   });
 
   describe('healthStorage()', () => {
-    it('returns ok when storage is configured', () => {
+    it('returns ok when storage is configured', async () => {
       mockStorage.isConfigured.mockReturnValue(true);
-      const result = controller.healthStorage() as Record<string, unknown>;
+      const result = await controller.healthStorage() as Record<string, unknown>;
       expect(result['status']).toBe('ok');
       expect(result['configured']).toBe(true);
     });
 
-    it('returns degraded when storage is not configured', () => {
+    it('returns degraded when storage is not configured', async () => {
       mockStorage.isConfigured.mockReturnValue(false);
-      const result = controller.healthStorage() as Record<string, unknown>;
+      const result = await controller.healthStorage() as Record<string, unknown>;
       expect(result['status']).toBe('degraded');
       expect(result['configured']).toBe(false);
     });

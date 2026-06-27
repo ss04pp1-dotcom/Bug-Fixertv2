@@ -71,7 +71,6 @@
     "expo-keep-awake": "^15.0.8",
     "expo-localization": "~17.0.9",
     "expo-screen-orientation": "~9.0.9",
-    "expo-updates": "~29.0.18",
     "hls.js": "^1.6.16",
     "react-native-webview": "^13.12.5",
     "react-native-youtube-iframe": "^2.3.0"

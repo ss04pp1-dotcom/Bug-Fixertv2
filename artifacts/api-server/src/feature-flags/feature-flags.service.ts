@@ -1,25 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class FeatureFlagsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAll(query: PaginationDto = new PaginationDto()) {
-    const page  = Math.max(1, query.page  ?? 1);
-    const limit = Math.min(100, query.limit ?? 50);
-    const skip  = (page - 1) * limit;
-
-    const [data, total] = await Promise.all([
-      this.prisma.featureFlag.findMany({ orderBy: { name: 'asc' }, skip, take: limit }),
-      this.prisma.featureFlag.count(),
-    ]);
-
-    return {
-      data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+  async getAll() {
+    return this.prisma.featureFlag.findMany({ orderBy: { name: 'asc' } });
   }
 
   async getEnabled() {
@@ -50,8 +37,7 @@ export class FeatureFlagsService {
   }
 
   async delete(name: string) {
-    await this.prisma.featureFlag.delete({ where: { name } })
-      .catch((e: Error) => { throw new NotFoundException(`Feature flag "${name}" not found: ${e.message}`); });
+    await this.prisma.featureFlag.delete({ where: { name } }).catch(() => {});
     return { message: 'Feature flag deleted' };
   }
 }

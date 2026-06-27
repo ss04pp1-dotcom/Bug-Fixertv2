@@ -71,11 +71,10 @@ describe('SubscriptionsService', () => {
     });
   });
 
-  describe('getMySubscription', () => {
-    it('returns null when user has no subscription', async () => {
+  describe('getUserSubscription', () => {
+    it('throws NotFoundException when user has no subscription', async () => {
       mockPrisma.subscription.findFirst.mockResolvedValue(null);
-      const result = await service.getMySubscription('user-id');
-      expect(result).toBeNull();
+      await expect(service.getUserSubscription('user-id')).rejects.toThrow('No subscription found');
     });
   });
 });
