@@ -11,8 +11,8 @@ module.exports = function withPipSupport(config) {
       mainActivity.$['android:supportsPictureInPicture'] = 'true';
 
       // Android 12+ (API 31+): auto-enter PiP when home/recents pressed
-      // This is what YouTube uses — no code needed, OS handles it
-      mainActivity.$['android:autoEnterPictureInPicture'] = 'false';
+      // This is what YouTube uses — OS handles it automatically, no JS code needed
+      mainActivity.$['android:autoEnterPictureInPicture'] = 'true';
 
       // Required configChanges so activity doesn't restart on PiP resize
       const required = [

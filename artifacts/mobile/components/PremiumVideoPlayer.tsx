@@ -863,20 +863,28 @@ export default function PremiumVideoPlayer({
   }, [fullscreen, pip]);
 
   // ── Auto PiP when app goes to background (YouTube-style) ──────────────────
+  // NOTE: On Android, AppState NEVER emits 'inactive' — it goes directly
+  // 'active' → 'background'. We must listen for 'background' only.
+  // Android 12+ (autoEnterPictureInPicture="true" in manifest) handles PiP
+  // automatically without any JS code. This listener covers Android < 12
+  // by triggering enterPictureInPictureMode() via the pictureInPicture prop.
   useEffect(() => {
     if (Platform.OS !== 'android' || IS_WEB) return;
     const sub = AppState.addEventListener('change', (nextState) => {
-      // 'inactive' fires first when home/recents pressed — trigger PiP immediately
-      // so the PiP window opens before Android fully backgrounds the activity
-      if ((nextState === 'background' || nextState === 'inactive') && isReady && !hasError) {
+      if (nextState === 'background' && isReady && !hasError && !playerError) {
+        // Trigger PiP entry for Android < 12.
+        // Android 12+ enters PiP automatically via manifest autoEnterPictureInPicture.
+        // Setting this prop calls enterPictureInPictureMode() in react-native-video.
         setPip(true);
       }
-      if (nextState === 'active') {
-        setPip(false);
-      }
+      // Do NOT call setPip(false) or reset any player state here when returning
+      // to 'active'. The onPipChange callback (onPictureInPictureStatusChanged)
+      // is the authoritative signal that PiP has ended — handling it here too
+      // causes a double state update and can trigger unnecessary re-renders.
     });
     return () => sub.remove();
-  }, [isReady, hasError]);
+  // playerError intentionally included so PiP isn't triggered on error screens
+  }, [isReady, hasError, playerError]);
 
   // ── Auto-hide controls ─────────────────────────────────────────────────────
   const setCtrlHidden = useCallback(() => {
@@ -1175,14 +1183,20 @@ export default function PremiumVideoPlayer({
               onTextTracks={setTextTracks}
               onPipChange={(active) => {
                 setPipActive(active);
-                // When system dismisses PiP, sync the pip toggle back to false
-                if (!active) setPip(false);
+                // Sync pip prop when OS dismisses PiP (user taps expand/close).
+                // Do NOT reset source, seek position, or any player state here —
+                // the player instance stays alive and continues from where it was.
+                if (!active) {
+                  setPip(false);
+                }
               }}
             />
           )
       )}
 
-      {/* ── Overlays ────────────────────────────────────────────────────── */}
+      {/* ── Overlays — hidden in PiP (window too small, user can't interact) ── */}
+      {!pipActive && (
+        <>
       {/* Buffering */}
       {(isLoading || (buffering && !playerError && src)) && !hasError && (
         <View style={p.overlay} pointerEvents="none">
@@ -1252,6 +1266,8 @@ export default function PremiumVideoPlayer({
           <Text style={p.overlayTxt}>{switching ? 'Switching server…' : 'Connecting to stream…'}</Text>
         </View>
       )}
+        </>
+      )}
 
       {/* ── Brightness overlay (dark layer, 0=fully dark, 1=no overlay) ── */}
       {brightness < 1 && (
@@ -1268,7 +1284,8 @@ export default function PremiumVideoPlayer({
       <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
 
       {/* ── Controls overlay ────────────────────────────────────────────── */}
-      {showCtrl && !hasError && !playerError && (
+      {/* Hide all controls when in PiP window — the window is too small for interaction */}
+      {showCtrl && !hasError && !playerError && !pipActive && (
         <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
           <LinearGradient
             colors={['rgba(0,0,0,0.78)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
@@ -1500,8 +1517,8 @@ export default function PremiumVideoPlayer({
         </Animated.View>
       )}
 
-      {/* ── Double-tap seek feedback ────────────────────────────────────── */}
-      {seekSide && (
+      {/* ── Double-tap seek feedback & swipe indicator — hidden in PiP ─── */}
+      {!pipActive && seekSide && (
         <SeekFeedback
           key={seekSide.side + Date.now()}
           side={seekSide.side}
@@ -1509,9 +1526,7 @@ export default function PremiumVideoPlayer({
           onDone={() => setSeekSide(null)}
         />
       )}
-
-      {/* ── Swipe indicator ─────────────────────────────────────────────── */}
-      {swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
+      {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
 
       {/* ── Settings sheets ──────────────────────────────────────────────── */}
       <SettingsSheet
