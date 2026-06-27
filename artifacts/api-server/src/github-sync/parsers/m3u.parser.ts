@@ -83,10 +83,10 @@ export class M3uParser implements ChannelParser {
     };
 
     // Standard M3U: channel name is always the text after the LAST comma.
-    // tvg-name is intentionally NOT used as a name override — it may contain
-    // a category label or match-title (e.g. "Fifa World Cup") that differs
-    // from the true per-stream name after the comma (e.g. "Toffee 1").
-    let name = line.includes(',') ? line.split(',').slice(1).join(',').trim() : '';
+    // We must use lastIndexOf to avoid being misled by commas that appear
+    // inside attribute values (e.g. Cloudinary URLs like tvg-logo="…q_75,f_webp/…").
+    const lastCommaIdx = line.lastIndexOf(',');
+    let name = lastCommaIdx !== -1 ? line.substring(lastCommaIdx + 1).trim() : '';
 
     // Some M3U generators (e.g. Toffee Live) embed the poster path directly
     // in the display-name field:
