@@ -567,19 +567,23 @@ const sf = StyleSheet.create({
 });
 
 // ─── Swipe Indicator ──────────────────────────────────────────────────────────
+const MAX_SWIPE = 0.15;  // cap both brightness and volume at 15%
+
 function SwipeIndicator({ type, value }: { type: 'volume' | 'brightness'; value: number }) {
+  const pct = Math.round((value / MAX_SWIPE) * 100);
+  const side = type === 'brightness' ? { left: 16 } : { right: 16 };
   return (
-    <View style={sw.wrap}>
+    <View style={[sw.wrap, side]}>
       <Ionicons name={type === 'volume' ? 'volume-high' : 'sunny'} size={18} color="#fff" />
       <View style={sw.track}>
-        <View style={[sw.fill, { height: `${Math.round(value * 100)}%` as any }]} />
+        <View style={[sw.fill, { height: `${pct}%` as any }]} />
       </View>
-      <Text style={sw.val}>{Math.round(value * 100)}%</Text>
+      <Text style={sw.val}>{pct}%</Text>
     </View>
   );
 }
 const sw = StyleSheet.create({
-  wrap: { position: 'absolute', top: '20%', right: 16, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 14, padding: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border, width: 52 },
+  wrap: { position: 'absolute', top: '20%', backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 14, padding: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border, width: 52 },
   track: { width: 6, height: 80, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 3, overflow: 'hidden', justifyContent: 'flex-end' },
   fill: { width: '100%', backgroundColor: C.primary, borderRadius: 3 },
   val: { color: '#fff', fontSize: 10, fontWeight: '600' },
@@ -639,8 +643,8 @@ export default function PremiumVideoPlayer({
   const [urlCheck, setUrlCheck]       = useState<string | null>(null);
   const [seekSide, setSeekSide]       = useState<{ side: 'left' | 'right'; secs: number } | null>(null);
   const [swipeType, setSwipeType]     = useState<'volume' | 'brightness' | null>(null);
-  const [swipeValue, setSwipeValue]   = useState(0.7);
-  const [videoVolume, setVideoVolume] = useState(1.0);  // FIX: actual volume for player
+  const [swipeValue, setSwipeValue]   = useState(0.10);  // start at 10% (within 0–MAX_SWIPE range)
+  const [videoVolume, setVideoVolume] = useState(0.10);  // start at 10% volume
   const [isAtLiveEdge, setAtLiveEdge] = useState(true);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
@@ -650,7 +654,7 @@ export default function PremiumVideoPlayer({
   const saveTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef      = useRef<{ time: number; x: number } | null>(null);
   const swipeStartY     = useRef(0);
-  const swipeStartV     = useRef(0.7);
+  const swipeStartV     = useRef(0.10);
   const swipeSide       = useRef<'left' | 'right'>('right');
   const currentTimeRef  = useRef(0);
   const durationRef     = useRef(0);
@@ -976,11 +980,13 @@ export default function PremiumVideoPlayer({
     },
     onPanResponderMove: (_, gs) => {
       if (Math.abs(gs.dy) < 10) return;
-      const newVal = Math.max(0, Math.min(1, swipeStartV.current - gs.dy / 250));
+      // Smooth: divisor 1500 → small precise steps per swipe
+      // Cap: clamp within [0, MAX_SWIPE] so neither brightness nor volume exceed 15%
+      const delta = -gs.dy / 1500;
+      const newVal = Math.max(0, Math.min(MAX_SWIPE, swipeStartV.current + delta));
       setSwipeValue(newVal);
       const sideType = swipeSide.current === 'left' ? 'brightness' : 'volume';
       setSwipeType(sideType);
-      // FIX: actually apply volume when swiping right side
       if (sideType === 'volume') setVideoVolume(newVal);
     },
     onPanResponderRelease: (evt, gs) => {

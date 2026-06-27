@@ -196,10 +196,7 @@ export default function LivePlayerScreen() {
         isLive
         isLoading={fetchLoading}
         hasError={fetchError}
-        onBack={() => {
-          if (router.canGoBack()) router.back();
-          else router.replace('/(main)/live-tv');
-        }}
+        onBack={() => router.replace('/(main)/live-tv')}
         onRetry={loadStream}
         onRefreshStream={loadStream}
         contentId={id}
