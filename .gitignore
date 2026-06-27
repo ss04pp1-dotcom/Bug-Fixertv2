@@ -8,6 +8,10 @@ out-tsc
 .expo
 .expo-shared
 
+# Next.js build output
+.next/
+out/
+
 # dependencies
 node_modules
 
@@ -47,3 +51,4 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+attached_assets/

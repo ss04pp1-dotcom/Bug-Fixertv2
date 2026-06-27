@@ -1,30 +1,26 @@
-# ─── node_modules (সব level এ) ──────────────────────────────────────────────
+# ─── node_modules (all levels) ───────────────────────────────────────────────
 node_modules/
 **/node_modules/
 
-# ─── Build / cache output ────────────────────────────────────────────────────
+# ─── Next.js / Admin build cache (73 MB — biggest offender) ─────────────────
+.next/
+**/.next/
+artifacts/admin/.next/
+artifacts/admin/out/
+
+# ─── Other build / cache output ──────────────────────────────────────────────
 dist/
 build/
 out/
-.next/
 web-build/
 .expo/
 .expo-shared/
 android/
 ios/
 
-# ─── Monorepo packages not needed for mobile build ───────────────────────────
-# (source kept for pnpm workspace resolution, only heavy build artifacts removed)
-artifacts/admin/.next/
-artifacts/admin/dist/
-artifacts/admin/build/
+# ─── API server compiled output ──────────────────────────────────────────────
 artifacts/api-server/dist/
 artifacts/api-server/build/
-lib/*/dist/
-lib/*/build/
-
-# ─── Git ─────────────────────────────────────────────────────────────────────
-.git/
 
 # ─── Replit-specific ─────────────────────────────────────────────────────────
 .local/
@@ -33,12 +29,11 @@ replit.nix
 attached_assets/
 tools/
 
+# ─── Git ─────────────────────────────────────────────────────────────────────
+.git/
+
 # ─── Test & coverage ─────────────────────────────────────────────────────────
 coverage/
-**/*.test.ts
-**/*.test.tsx
-**/*.spec.ts
-**/*.spec.tsx
 **/__tests__/
 **/__mocks__/
 
@@ -48,6 +43,3 @@ coverage/
 .DS_Store
 Thumbs.db
 **/*.log
-
-# ─── Prisma generated (re-generated on build server) ─────────────────────────
-artifacts/api-server/node_modules/.prisma/
