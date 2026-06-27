@@ -9,6 +9,43 @@ export interface ValidationResult {
   playlistSegmentCount: number;
 }
 
+export interface ValidationHeaders {
+  cookie?: string | null;
+  userAgent?: string | null;
+  referer?: string | null;
+  origin?: string | null;
+}
+
+/**
+ * Parse cookie expiry from two common formats:
+ *  1. CDN signed cookie:  "Edge-Cache-Cookie=URLPrefix=...:Expires=1782699104:..."  (Unix seconds)
+ *  2. Standard HTTP:      "session=abc; expires=Thu, 01 Jan 2026 00:00:00 GMT"
+ */
+export function parseCookieExpiry(cookie: string): Date | null {
+  const unixMatch = cookie.match(/:Expires=(\d{8,11})(?::|$)/i);
+  if (unixMatch) {
+    const ts = parseInt(unixMatch[1], 10);
+    if (!isNaN(ts) && ts > 0) return new Date(ts * 1000);
+  }
+  const httpMatch = cookie.match(/(?:^|;\s*)expires=([^;]+)/i);
+  if (httpMatch) {
+    const d = new Date(httpMatch[1].trim());
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+export function isCookieExpired(cookie: string): boolean {
+  const expiry = parseCookieExpiry(cookie);
+  if (!expiry) return false;
+  return expiry.getTime() < Date.now();
+}
+
+export function cookieExpiryInfo(cookie: string): { expired: boolean; expiresAt: Date | null } {
+  const expiresAt = parseCookieExpiry(cookie);
+  return { expired: expiresAt ? expiresAt.getTime() < Date.now() : false, expiresAt };
+}
+
 @Injectable()
 export class StreamValidationService {
   private readonly logger = new Logger(StreamValidationService.name);
@@ -16,7 +53,29 @@ export class StreamValidationService {
   private readonly MAX_RETRIES = 2;
   private readonly RETRY_DELAY_MS = 1_000;
 
-  async validate(streamUrl: string): Promise<ValidationResult> {
+  /**
+   * Validate a stream URL, optionally passing server-specific headers.
+   * If a cookie is present and already expired, returns immediately with
+   * failReason 'Cookie Expired' — no HTTP request is made.
+   */
+  async validateWithHeaders(streamUrl: string, headers?: ValidationHeaders): Promise<ValidationResult> {
+    if (headers?.cookie && isCookieExpired(headers.cookie)) {
+      const info = cookieExpiryInfo(headers.cookie);
+      const expiredSince = info.expiresAt
+        ? info.expiresAt.toISOString().substring(0, 10)
+        : 'unknown date';
+      return {
+        success: false,
+        responseTimeMs: 0,
+        failReason: `Cookie Expired (since ${expiredSince})`,
+        isHlsPlaylist: false,
+        playlistSegmentCount: 0,
+      };
+    }
+    return this.validate(streamUrl, headers);
+  }
+
+  async validate(streamUrl: string, headers?: ValidationHeaders): Promise<ValidationResult> {
     let lastError: string | undefined;
     let lastHttpStatus: number | undefined;
     let bestResult: ValidationResult | undefined;
@@ -28,7 +87,7 @@ export class StreamValidationService {
       }
 
       try {
-        const result = await this.validateSingle(streamUrl);
+        const result = await this.validateSingle(streamUrl, headers);
         if (result.success) {
           return result;
         }
@@ -51,7 +110,7 @@ export class StreamValidationService {
     };
   }
 
-  private async validateSingle(streamUrl: string): Promise<ValidationResult> {
+  private async validateSingle(streamUrl: string, headers?: ValidationHeaders): Promise<ValidationResult> {
     const startTime = Date.now();
 
     // Step 1: URL validation
@@ -78,8 +137,11 @@ export class StreamValidationService {
         redirect: 'follow',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'StreamPro-Validator/1.0',
+          'User-Agent': headers?.userAgent || 'StreamPro-Validator/1.0',
           'Accept': '*/*',
+          ...(headers?.cookie  ? { Cookie:  headers.cookie  } : {}),
+          ...(headers?.referer ? { Referer: headers.referer } : {}),
+          ...(headers?.origin  ? { Origin:  headers.origin  } : {}),
         },
       });
 

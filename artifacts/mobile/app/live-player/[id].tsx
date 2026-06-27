@@ -112,18 +112,18 @@ export default function LivePlayerScreen() {
     if (Array.isArray(ch?.servers) && ch.servers.length > 0) {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
-        const sourceLabel = srv.sourceType === 'ADMIN'
-          ? 'Admin'
-          : srv.githubSource?.name ?? 'GitHub';
+        const cookieExpired = srv.cookieExpired === true;
         srcs.push({
           url: srv.link,
-          label: `Server ${i + 1}`,
+          label: cookieExpired ? `Server ${i + 1} ⚠️` : `Server ${i + 1}`,
           quality: i === 0 ? 'HD' : 'SD',
+          cookieExpired,
+          cookieExpiresAt: srv.cookieExpiresAt ?? null,
           headers: {
-            ...(srv.cookie    ? { Cookie: srv.cookie }       : {}),
+            ...(srv.cookie    ? { Cookie: srv.cookie }          : {}),
             ...(srv.userAgent ? { 'User-Agent': srv.userAgent } : {}),
-            ...(srv.referer   ? { Referer: srv.referer }     : {}),
-            ...(srv.origin    ? { Origin: srv.origin }       : {}),
+            ...(srv.referer   ? { Referer: srv.referer }        : {}),
+            ...(srv.origin    ? { Origin: srv.origin }          : {}),
           },
         });
       });

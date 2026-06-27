@@ -612,7 +612,15 @@ export class M3uImportService {
       try {
         const channel = await this.prisma.channel.findUnique({
           where: { id: channelId },
-          select: { id: true, primaryStreamUrl: true, streamStatus: true },
+          select: {
+            id: true, primaryStreamUrl: true, streamStatus: true,
+            servers: {
+              where: { healthCheckEnabled: true, deletedAt: null, enabled: true },
+              orderBy: { priority: 'asc' },
+              take: 1,
+              select: { cookie: true, userAgent: true, referer: true, origin: true },
+            },
+          },
         });
 
         if (!channel?.primaryStreamUrl) continue;
@@ -622,7 +630,12 @@ export class M3uImportService {
           data: { streamStatus: ChannelStreamStatus.checking },
         });
 
-        const result = await this.streamValidation.validate(channel.primaryStreamUrl);
+        // Use the primary server's headers (cookie/userAgent) for validation
+        const primaryServer = channel.servers?.[0];
+        const result = await this.streamValidation.validateWithHeaders(
+          channel.primaryStreamUrl,
+          primaryServer ?? undefined,
+        );
 
         const newStatus = result.success ? ChannelStreamStatus.active : ChannelStreamStatus.offline;
         await this.prisma.channel.update({
@@ -634,7 +647,8 @@ export class M3uImportService {
           },
         });
 
-        this.logger.debug(`Channel ${channelId}: ${result.success ? 'ACTIVE' : 'OFFLINE'} (${result.responseTimeMs}ms)`);
+        const label = result.success ? 'ACTIVE' : `OFFLINE (${result.failReason ?? 'unknown'})`;
+        this.logger.debug(`Channel ${channelId}: ${label} (${result.responseTimeMs}ms)`);
       } catch (err: any) {
         this.logger.error(`Health check failed for ${channelId}: ${err?.message}`);
         await this.prisma.channel.update({

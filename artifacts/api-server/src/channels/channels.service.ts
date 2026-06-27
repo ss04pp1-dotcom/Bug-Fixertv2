@@ -56,7 +56,16 @@ export class ChannelsService {
       },
     });
     if (!channel) throw new NotFoundException('Channel not found');
-    return channel;
+
+    // Annotate each server with a computed cookieExpired flag
+    const { cookieExpiryInfo } = await import('../m3u-import/stream-validation.service');
+    const servers = channel.servers.map((srv: any) => {
+      if (!srv.cookie) return { ...srv, cookieExpired: false, cookieExpiresAt: null };
+      const info = cookieExpiryInfo(srv.cookie);
+      return { ...srv, cookieExpired: info.expired, cookieExpiresAt: info.expiresAt?.toISOString() ?? null };
+    });
+
+    return { ...channel, servers };
   }
 
   async getStreamUrl(id: string) {
