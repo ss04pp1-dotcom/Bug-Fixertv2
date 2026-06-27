@@ -55,6 +55,7 @@ export default function LivePlayerScreen() {
   const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportedRef        = useRef(false);
   const playbackStartRef   = useRef<number>(0);
+  const autoRefreshRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const clearPlaybackTimer = () => {
     if (playbackTimerRef.current) {
