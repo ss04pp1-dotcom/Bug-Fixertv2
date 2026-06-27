@@ -180,7 +180,7 @@ export const channels = pgTable('channels', {
   index('channels_category_id_idx').on(t.categoryId),
   index('channels_created_at_idx').on(t.createdAt),
   index('channels_last_active_at_idx').on(t.lastActiveAt),
-  index('channels_normalized_name_idx').on(t.normalizedName),
+  unique('channels_normalized_name_key').on(t.normalizedName),
 ]);
 
 // ─── GitHub Sources & Channel Servers ────────────────────────
@@ -973,6 +973,21 @@ export const importChannels = pgTable('import_channels', {
   index('import_channels_job_id_idx').on(t.importJobId),
   index('import_channels_status_idx').on(t.status),
   index('import_channels_channel_name_idx').on(t.channelName),
+]);
+
+export const channelMergeLogs = pgTable('channel_merge_logs', {
+  id:                   uuid('id').primaryKey().defaultRandom(),
+  trigger:              text('trigger').notNull(),
+  normalizedName:       text('normalized_name').notNull(),
+  keptChannelId:        text('kept_channel_id').notNull(),
+  mergedChannelIds:     text('merged_channel_ids').array().notNull().default([]),
+  serversMoved:         integer('servers_moved').default(0).notNull(),
+  serversDeduplicated:  integer('servers_deduplicated').default(0).notNull(),
+  details:              json('details'),
+  createdAt:            timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('channel_merge_logs_created_at_idx').on(t.createdAt),
+  index('channel_merge_logs_kept_channel_id_idx').on(t.keptChannelId),
 ]);
 
 export const deletedChannelLogs = pgTable('deleted_channel_logs', {
