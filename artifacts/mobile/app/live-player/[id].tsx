@@ -42,8 +42,6 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
-  const autoRefreshRef                = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // ── Hardware back button → go back to Live TV, not Home ───────────────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
