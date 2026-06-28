@@ -51,7 +51,7 @@ function NativeVideo({
     const Video = require('react-native-video').default;
     return (
       <Video
-        source={{ uri, headers: { 'User-Agent': 'Mozilla/5.0', ...headers } }}
+        source={{ uri, headers: { ...headers } }}
         style={StyleSheet.absoluteFill}
         paused={paused}
         muted={false}

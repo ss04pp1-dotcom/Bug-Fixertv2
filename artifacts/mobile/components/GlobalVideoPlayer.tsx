@@ -474,6 +474,10 @@ export default function GlobalVideoPlayer() {
   const [brightness, setBrightness]   = useState(1.0);
   const volumeSV    = useSharedValue(1.0);   // drives SwipeIndicator (instant)
   const brightnessSV = useSharedValue(1.0);  // drives overlay opacity (instant)
+  // Refs that stay in sync with state — used by PanResponder (memoized, can't
+  // read state variables without stale closure).
+  const videoVolumeRef = useRef(1.0);
+  const brightnessRef  = useRef(1.0);
   const [swipeType, setSwipeType]     = useState<'volume'|'brightness'|null>(null);
   const [swipeValue, setSwipeValue]   = useState(1.0);  // for SwipeIndicator display
   const [seekSide, setSeekSide]       = useState<{side:'left'|'right'; secs:number}|null>(null);
@@ -497,6 +501,10 @@ export default function GlobalVideoPlayer() {
   const ctrlTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef     = useRef<{ time: number; x: number } | null>(null);
+  // Keep refs in sync with state so PanResponder (memoized) reads correct values
+  useEffect(() => { videoVolumeRef.current = videoVolume; }, [videoVolume]);
+  useEffect(() => { brightnessRef.current  = brightness;  }, [brightness]);
+
   const swipeStartV    = useRef(1.0);
   const swipeStartB    = useRef(1.0);
   const swipeSide      = useRef<'left'|'right'>('right');
@@ -772,8 +780,8 @@ export default function GlobalVideoPlayer() {
     onMoveShouldSetPanResponder: (_, gs) =>
       Math.abs(gs.dy) > 8 && Math.abs(gs.dy) > Math.abs(gs.dx),
     onPanResponderGrant: (evt) => {
-      swipeStartV.current = videoVolume;
-      swipeStartB.current = brightness;
+      swipeStartV.current = videoVolumeRef.current;
+      swipeStartB.current = brightnessRef.current;
       swipeSide.current = evt.nativeEvent.locationX < vidW / 2 ? 'left' : 'right';
     },
     onPanResponderMove: (_, gs) => {
@@ -1384,7 +1392,7 @@ export default function GlobalVideoPlayer() {
       {/* ── Brightness overlay (animated, ZERO re-renders) ──────────────── */}
       <Animated.View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, brightnessOverlayStyle, { opacity: (1 - brightness) * 0.85 }]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, brightnessOverlayStyle]}
       />
 
       {/* ── Buffering ─────────────────────────────────────────────────────── */}
