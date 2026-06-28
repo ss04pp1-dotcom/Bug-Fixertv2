@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -71,8 +71,12 @@ export default function LiveTVScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // M-040: reduced from 500 to 100 to load faster (true pagination would use useInfiniteQuery)
-  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 100 });
+  const [displayLimit, setDisplayLimit] = useState(150);
+  // Fetch ALL channels so search covers the entire database
+  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 9999 });
+
+  // Reset display limit when tab or search changes
+  useEffect(() => { setDisplayLimit(150); }, [activeTab, search]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -260,14 +264,29 @@ export default function LiveTVScreen() {
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={search.trim() ? filtered : filtered.slice(0, displayLimit)}
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={s.listContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={15}
-          maxToRenderPerBatch={20}
+          initialNumToRender={20}
+          maxToRenderPerBatch={30}
           windowSize={10}
+          onEndReached={() => {
+            if (!search.trim() && displayLimit < filtered.length) {
+              setDisplayLimit(prev => Math.min(prev + 100, filtered.length));
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            !search.trim() && displayLimit < filtered.length ? (
+              <View style={{ alignItems: 'center', paddingVertical: 18 }}>
+                <Text style={{ color: C.textSec, fontSize: 12, fontFamily: 'Inter' }}>
+                  Loading more channels…
+                </Text>
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

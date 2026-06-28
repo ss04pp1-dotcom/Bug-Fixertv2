@@ -23,7 +23,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
   Platform, AppState, BackHandler, StatusBar, ActivityIndicator,
-  PanResponder, Modal, Alert,
+  PanResponder, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,6 +37,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import apiClient from '@/lib/api';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const IS_EXPO_GO =
@@ -368,8 +369,43 @@ export default function GlobalVideoPlayer() {
   const { width: SW, height: SH } = Dimensions.get('window');
   const {
     mode, sources, srcIdx, title, logo, contentId, contentType, isLive,
-    isPlaying, enterMini, hide, setPlaying, setSrcIdx,
+    isPlaying, enterMini, enterTop, hide, setPlaying, setSrcIdx,
   } = useGlobalPlayer();
+
+  // ── Landscape / Orientation ──────────────────────────────────────────────
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  const lockLandscape = useCallback(async () => {
+    if (IS_EXPO_GO || IS_WEB) return;
+    try {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      setIsLandscape(true);
+    } catch {}
+  }, []);
+
+  const unlockOrientation = useCallback(async () => {
+    if (IS_EXPO_GO || IS_WEB) return;
+    try {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      setIsLandscape(false);
+    } catch {}
+  }, []);
+
+  const toggleLandscapeRef = useRef<() => Promise<void>>(async () => {});
+
+  useEffect(() => {
+    toggleLandscapeRef.current = async () => {
+      if (!isLandscape) {
+        await lockLandscape();
+        useGlobalPlayer.getState().expand();
+      } else {
+        await unlockOrientation();
+        enterTop();
+      }
+    };
+  }, [isLandscape, lockLandscape, unlockOrientation, enterTop]);
+
+  const toggleLandscape = useCallback(() => toggleLandscapeRef.current(), []);
 
   // ── Playback state ───────────────────────────────────────────────────────
   const [buffering, setBuffering]   = useState(true);
@@ -769,31 +805,41 @@ export default function GlobalVideoPlayer() {
   }), [vidW, seek, bumpCtrl, hideCtrlNow]); // ← stable deps only
 
   // ── OS PiP — Android + iOS ────────────────────────────────────────────────
-  // FIX: old code only handled Android. iOS goes active → inactive → background.
+  // FIX: only activate PiP when video is actually playing and ready.
+  // Old code activated PiP even when paused/stopped → background PiP appeared unexpectedly.
   useEffect(() => {
     if (mode === 'hidden') return;
     if (IS_EXPO_GO) return;
     const sub = AppState.addEventListener('change', (s) => {
       // Android: 'background'.  iOS: 'inactive' (then 'background').
       if ((s === 'background' || (Platform.OS === 'ios' && s === 'inactive'))
-          && isReady && !playerError) {
+          && isReady && !playerError && isPlaying) {
         setPip(true); // useTextureView prevents reload
+      } else if (s === 'active') {
+        // Return from background — exit PiP
+        setPip(false);
       }
     });
     return () => sub.remove();
-  }, [mode, isReady, playerError]);
+  }, [mode, isReady, playerError, isPlaying]);
 
   // ── Android back button ──────────────────────────────────────────────────
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     if (mode === 'hidden') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (mode === 'fullscreen') { enterMini(); return true; }
+      if (mode === 'fullscreen') {
+        // If we're in landscape fullscreen, go back to top mode + unlock orientation
+        unlockOrientation();
+        enterTop();
+        return true;
+      }
+      if (mode === 'top') { enterMini(); return true; }
       if (mode === 'mini') { hide(); return true; }
       return false;
     });
     return () => sub.remove();
-  }, [mode, enterMini, hide]);
+  }, [mode, enterMini, enterTop, hide, unlockOrientation]);
 
   // ── Keep awake ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -945,6 +991,13 @@ export default function GlobalVideoPlayer() {
     }
   }, [srcIdx, setSrcIdx, contentType, reportPlayback]);
 
+  // ── Unlock orientation when player is hidden ─────────────────────────────
+  useEffect(() => {
+    if (mode === 'hidden') {
+      unlockOrientation();
+    }
+  }, [mode, unlockOrientation]);
+
   // ── Don't render if hidden ───────────────────────────────────────────────
   if (mode === 'hidden') return null;
 
@@ -1060,6 +1113,98 @@ export default function GlobalVideoPlayer() {
           )}
         </Animated.View>
       </GestureDetector>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // TOP MODE  (video at top of screen, related channels visible below)
+  // ═════════════════════════════════════════════════════════════════════════
+  if (mode === 'top') {
+    const topH = Math.round(SW * 9 / 16);
+    return (
+      <View style={[g.topRoot, { top: insets.top, height: topH }]}>
+        {nativeSource && (
+          <NativeIPTVPlayer
+            key={`v-${videoKey}`}
+            source={nativeSource}
+            paused={!isPlaying}
+            rate={speed}
+            volume={videoVolume}
+            resizeMode="cover"
+            pip={false}
+            isLive={isLive}
+            videoRef={videoRef}
+            selectedVideoTrack={selectedVideoTrack}
+            selectedAudioTrack={selectedAudioTrack}
+            selectedTextTrack={selectedTextTrack}
+            onLoadStart={() => { setBuffering(true); setReady(false); }}
+            onLoad={handleLoad}
+            onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
+            onProgress={(d) => {
+              setTime(d.currentTime);
+              currentTimeRef.current = d.currentTime;
+              if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
+                setDuration(d.seekableDuration);
+                durationRef.current = d.seekableDuration;
+              }
+            }}
+            onBuffer={setBuffering}
+            onError={handleError}
+            onEnd={() => { setEnded(true); setPlaying(false); }}
+            onVideoTracks={setVideoTracks}
+            onAudioTracks={setAudioTracks}
+            onTextTracks={setTextTracks}
+            onPipChange={(active) => { setPipActive(active); setPip(active); }}
+          />
+        )}
+
+        {/* Buffering */}
+        {(buffering || !isReady) && !playerError && nativeSource && (
+          <View style={g.overlayCenter} pointerEvents="none">
+            <ActivityIndicator size="large" color={C.primary} />
+          </View>
+        )}
+
+        {/* Error */}
+        {playerError && (
+          <View style={g.overlayCenter}>
+            <Ionicons name="alert-circle-outline" size={32} color={C.live} />
+            <Text style={[g.errorTxt, { fontSize: 13 }]}>Playback Failed</Text>
+            <TouchableOpacity onPress={refreshStream} style={[g.retryBtn, { paddingHorizontal: 16, paddingVertical: 8 }]}>
+              <Ionicons name="refresh" size={14} color="#fff" />
+              <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Top controls overlay */}
+        <View style={g.topControls} pointerEvents="box-none">
+          {/* Back → mini */}
+          <TouchableOpacity style={g.topIconBtn} onPress={enterMini}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Play/Pause */}
+          <TouchableOpacity style={g.topIconBtn} onPress={() => setPlaying(!isPlaying)}>
+            {buffering && isReady
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />}
+          </TouchableOpacity>
+
+          {/* Landscape fullscreen */}
+          <TouchableOpacity style={g.topIconBtn} onPress={toggleLandscape}>
+            <MaterialIcons name="screen-rotation" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          {/* LIVE badge */}
+          {isLive && (
+            <View style={g.topLiveBadge}>
+              <View style={g.liveDot} />
+              <Text style={g.liveTxt}>LIVE</Text>
+            </View>
+          )}
+        </View>
+      </View>
     );
   }
 
@@ -1290,6 +1435,15 @@ export default function GlobalVideoPlayer() {
                 <TouchableOpacity onPress={() => { setAspect(a => ASPECT_CYCLE[(ASPECT_CYCLE.indexOf(a) + 1) % ASPECT_CYCLE.length]); bumpCtrl(); }} style={g.toolBtn}>
                   <MaterialIcons name="aspect-ratio" size={20} color="#fff" />
                 </TouchableOpacity>
+                {Platform.OS !== 'web' && (
+                  <TouchableOpacity onPress={toggleLandscape} style={g.toolBtn} hitSlop={8}>
+                    <MaterialIcons
+                      name={isLandscape ? 'stay-primary-portrait' : 'stay-primary-landscape'}
+                      size={20}
+                      color={isLandscape ? C.primary : '#fff'}
+                    />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={() => { setLocked(v => !v); bumpCtrl(); }} style={g.toolBtn}>
                   <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={20} color="#fff" />
                 </TouchableOpacity>
@@ -1397,6 +1551,29 @@ const g = StyleSheet.create({
 
   lockBadge: { position: 'absolute', alignSelf: 'center', top: '46%', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: C.border },
   lockTxt:   { color: '#fff', fontSize: 13 },
+
+  // Top mode (video at top, related channels visible below)
+  topRoot: {
+    position: 'absolute', left: 0, right: 0,
+    backgroundColor: '#000', zIndex: 9999, elevation: 50,
+  },
+  topControls: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingTop: 8, paddingBottom: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)', gap: 6,
+  },
+  topIconBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  topLiveBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.live, borderRadius: 4,
+    paddingHorizontal: 7, paddingVertical: 3,
+    marginLeft: 4,
+  },
 
   // Mini
   miniRoot: {

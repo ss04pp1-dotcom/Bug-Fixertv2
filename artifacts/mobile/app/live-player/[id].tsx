@@ -159,6 +159,8 @@ export default function LivePlayerScreen() {
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
   // ── Open the singleton player once sources are ready ───────────────────────
+  // startInTop: true → player renders at top portion only (video-at-top layout).
+  // User can press the landscape button to expand to true fullscreen + landscape.
   useEffect(() => {
     if (sources.length === 0) return;
     openPlayer({
@@ -168,6 +170,7 @@ export default function LivePlayerScreen() {
       contentType: 'channel',
       sources,
       isLive: true,
+      startInTop: true,
     });
   }, [sources, contentTitle, logoUrl, id, openPlayer]);
 

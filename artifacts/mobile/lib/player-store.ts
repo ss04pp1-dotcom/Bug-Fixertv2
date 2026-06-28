@@ -1,10 +1,3 @@
-/**
- * Unified Global Player Store
- *
- * ONE store, ONE Video instance. The player lives at the _layout level
- * and NEVER unmounts during mini ↔ fullscreen transitions.
- * Only the wrapper layout changes — ExoPlayer/AVPlayer keeps playing.
- */
 import { create } from 'zustand';
 
 export interface PlayerSource {
@@ -16,7 +9,7 @@ export interface PlayerSource {
   cookieExpiresAt?: string | null;
 }
 
-export type PlayerMode = 'hidden' | 'mini' | 'fullscreen';
+export type PlayerMode = 'hidden' | 'mini' | 'fullscreen' | 'top';
 
 interface OpenParams {
   title: string;
@@ -25,8 +18,8 @@ interface OpenParams {
   contentType: 'channel' | 'movie' | 'series';
   sources: PlayerSource[];
   isLive?: boolean;
-  /** caller can request to start in mini mode (e.g. "play in background") */
   startInMini?: boolean;
+  startInTop?: boolean;
 }
 
 interface GlobalPlayerState {
@@ -40,17 +33,13 @@ interface GlobalPlayerState {
   isLive: boolean;
   isPlaying: boolean;
 
-  /** open + auto enter fullscreen (or mini if startInMini) */
   open: (params: OpenParams) => void;
-  /** shrink to corner — Video keeps playing, NO reload */
   enterMini: () => void;
-  /** expand corner back to fullscreen — Video keeps playing, NO reload */
+  enterTop: () => void;
   expand: () => void;
-  /** fully hide + clear sources (called on close button) */
   hide: () => void;
   setPlaying: (v: boolean) => void;
   setSrcIdx: (i: number) => void;
-  /** replace sources for the SAME content (e.g. server refresh) without changing mode */
   setSources: (s: PlayerSource[]) => void;
 }
 
@@ -67,7 +56,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
 
   open: (p) =>
     set({
-      mode: p.startInMini ? 'mini' : 'fullscreen',
+      mode: p.startInTop ? 'top' : p.startInMini ? 'mini' : 'fullscreen',
       title: p.title,
       logo: p.logo,
       contentId: p.contentId,
@@ -79,6 +68,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
     }),
 
   enterMini: () => set({ mode: 'mini' }),
+  enterTop: () => set({ mode: 'top' }),
   expand: () => set({ mode: 'fullscreen' }),
   hide: () =>
     set({
@@ -97,6 +87,4 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
   setSources: (sources) => set({ sources, srcIdx: 0 }),
 }));
 
-// Back-compat: old code that imports usePlayerStore still works.
-// It just reads the same singleton.
 export const usePlayerStore = useGlobalPlayer;
