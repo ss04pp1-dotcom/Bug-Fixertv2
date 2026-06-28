@@ -441,6 +441,14 @@ export class GitHubSyncService implements OnModuleInit {
     const byGhId = new Map<string, string>();   // githubChannelId → channelId (within this sync)
     const slugSet = new Set<string>();           // slugs already used in this sync
 
+    // Pre-load all existing channel slugs so uniqueSlug() never collides with the DB.
+    // We only select slug (one string per row) — far lighter than loading full channel objects.
+    const existingSlugRows = await this.prisma.channel.findMany({
+      where: { deletedAt: null },
+      select: { slug: true },
+    });
+    for (const row of existingSlugRows) slugSet.add(row.slug);
+
     const categoryCache = new Map<string, string>(); // groupName → categoryId
 
     const BATCH = 100;
@@ -536,14 +544,30 @@ export class GitHubSyncService implements OnModuleInit {
     }
 
     // ── 1. Resolve Channel ───────────────────────────────────────────────────
+    //
+    // Priority: normalizedName match FIRST (most reliable), then githubChannelId.
+    // We deliberately do NOT use githubChannelId as the primary lookup because
+    // many M3U files assign the same tvg-id to several distinct channels
+    // (e.g. tvg-id="toffee" for "Toffee 1", "Toffee 2", … "Toffee 5").
+    // Using tvg-id first would collapse all those into one channel; using the
+    // normalizedName keeps them separate.
 
     let channelId: string | undefined =
-      (item.githubChannelId ? byGhId.get(item.githubChannelId) : undefined) ??
-      byNorm.get(normalized);
+      byNorm.get(normalized) ??
+      (item.githubChannelId ? byGhId.get(item.githubChannelId) : undefined);
+
+    // Verify that a githubChannelId hit actually matches this normalizedName;
+    // if it doesn't, treat as "not found" so we look up / create correctly.
+    if (channelId && !byNorm.has(normalized)) {
+      const ghChannel = await this.prisma.channel.findFirst({
+        where: { id: channelId, normalizedName: normalized, deletedAt: null },
+        select: { id: true },
+      });
+      if (!ghChannel) channelId = undefined;
+    }
 
     if (!channelId) {
-      // Maps were built before the sync started; another concurrent sync for a
-      // different source may have created this channel since then — re-check DB.
+      // Not in in-memory maps — re-check DB (concurrent sync may have created it)
       const existingInDb = await this.prisma.channel.findFirst({
         where: { normalizedName: normalized, deletedAt: null },
         select: { id: true },
@@ -554,6 +578,7 @@ export class GitHubSyncService implements OnModuleInit {
         byNorm.set(normalized, channelId);
         if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
       } else {
+        // Create a brand-new channel
         const slug = uniqueSlug(slugify(item.name), slugSet);
         try {
           const created = await this.prisma.channel.create({
@@ -573,9 +598,14 @@ export class GitHubSyncService implements OnModuleInit {
           stats.added++;
         } catch (e: any) {
           if (e?.code !== P2002) throw e;
-          // Another process won the race — adopt the winner
+          // Race condition (another process won) — find the winner by normalizedName or slug
           const winner = await this.prisma.channel.findFirst({
-            where: { normalizedName: normalized, deletedAt: null },
+            where: {
+              OR: [
+                { normalizedName: normalized, deletedAt: null },
+                { slug: slugify(item.name), deletedAt: null },
+              ],
+            },
             select: { id: true },
           });
           if (!winner) throw e;
@@ -586,7 +616,7 @@ export class GitHubSyncService implements OnModuleInit {
         if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId as string);
       }
     } else {
-      // Channel already exists — sync non-overridden metadata from source
+      // Channel already found — update metadata (never overwrite admin overrides)
       const ch = await this.prisma.channel.findUnique({
         where: { id: channelId },
         select: { adminLogoOverride: true, adminNameOverride: true, adminCategoryIdOverride: true },
@@ -595,7 +625,19 @@ export class GitHubSyncService implements OnModuleInit {
       if (!ch?.adminNameOverride) updateData.name = item.name;
       if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
       if (categoryId && !ch?.adminCategoryIdOverride) updateData.categoryId = categoryId;
-      await this.prisma.channel.update({ where: { id: channelId }, data: updateData });
+      try {
+        await this.prisma.channel.update({ where: { id: channelId }, data: updateData });
+      } catch (e: any) {
+        if (e?.code !== P2002) throw e;
+        // normalizedName conflicts with another channel — update everything except normalizedName
+        const { normalizedName: _skip, ...safeData } = updateData as Record<string, unknown>;
+        if (Object.keys(safeData).length > 0) {
+          await this.prisma.channel.update({ where: { id: channelId }, data: safeData });
+        }
+      }
+      stats.updated++;
+      byNorm.set(normalized, channelId);
+      if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
     }
 
     // ── 2. Resolve ChannelServer ─────────────────────────────────────────────
