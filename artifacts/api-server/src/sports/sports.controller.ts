@@ -42,6 +42,20 @@ export class SportsController {
     return this.sportsService.findAllSports({ limit: limit ? Number(limit) : 200, search });
   }
 
+  @Roles('super_admin', 'admin')
+  @Post('sports')
+  @ApiOperation({ summary: 'Create a sport type' })
+  createSportType(@Body() body: { name: string; slug?: string; icon?: string }) {
+    return this.sportsService.createSport(body);
+  }
+
+  @Roles('super_admin', 'admin')
+  @Delete('sports/:id')
+  @ApiOperation({ summary: 'Delete a sport type' })
+  removeSportType(@Param('id') id: string) {
+    return this.sportsService.removeSport(id);
+  }
+
   // ──────────────── Matches ────────────────
 
   @Public()

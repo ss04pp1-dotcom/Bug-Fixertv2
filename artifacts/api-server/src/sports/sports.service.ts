@@ -13,6 +13,17 @@ export class SportsService {
 
   // ──────────────── Sport Types ────────────────
 
+  async createSport(data: { name: string; slug?: string; icon?: string }) {
+    const slug = data.slug || data.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    return this.prisma.sport.create({
+      data: { name: data.name, slug, icon: data.icon ?? null },
+    });
+  }
+
+  async removeSport(id: string) {
+    await this.prisma.sport.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
+  }
+
   async findAllSports(query: { limit?: number; search?: string }) {
     const where: Prisma.SportWhereInput = {};
     if (query.search) where.name = { contains: query.search, mode: 'insensitive' };

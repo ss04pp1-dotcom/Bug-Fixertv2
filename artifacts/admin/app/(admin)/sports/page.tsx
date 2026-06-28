@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight,
-  Menu, RefreshCw, Trophy, Users, Calendar, Tv,
+  Menu, RefreshCw, Trophy, Users, Calendar, Tv, Layers,
 } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 
@@ -38,7 +38,7 @@ interface PaginatedResponse<T> {
   meta: { total: number; totalPages: number; page: number };
 }
 
-type Tab = "matches" | "teams" | "tournaments";
+type Tab = "matches" | "teams" | "tournaments" | "sports";
 
 const STATUS_COLORS: Record<string, string> = {
   live: "bg-red-500/15 text-red-400",
@@ -69,6 +69,7 @@ export default function Sports() {
           { key: "matches" as Tab, label: "Matches", icon: Tv },
           { key: "teams" as Tab, label: "Teams", icon: Users },
           { key: "tournaments" as Tab, label: "Tournaments", icon: Trophy },
+          { key: "sports" as Tab, label: "Sport Types", icon: Layers },
         ]).map(tab => (
           <button
             key={tab.key}
@@ -91,6 +92,7 @@ export default function Sports() {
         {activeTab === "matches" && <MatchesTab />}
         {activeTab === "teams" && <TeamsTab />}
         {activeTab === "tournaments" && <TournamentsTab />}
+        {activeTab === "sports" && <SportTypesTab />}
       </div>
     </>
   );
@@ -152,6 +154,7 @@ function MatchesTab() {
   const { data: sportsData } = useApi<{ data: Sport[] }>("/v1/sports/sports?limit=200");
   const { data: tournamentsData } = useApi<{ data: Tournament[] }>(`/v1/sports/tournaments?limit=200${filterSport ? `&sportId=${filterSport}` : ""}`);
   const { data: teamsData } = useApi<{ data: Team[] }>(`/v1/sports/teams?limit=200${filterSport ? `&sportId=${filterSport}` : ""}`);
+  const { data: channelsData } = useApi<{ data: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[] }>("/v1/channels?limit=500&isActive=true");
   const { call, loading: actionLoading } = useApiCallState();
 
   const matches = data?.data ?? [];
