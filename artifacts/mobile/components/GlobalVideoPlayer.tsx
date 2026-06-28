@@ -538,10 +538,10 @@ export default function GlobalVideoPlayer() {
       // hide fullscreen controls when shrinking
       ctrlOpacity.value = withTiming(0, { duration: 200 });
       setShowCtrl(false); showCtrlRef.current = false;
-    } else if (mode === 'fullscreen') {
+    } else if (mode === 'fullscreen' || mode === 'top') {
       miniScale.value = withSpring(0, { damping: 20, stiffness: 260 });
       miniOpac.value  = withTiming(0, { duration: 180 });
-      // show controls in fullscreen
+      // show controls immediately when entering fullscreen or top mode
       bumpCtrl();
     }
   }, [mode, bumpCtrl]);
@@ -678,7 +678,7 @@ export default function GlobalVideoPlayer() {
   useEffect(() => { sourcesRef.current = sources; }, [sources]);
 
   useEffect(() => {
-    if (mode === 'fullscreen') startHide();
+    if (mode === 'fullscreen' || mode === 'top') startHide();
     return () => { if (ctrlTimer.current) clearTimeout(ctrlTimer.current); };
   }, [mode, startHide]);
 
@@ -1112,6 +1112,7 @@ export default function GlobalVideoPlayer() {
 
   // ═════════════════════════════════════════════════════════════════════════
   // TOP MODE  (video at top of screen, related channels visible below)
+  // Full controls UI matching the player screenshot design.
   // ═════════════════════════════════════════════════════════════════════════
   if (mode === 'top') {
     const topH = Math.round(SW * 9 / 16);
@@ -1124,8 +1125,8 @@ export default function GlobalVideoPlayer() {
             paused={!isPlaying}
             rate={speed}
             volume={videoVolume}
-            resizeMode="cover"
-            pip={false}
+            resizeMode={aspect}
+            pip={pip}
             isLive={isLive}
             videoRef={videoRef}
             selectedVideoTrack={selectedVideoTrack}
@@ -1152,10 +1153,19 @@ export default function GlobalVideoPlayer() {
           />
         )}
 
+        {/* Brightness overlay */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, { opacity: (1 - brightness) * 0.85 }]}
+        />
+
         {/* Buffering */}
         {(buffering || !isReady) && !playerError && nativeSource && (
           <View style={g.overlayCenter} pointerEvents="none">
             <ActivityIndicator size="large" color={C.primary} />
+            <Text style={g.bufferingTxt}>
+              {isLive ? 'Buffering live stream…' : 'Buffering…'}
+            </Text>
           </View>
         )}
 
@@ -1164,40 +1174,190 @@ export default function GlobalVideoPlayer() {
           <View style={g.overlayCenter}>
             <Ionicons name="alert-circle-outline" size={32} color={C.live} />
             <Text style={[g.errorTxt, { fontSize: 13 }]}>Playback Failed</Text>
-            <TouchableOpacity onPress={refreshStream} style={[g.retryBtn, { paddingHorizontal: 16, paddingVertical: 8 }]}>
-              <Ionicons name="refresh" size={14} color="#fff" />
-              <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
-            </TouchableOpacity>
+            <View style={[g.errorActions, { marginTop: 10 }]}>
+              {sources.length > 1 && srcIdx < sources.length - 1 && (
+                <TouchableOpacity onPress={() => switchToSource(srcIdx + 1)} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
+                  <Text style={[g.retryTxt, { fontSize: 12 }]}>Try Server {srcIdx + 2}</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={refreshStream} style={[g.retryBtn, { paddingHorizontal: 16, paddingVertical: 8 }]}>
+                <Ionicons name="refresh" size={14} color="#fff" />
+                <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* Top controls overlay */}
-        <View style={g.topControls} pointerEvents="box-none">
-          {/* Back → mini */}
-          <TouchableOpacity style={g.topIconBtn} onPress={enterMini}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </TouchableOpacity>
+        {/* Gesture layer */}
+        {!pipActive && (
+          <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
+        )}
 
-          {/* Play/Pause */}
-          <TouchableOpacity style={g.topIconBtn} onPress={() => setPlaying(!isPlaying)}>
-            {buffering && isReady
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />}
-          </TouchableOpacity>
+        {/* Full controls overlay */}
+        {showCtrl && !pipActive && !playerError && (
+          <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
+            <LinearGradient
+              colors={['rgba(0,0,0,0.82)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.88)']}
+              locations={[0, 0.28, 0.62, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
 
-          {/* Landscape fullscreen */}
-          <TouchableOpacity style={g.topIconBtn} onPress={toggleLandscape}>
-            <MaterialIcons name="screen-rotation" size={20} color="#fff" />
-          </TouchableOpacity>
-
-          {/* LIVE badge */}
-          {isLive && (
-            <View style={g.topLiveBadge}>
-              <View style={g.liveDot} />
-              <Text style={g.liveTxt}>LIVE</Text>
+            {/* Top bar */}
+            <View style={[g.topBar, { paddingTop: 10 }]}>
+              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
+                <Ionicons name="arrow-back" size={22} color="#fff" />
+              </TouchableOpacity>
+              <View style={{ flex: 1, marginHorizontal: 8 }}>
+                <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>
+                {streamFormat !== 'UNKNOWN' && (
+                  <Text style={g.formatBadge}>{streamFormat}</Text>
+                )}
+              </View>
+              <View style={g.topRight}>
+                {Platform.OS !== 'web' && (
+                  <TouchableOpacity style={g.iconBtn} onPress={() => { setPip(v => !v); bumpCtrl(); }}>
+                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={g.iconBtn} onPress={refreshStream}>
+                  <Ionicons name="refresh-outline" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-        </View>
+
+            {/* Server pills */}
+            {sources.length > 1 && (
+              <View style={g.pillRow}>
+                {sources.map((s, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => switchToSource(i)}
+                    style={[g.pill, i === srcIdx && g.pillActive, s.cookieExpired && g.pillExpired]}
+                  >
+                    <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt, s.cookieExpired && g.pillExpiredTxt]}>
+                      {i === srcIdx ? '● ' : ''}{s.label || `Server ${i + 1}`}{s.cookieExpired ? ' ⚠' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* LIVE badge */}
+            {isLive && (
+              <View style={g.liveRow}>
+                <View style={g.liveBadge}>
+                  <View style={g.liveDot} />
+                  <Text style={g.liveTxt}>LIVE</Text>
+                </View>
+                {isReady && !buffering && (
+                  <View style={g.livePing}>
+                    <Ionicons name="wifi" size={11} color={C.green} />
+                    <Text style={g.livePingTxt}>
+                      {selectedVidIdx >= 0 && videoTracks[selectedVidIdx]?.height
+                        ? `${videoTracks[selectedVidIdx].height}p`
+                        : 'HD'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Center controls */}
+            <View style={g.centerPanel} pointerEvents="box-none">
+              <View style={g.glassRow}>
+                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-back" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
+                  {buffering && isReady
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-forward" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Bottom tool row */}
+            <View style={[g.bottomBar, { paddingBottom: 10 }]}>
+              {!isLive && duration > 0 && (
+                <View style={g.progressRow}>
+                  <Text style={g.timeTxt}>{fmt(currentTime)}</Text>
+                  <TouchableOpacity
+                    style={g.trackWrap}
+                    activeOpacity={1}
+                    onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+                    onPress={(e) => {
+                      if (!trackWidthRef.current) return;
+                      seekToFrac(e.nativeEvent.locationX / trackWidthRef.current);
+                    }}
+                  >
+                    <View style={g.trackBg}>
+                      <LinearGradient
+                        colors={[C.primary, C.accent]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        style={[g.trackFill, { width: `${progress * 100}%` as any }]}
+                      />
+                      <View style={[g.trackThumb, { left: `${Math.min(100, progress * 100)}%` as any }]} />
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={g.timeTxt}>{fmt(duration)}</Text>
+                </View>
+              )}
+              <View style={g.toolRow}>
+                <TouchableOpacity onPress={() => { setSheet('speed'); bumpCtrl(); }} style={g.toolBtn}>
+                  <Text style={g.speedTxt}>{speed}×</Text>
+                </TouchableOpacity>
+                {Platform.OS !== 'web' && (
+                  <TouchableOpacity onPress={() => { setSheet('quality'); bumpCtrl(); }} style={g.toolBtn}>
+                    <MaterialIcons name="hd" size={22} color={selectedVidIdx !== -1 ? C.primary : '#fff'} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => { setSheet('audio'); bumpCtrl(); }} style={g.toolBtn}>
+                  <Ionicons name="musical-note-outline" size={20} color={selectedAudIdx !== -1 ? C.primary : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setSheet('subtitle'); bumpCtrl(); }} style={g.toolBtn}>
+                  <MaterialCommunityIcons name="subtitles-outline" size={20} color={selectedSubIdx !== -1 ? C.primary : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setAspect(a => ASPECT_CYCLE[(ASPECT_CYCLE.indexOf(a) + 1) % ASPECT_CYCLE.length]); bumpCtrl(); }} style={g.toolBtn}>
+                  <MaterialIcons name="aspect-ratio" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={toggleLandscape} style={g.toolBtn} hitSlop={8}>
+                  <MaterialIcons name="screen-rotation" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Tap to show controls when hidden */}
+        {!showCtrl && !pipActive && !playerError && (
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={bumpCtrl} />
+        )}
+
+        {/* Seek feedback + swipe indicator */}
+        {!pipActive && seekSide && (
+          <SeekFeedback
+            key={seekSide.side + Date.now()}
+            side={seekSide.side}
+            seconds={seekSide.secs}
+            onDone={() => setSeekSide(null)}
+          />
+        )}
+        {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
+
+        {/* Settings sheet */}
+        <SettingsSheet
+          visible={sheet !== 'none'} sheet={sheet}
+          onClose={() => setSheet('none')} onSelect={handleSheetSelect}
+          speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
+          selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
+        />
       </View>
     );
   }
