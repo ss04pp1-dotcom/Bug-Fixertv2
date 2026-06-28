@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import Sidebar from "./Sidebar";
 import { getToken, clearToken } from "@/lib/auth";
 import { useApiQuery } from "@/lib/use-api";
+import { API_CONFIG } from "@/lib/config/api";
 
 // D-008 fix: profile fetch goes through React Query so the in-flight request
 // is deduped with the one in Sidebar.tsx (same query key).
 interface AdminProfile { id: string; identifier: string }
+interface Setting { key: string; value: unknown }
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -21,11 +23,15 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
+// Ping the API server every KEEP_ALIVE_INTERVAL_MS to prevent Render from sleeping.
+const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000; // 8 minutes
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [checked, setChecked]     = useState(false);
   const [timedOut, setTimedOut]   = useState(false);
   const router = useRouter();
+  const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const token = typeof window !== "undefined" ? getToken() : null;
   // D-008: shared React Query hook — dedupes the profile fetch with Sidebar
@@ -34,6 +40,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "/v1/auth/profile",
     { enabled: !!token, retry: false },
   );
+
+  // Fetch settings once to check keep_alive_enabled
+  const { data: settingsData } = useApiQuery<Setting[]>(
+    ["settings-keep-alive"],
+    "/v1/settings",
+    { enabled: !!token && !isError, staleTime: 5 * 60 * 1000, retry: false },
+  );
+
+  // ── Keep-alive ping ────────────────────────────────────────────────────────
+  // Reads keep_alive_enabled from settings. If true, pings /healthz every
+  // 8 minutes so the Render server never goes to sleep from inactivity.
+  useEffect(() => {
+    if (!settingsData) return;
+
+    const setting = (settingsData as Setting[]).find(s => s.key === "keep_alive_enabled");
+    const enabled = setting ? String(setting.value) !== "false" : true; // default on
+
+    if (keepAliveRef.current) {
+      clearInterval(keepAliveRef.current);
+      keepAliveRef.current = null;
+    }
+
+    if (!enabled) return;
+
+    const ping = () => {
+      try {
+        fetch(`${API_CONFIG.BASE_URL}/healthz`, {
+          method: "GET",
+          cache: "no-store",
+        }).catch(() => {/* non-fatal — server may be temporarily unavailable */});
+      } catch { /* non-fatal */ }
+    };
+
+    // Ping once immediately (wakes a sleeping server), then on interval
+    ping();
+    keepAliveRef.current = setInterval(ping, KEEP_ALIVE_INTERVAL_MS);
+
+    return () => {
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current);
+    };
+  }, [settingsData]);
 
   useEffect(() => {
     if (!token) {

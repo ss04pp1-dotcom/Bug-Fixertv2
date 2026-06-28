@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Github, Plus, RefreshCw, Trash2, Edit, ToggleLeft, ToggleRight,
   CheckCircle, XCircle, Clock, Loader2, ExternalLink, ChevronDown, ChevronUp,
-  Server, Tv, AlertTriangle, Zap,
+  Server, Tv, AlertTriangle, Zap, Activity,
 } from "lucide-react";
 import { useApiQuery, useApiCallState, useInvalidate, getApiErrorMessage } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
@@ -42,6 +42,9 @@ interface SyncLog {
 }
 
 const KEY = ["github-sources"];
+
+// Auto-refresh interval for the sources table (so "Last Sync" / "Next Sync" stay current)
+const REFRESH_INTERVAL_MS = 20_000; // 20 seconds
 
 function StatusBadge({ status, isSyncing }: { status: string | null; isSyncing: boolean }) {
   if (isSyncing) return (
@@ -81,21 +84,67 @@ function formatMs(ms: number | null) {
 
 export default function GitHubSourcesPage() {
   const invalidate = useInvalidate();
-  const { data: sources = [], isLoading } = useApiQuery<GitHubSource[]>(KEY, "/v1/github-sources");
+  const { data: sources = [], isLoading } = useApiQuery<GitHubSource[]>(KEY, "/v1/github-sources", {
+    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  });
 
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<GitHubSource | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const [lastAutoSync, setLastAutoSync] = useState<string | null>(null);
 
   const nameRef     = useRef<HTMLInputElement>(null);
   const urlRef      = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const autoSyncedRef = useRef<Set<string>>(new Set());
 
   const openAdd  = () => { setEditItem(null); setModalError(null); setShowModal(true); };
   const openEdit = (s: GitHubSource) => { setEditItem(s); setModalError(null); setShowModal(true); };
+
+  // ── Auto-trigger sync for overdue sources ──────────────────────────────────
+  // When the page loads (or after each auto-refresh), any enabled source that
+  // is past its sync interval and not already syncing gets triggered automatically.
+  // This acts as a client-side fallback if the server-side cron missed a tick
+  // (e.g. server was sleeping on Render free tier).
+  const triggerOverdue = useCallback(async (sourceList: GitHubSource[]) => {
+    const now = Date.now();
+    for (const source of sourceList) {
+      if (!source.enabled || source.isSyncing) continue;
+      if (syncingIds.has(source.id)) continue;
+      if (autoSyncedRef.current.has(source.id)) continue;
+
+      const intervalMs = (source.syncIntervalMinutes ?? 10) * 60 * 1000;
+      const lastSyncMs = source.lastSyncAt ? new Date(source.lastSyncAt).getTime() : 0;
+      const overdue    = now - lastSyncMs >= intervalMs;
+
+      if (overdue) {
+        autoSyncedRef.current.add(source.id);
+        try {
+          await apiClient.post(`/v1/github-sources/${source.id}/sync`);
+          setSyncingIds(prev => new Set(prev).add(source.id));
+          setLastAutoSync(`Auto-synced: ${source.name} (${new Date().toLocaleTimeString()})`);
+          // Remove from syncingIds after 30s
+          setTimeout(() => {
+            setSyncingIds(prev => { const n = new Set(prev); n.delete(source.id); return n; });
+            // Clear so it can be re-triggered on next interval check
+            autoSyncedRef.current.delete(source.id);
+            invalidate(KEY);
+          }, 30_000);
+        } catch {
+          autoSyncedRef.current.delete(source.id);
+        }
+      }
+    }
+  }, [syncingIds, invalidate]);
+
+  useEffect(() => {
+    if (!sources || (sources as GitHubSource[]).length === 0) return;
+    triggerOverdue(sources as GitHubSource[]);
+  }, [sources, triggerOverdue]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -177,6 +226,28 @@ export default function GitHubSourcesPage() {
         >
           <Plus size={16} /> Add Source
         </button>
+      </div>
+
+      {/* Auto-sync / keep-alive status bar */}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex items-center gap-1.5 text-emerald-400">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          Auto-refresh every 20s
+        </div>
+        <span className="text-[#374151]">•</span>
+        <div className="flex items-center gap-1.5 text-blue-400">
+          <Activity size={12} />
+          Overdue sources auto-triggered
+        </div>
+        {lastAutoSync && (
+          <>
+            <span className="text-[#374151]">•</span>
+            <span className="text-[#8B92A5]">{lastAutoSync}</span>
+          </>
+        )}
       </div>
 
       {/* Stats */}
