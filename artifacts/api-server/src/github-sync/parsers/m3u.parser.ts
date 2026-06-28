@@ -150,13 +150,20 @@ export class M3uParser implements ChannelParser {
     name: string; logo?: string; groupCategory?: string; userAgent?: string;
     referer?: string; cookie?: string; origin?: string; tvgId?: string;
   } {
-    const attr = (key: string): string | undefined => {
-      const reDouble = new RegExp(`${key}="([^"]*)"`, 'i');
-      const reSingle = new RegExp(`${key}='([^']*)'`, 'i');
-      const m = line.match(reDouble) ?? line.match(reSingle);
-      return m?.[1] || undefined;
+    // Match attribute with double or single quotes, or unquoted value up to next space/attr
+    const attr = (...keys: string[]): string | undefined => {
+      for (const key of keys) {
+        // Double-quoted
+        const reDouble = new RegExp(`(?:^|\\s)${key}\\s*=\\s*"([^"]*)"`, 'i');
+        // Single-quoted
+        const reSingle = new RegExp(`(?:^|\\s)${key}\\s*=\\s*'([^']*)'`, 'i');
+        const m = line.match(reDouble) ?? line.match(reSingle);
+        if (m?.[1]) return m[1].trim();
+      }
+      return undefined;
     };
 
+    // ── Channel name: last comma-delimited segment ───────────────────────────
     const lastCommaIdx = line.lastIndexOf(',');
     let name = lastCommaIdx !== -1 ? line.substring(lastCommaIdx + 1).trim() : '';
 
@@ -164,15 +171,35 @@ export class M3uParser implements ChannelParser {
     const imgPrefix = name.match(/^[^\s'"]*\.(png|jpg|jpeg|webp|gif|svg)['\s]+(.+)$/i);
     if (imgPrefix) name = imgPrefix[2].trim();
 
-    return {
-      name,
-      logo: attr('tvg-logo'),
-      tvgId: attr('tvg-id'),
-      groupCategory: attr('group-title') || undefined,
-      userAgent: attr('user-agent') || attr('useragent'),
-      referer: attr('referrer') || attr('referer'),
-      cookie: attr('cookie'),
-      origin: attr('origin'),
-    };
+    // Fallback: use tvg-name attribute if comma-name is empty or looks like a URL
+    if (!name || name.startsWith('http')) {
+      const tvgName = attr('tvg-name', 'name');
+      if (tvgName) name = tvgName;
+    }
+
+    // ── Logo: try multiple attribute names ───────────────────────────────────
+    // Different generators use: tvg-logo, logo, channel-logo, tvg-icon, icon
+    const logo = attr('tvg-logo', 'logo', 'channel-logo', 'tvg-icon', 'icon');
+
+    // ── tvg-id: stable channel identifier (never fall back to tvg-name — it's the display name) ──
+    const tvgId = attr('tvg-id', 'id');
+
+    // ── group/category ───────────────────────────────────────────────────────
+    const groupCategory = attr('group-title', 'group', 'category') || undefined;
+
+    // ── User-Agent: many M3U generators use different attribute names ─────────
+    // inline in #EXTINF: user-agent="...", useragent="...", http-user-agent="..."
+    const userAgent = attr('user-agent', 'useragent', 'http-user-agent', 'ua') || undefined;
+
+    // ── Referer ──────────────────────────────────────────────────────────────
+    const referer = attr('referrer', 'referer', 'http-referrer', 'http-referer', 'origin') || undefined;
+
+    // ── Cookie ───────────────────────────────────────────────────────────────
+    const cookie = attr('cookie', 'http-cookie', 'cookies') || undefined;
+
+    // ── Origin ───────────────────────────────────────────────────────────────
+    const origin = attr('origin', 'http-origin') || undefined;
+
+    return { name, logo, tvgId, groupCategory, userAgent, referer, cookie, origin };
   }
 }
