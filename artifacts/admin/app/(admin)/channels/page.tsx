@@ -11,6 +11,7 @@ import { apiClient } from "@/lib/axios-client";
 import { ImageUpload } from "@/components/ui/image-upload";
 import BulkImportModal from "@/components/channels/bulk-import-modal";
 import { ChannelDetailModal } from "@/components/channels/channel-detail-modal";
+import { MergeDuplicatesModal } from "@/components/channels/merge-duplicates-modal";
 
 interface Channel {
   id: string;
@@ -56,7 +57,7 @@ export default function Channels() {
   const [manageId,   setManageId]   = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [merging, setMerging] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [fixingQuality, setFixingQuality] = useState(false);
 
@@ -113,21 +114,6 @@ export default function Channels() {
     }
   };
 
-  const handleMergeDuplicates = async () => {
-    if (!confirm("এটি সব duplicate চ্যানেল খুঁজে বের করে সার্ভার হিসেবে মার্জ করবে। চালিয়ে যাবেন?")) return;
-    setMerging(true);
-    try {
-      const res = await apiClient.post<any>("/v1/channels/merge-duplicates");
-      const result = res.data?.data ?? res.data;
-      alert(result?.message ?? "Merge complete");
-      refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Merge failed";
-      alert(typeof msg === "string" ? msg : "Merge failed");
-    } finally {
-      setMerging(false);
-    }
-  };
 
   const handleCleanupBadNames = async () => {
     if (!confirm("এটি image URL-এর মতো ভুল নামের চ্যানেলগুলো ডিলিট করবে। GitHub re-sync করলে সঠিক নামে ফিরে আসবে। চালিয়ে যাবেন?")) return;
@@ -294,13 +280,12 @@ export default function Channels() {
           </div>
 
           <button
-            onClick={handleMergeDuplicates}
-            disabled={merging}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-semibold hover:bg-orange-500/20 disabled:opacity-50"
-            title="Find all channels with the same name and merge them into one"
+            onClick={() => setShowMergeModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 text-xs font-semibold hover:bg-orange-500/20"
+            title="Preview and selectively merge duplicate channels"
           >
-            <GitMerge size={13} className={merging ? "animate-pulse" : ""} />
-            {merging ? "Merging…" : "Merge Duplicates"}
+            <GitMerge size={13} />
+            Merge Duplicates
           </button>
           <button
             onClick={handleCleanupBadNames}
@@ -609,6 +594,13 @@ export default function Channels() {
 
       {showImport && (
         <BulkImportModal categories={categories} onClose={() => setImport(false)} onImported={() => { setImport(false); refetch(); }} />
+      )}
+
+      {showMergeModal && (
+        <MergeDuplicatesModal
+          onClose={() => setShowMergeModal(false)}
+          onMerged={() => refetch()}
+        />
       )}
     </>
   );

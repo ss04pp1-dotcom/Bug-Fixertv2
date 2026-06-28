@@ -572,9 +572,66 @@ export class ChannelsService {
 
   // ── Manual deduplication ────────────────────────────────────────────────────
 
-  async mergeDuplicates(): Promise<{ message: string; groupsMerged: number; backfilled: number }> {
+  async previewDuplicates(): Promise<{
+    groups: Array<{
+      normalizedName: string;
+      channels: Array<{ id: string; name: string; logo: string | null; category: string | null }>;
+    }>;
+    backfilled: number;
+  }> {
+    // Backfill normalizedName for any channels missing it
+    const missing = await this.prisma.channel.findMany({
+      where: { normalizedName: null, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    let backfilled = 0;
+    for (const ch of missing) {
+      const norm = normalizeName(ch.name);
+      if (norm) {
+        await this.prisma.channel.update({ where: { id: ch.id }, data: { normalizedName: norm } });
+        backfilled++;
+      }
+    }
+
+    // Find duplicate groups
+    const raw = await this.prisma.$queryRaw<{ normalizedName: string; ids: string[] }[]>`
+      SELECT
+        normalized_name AS "normalizedName",
+        array_agg(id::text ORDER BY created_at ASC) AS ids
+      FROM channels
+      WHERE normalized_name IS NOT NULL
+        AND deleted_at IS NULL
+      GROUP BY normalized_name
+      HAVING count(*) > 1
+    `;
+
+    // Fetch full channel details for each group
+    const groups = await Promise.all(
+      raw.map(async (g) => {
+        const channels = await this.prisma.channel.findMany({
+          where: { id: { in: g.ids }, deletedAt: null },
+          select: { id: true, name: true, logo: true, category: { select: { name: true } } },
+          orderBy: { createdAt: 'asc' },
+        });
+        return {
+          normalizedName: g.normalizedName,
+          channels: channels.map(c => ({
+            id: c.id,
+            name: c.name,
+            logo: c.logo ?? null,
+            category: c.category?.name ?? null,
+          })),
+        };
+      }),
+    );
+
+    return { groups, backfilled };
+  }
+
+  async mergeDuplicates(
+    excludedNormalizedNames: string[] = [],
+  ): Promise<{ message: string; groupsMerged: number; backfilled: number }> {
     // Step 1 — Backfill normalizedName for channels that don't have it yet
-    // (e.g. channels imported via M3U before the dedup fix was applied)
     const missing = await this.prisma.channel.findMany({
       where: { normalizedName: null, deletedAt: null },
       select: { id: true, name: true },
@@ -609,7 +666,10 @@ export class ChannelsService {
       HAVING count(*) > 1
     `;
 
-    if (dupeGroups.length === 0) {
+    const excludedSet = new Set(excludedNormalizedNames);
+    const groupsToMerge = dupeGroups.filter(g => !excludedSet.has(g.normalizedName));
+
+    if (groupsToMerge.length === 0) {
       const msg = backfilled > 0
         ? `নাম পূরণ করা হয়েছে ${backfilled}টি চ্যানেলে। কোনো duplicate পাওয়া যায়নি।`
         : 'কোনো duplicate চ্যানেল পাওয়া যায়নি।';
@@ -617,7 +677,7 @@ export class ChannelsService {
     }
 
     let merged = 0;
-    for (const group of dupeGroups) {
+    for (const group of groupsToMerge) {
       try {
         await this.githubSyncService.mergeDuplicateGroup(group.normalizedName, group.ids, 'manual');
         merged++;
@@ -626,9 +686,11 @@ export class ChannelsService {
       }
     }
 
+    const skipped = dupeGroups.length - groupsToMerge.length;
     const parts: string[] = [];
     if (backfilled > 0) parts.push(`${backfilled}টি চ্যানেলে নাম backfill`);
-    parts.push(`${merged}টি duplicate group merge হয়েছে (${dupeGroups.length}টির মধ্যে)`);
+    parts.push(`${merged}টি duplicate group merge হয়েছে`);
+    if (skipped > 0) parts.push(`${skipped}টি group বাদ দেওয়া হয়েছে`);
 
     return {
       message: parts.join(' | '),

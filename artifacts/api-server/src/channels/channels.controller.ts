@@ -92,11 +92,19 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Bulk import channels (alias for /bulk)' })
   bulkImportAlias(@Body() dto: BulkImportChannelsDto) { return this.channelsService.bulkImport(dto); }
 
+  @Get('preview-duplicates')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Preview duplicate channel groups without merging' })
+  previewDuplicates() { return this.channelsService.previewDuplicates(); }
+
   @Post('merge-duplicates')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin')
-  @ApiOperation({ summary: 'Merge duplicate channels by normalized name' })
-  mergeDuplicates() { return this.channelsService.mergeDuplicates(); }
+  @ApiOperation({ summary: 'Merge duplicate channels by normalized name (optionally exclude groups)' })
+  mergeDuplicates(@Body('excludedNormalizedNames') excluded?: string[]) {
+    return this.channelsService.mergeDuplicates(excluded ?? []);
+  }
 
   @Post('cleanup-bad-names')
   @ApiBearerAuth()
