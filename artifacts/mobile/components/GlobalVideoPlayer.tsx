@@ -35,7 +35,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
+import { useGlobalPlayer, type PlayerSource, type PlayerMode } from '@/lib/player-store';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
@@ -804,13 +804,37 @@ export default function GlobalVideoPlayer() {
     },
   }), [vidW, seek, bumpCtrl, hideCtrlNow]); // ← stable deps only
 
-  // ── OS PiP — MANUAL ONLY ─────────────────────────────────────────────────
-  // PiP is intentionally NOT triggered automatically on app background.
-  // Reason: auto-PiP fired unintentionally on home press, back press, or
-  // even when video was paused. PiP is only activated via the explicit
-  // PiP button in player controls. The onPipChange callback below handles
-  // entering/exiting PiP state cleanly.
-  // (AppState listener removed — no auto-PiP)
+  // ── YouTube-style auto-PiP on app background ────────────────────────────
+  // When the user presses Home or switches apps while a video is playing,
+  // automatically enter native PiP (just like YouTube).
+  // When the user returns to the app, PiP exits and the player goes back to
+  // whichever mode it was in before (top / fullscreen / mini).
+  const autoPipRef = useRef(false); // true when WE triggered PiP (not the user)
+  const prePipModeRef = useRef<PlayerMode>('top'); // mode to restore after auto-PiP
+
+  useEffect(() => {
+    if (IS_WEB || IS_EXPO_GO || Platform.OS === 'web') return;
+    if (mode === 'hidden') return;
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      const st = useGlobalPlayer.getState();
+
+      if ((nextState === 'background' || nextState === 'inactive') && st.isPlaying && !pipActive) {
+        // App going to background while playing — trigger PiP automatically
+        prePipModeRef.current = st.mode as PlayerMode;
+        autoPipRef.current = true;
+        setPip(true);
+      }
+
+      if (nextState === 'active' && autoPipRef.current) {
+        // User came back to the app — exit auto-PiP and restore mode
+        autoPipRef.current = false;
+        setPip(false);
+      }
+    });
+
+    return () => sub.remove();
+  }, [mode, pipActive]);
 
   // ── Android back button ──────────────────────────────────────────────────
   useEffect(() => {
