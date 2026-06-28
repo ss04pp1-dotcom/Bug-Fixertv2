@@ -804,24 +804,13 @@ export default function GlobalVideoPlayer() {
     },
   }), [vidW, seek, bumpCtrl, hideCtrlNow]); // ← stable deps only
 
-  // ── OS PiP — Android + iOS ────────────────────────────────────────────────
-  // FIX: only activate PiP when video is actually playing and ready.
-  // Old code activated PiP even when paused/stopped → background PiP appeared unexpectedly.
-  useEffect(() => {
-    if (mode === 'hidden') return;
-    if (IS_EXPO_GO) return;
-    const sub = AppState.addEventListener('change', (s) => {
-      // Android: 'background'.  iOS: 'inactive' (then 'background').
-      if ((s === 'background' || (Platform.OS === 'ios' && s === 'inactive'))
-          && isReady && !playerError && isPlaying) {
-        setPip(true); // useTextureView prevents reload
-      } else if (s === 'active') {
-        // Return from background — exit PiP
-        setPip(false);
-      }
-    });
-    return () => sub.remove();
-  }, [mode, isReady, playerError, isPlaying]);
+  // ── OS PiP — MANUAL ONLY ─────────────────────────────────────────────────
+  // PiP is intentionally NOT triggered automatically on app background.
+  // Reason: auto-PiP fired unintentionally on home press, back press, or
+  // even when video was paused. PiP is only activated via the explicit
+  // PiP button in player controls. The onPipChange callback below handles
+  // entering/exiting PiP state cleanly.
+  // (AppState listener removed — no auto-PiP)
 
   // ── Android back button ──────────────────────────────────────────────────
   useEffect(() => {
@@ -991,12 +980,17 @@ export default function GlobalVideoPlayer() {
     }
   }, [srcIdx, setSrcIdx, contentType, reportPlayback]);
 
-  // ── Unlock orientation when player is hidden ─────────────────────────────
+  // ── Orientation management ────────────────────────────────────────────────
+  // fullscreen mode ALWAYS locks landscape (portrait fullscreen is removed).
+  // top/mini/hidden → restore portrait.
   useEffect(() => {
-    if (mode === 'hidden') {
+    if (IS_EXPO_GO || IS_WEB) return;
+    if (mode === 'fullscreen') {
+      lockLandscape();
+    } else {
       unlockOrientation();
     }
-  }, [mode, unlockOrientation]);
+  }, [mode, lockLandscape, unlockOrientation]);
 
   // ── Don't render if hidden ───────────────────────────────────────────────
   if (mode === 'hidden') return null;
@@ -1069,7 +1063,7 @@ export default function GlobalVideoPlayer() {
             <TouchableOpacity
               activeOpacity={1}
               style={StyleSheet.absoluteFill}
-              onPress={() => { useGlobalPlayer.getState().expand(); }}
+              onPress={() => { useGlobalPlayer.getState().enterTop(); }}
             >
               {showCtrl && (
                 <View style={g.miniOverlay}>
@@ -1080,7 +1074,7 @@ export default function GlobalVideoPlayer() {
                     <TouchableOpacity style={g.miniBtn} onPress={() => setPlaying(!isPlaying)} hitSlop={10}>
                       <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={g.miniBtn} onPress={() => useGlobalPlayer.getState().expand()} hitSlop={10}>
+                    <TouchableOpacity style={g.miniBtn} onPress={() => useGlobalPlayer.getState().enterTop()} hitSlop={10}>
                       <Ionicons name="expand-outline" size={18} color="#fff" />
                     </TouchableOpacity>
                   </View>
@@ -1305,8 +1299,8 @@ export default function GlobalVideoPlayer() {
           {/* Top bar */}
           {!isLocked && (
             <View style={[g.topBar, { paddingTop: insets.top + 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
-                <Ionicons name="arrow-back" size={22} color="#fff" />
+              <TouchableOpacity style={g.iconBtn} onPress={() => { unlockOrientation(); enterTop(); }}>
+                <Ionicons name="stay-primary-portrait" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
                 <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>

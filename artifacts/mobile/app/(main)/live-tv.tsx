@@ -72,8 +72,9 @@ export default function LiveTVScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [displayLimit, setDisplayLimit] = useState(150);
-  // Fetch ALL channels so search covers the entire database
-  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 9999 });
+  // Fetch channels — 500 covers most IPTV libraries.
+  // Search runs client-side across all loaded channels.
+  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 500 });
 
   // Reset display limit when tab or search changes
   useEffect(() => { setDisplayLimit(150); }, [activeTab, search]);
