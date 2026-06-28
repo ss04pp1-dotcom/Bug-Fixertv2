@@ -456,6 +456,38 @@ export default function GlobalVideoPlayer() {
     clampMaxY.value = SH - MINI_H - MINI_TITLE_H - 80 - (insets.bottom || 0) - MINI_MARGIN;
   }, [insets.top, insets.bottom, SH]);
 
+  // ── Controls auto-hide ───────────────────────────────────────────────────
+  // IMPORTANT: defined BEFORE any useEffect that lists bumpCtrl in its deps
+  // to avoid TDZ (temporal dead zone) crash on web.
+  const setCtrlHidden = useCallback(() => {
+    setShowCtrl(false);
+    showCtrlRef.current = false;
+  }, []);
+
+  const startHide = useCallback(() => {
+    if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
+    ctrlTimer.current = setTimeout(() => {
+      ctrlOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
+        if (finished) runOnJS(setCtrlHidden)();
+      });
+    }, 4500);
+  }, [ctrlOpacity, setCtrlHidden]);
+
+  const bumpCtrl = useCallback(() => {
+    if (isLocked) return;
+    ctrlOpacity.value = withTiming(1, { duration: 200 });
+    setShowCtrl(true);
+    showCtrlRef.current = true;
+    startHide();
+  }, [isLocked, ctrlOpacity, startHide]);
+
+  const hideCtrlNow = useCallback(() => {
+    if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
+    ctrlOpacity.value = withTiming(0, { duration: 300 });
+    setShowCtrl(false);
+    showCtrlRef.current = false;
+  }, [ctrlOpacity]);
+
   // ── Enter / leave mini animation ─────────────────────────────────────────
   useEffect(() => {
     if (mode === 'mini') {
@@ -605,36 +637,6 @@ export default function GlobalVideoPlayer() {
 
   // ── Keep sourcesRef in sync ──────────────────────────────────────────────
   useEffect(() => { sourcesRef.current = sources; }, [sources]);
-
-  // ── Controls auto-hide ───────────────────────────────────────────────────
-  const setCtrlHidden = useCallback(() => {
-    setShowCtrl(false);
-    showCtrlRef.current = false;
-  }, []);
-
-  const startHide = useCallback(() => {
-    if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
-    ctrlTimer.current = setTimeout(() => {
-      ctrlOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
-        if (finished) runOnJS(setCtrlHidden)();
-      });
-    }, 4500);
-  }, [ctrlOpacity, setCtrlHidden]);
-
-  const bumpCtrl = useCallback(() => {
-    if (isLocked) return;
-    ctrlOpacity.value = withTiming(1, { duration: 200 });
-    setShowCtrl(true);
-    showCtrlRef.current = true;
-    startHide();
-  }, [isLocked, ctrlOpacity, startHide]);
-
-  const hideCtrlNow = useCallback(() => {
-    if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
-    ctrlOpacity.value = withTiming(0, { duration: 300 });
-    setShowCtrl(false);
-    showCtrlRef.current = false;
-  }, [ctrlOpacity]);
 
   useEffect(() => {
     if (mode === 'fullscreen') startHide();
