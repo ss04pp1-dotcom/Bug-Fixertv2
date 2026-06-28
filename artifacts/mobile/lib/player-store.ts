@@ -18,7 +18,6 @@ interface OpenParams {
   contentType: 'channel' | 'movie' | 'series';
   sources: PlayerSource[];
   isLive?: boolean;
-  startInMini?: boolean;
   startInTop?: boolean;
 }
 
@@ -56,7 +55,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
 
   open: (p) =>
     set({
-      mode: p.startInTop ? 'top' : p.startInMini ? 'mini' : 'fullscreen',
+      mode: p.startInTop ? 'top' : 'fullscreen',
       title: p.title,
       logo: p.logo,
       contentId: p.contentId,
@@ -67,7 +66,8 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       isPlaying: true,
     }),
 
-  enterMini: () => set({ mode: 'mini' }),
+  // Mini mode is replaced by native PiP — enterMini now goes to top mode.
+  enterMini: () => set({ mode: 'top' }),
   enterTop: () => set({ mode: 'top' }),
   expand: () => set({ mode: 'fullscreen' }),
   hide: () =>

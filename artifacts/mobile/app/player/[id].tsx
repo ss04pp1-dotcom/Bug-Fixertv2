@@ -211,18 +211,18 @@ export default function PlayerScreen() {
   // ── When episode changes, reload stream (the open effect will fire again) ──
   // epIdx already in loadStream deps, so it auto-reloads.
 
-  // ── Back button → minimize to mini (NO reload) ──────────────────────────────
+  // ── Back button → triggers PiP via GlobalVideoPlayer's back handler ─────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Let GlobalVideoPlayer handle back (it will enterMini)
+      // GlobalVideoPlayer handles back: fullscreen→top, top→PiP (native).
       return false;
     });
     return () => sub.remove();
   }, []);
 
   const handleBack = useCallback(() => {
-    // The GlobalVideoPlayer's back handler already calls enterMini() which
-    // shrinks the player without reload. We just navigate away from this screen.
+    // GlobalVideoPlayer's back handler triggers PiP automatically.
+    // We just navigate away from this screen.
     if (router.canGoBack()) router.back();
     else router.replace('/(main)');
   }, []);
