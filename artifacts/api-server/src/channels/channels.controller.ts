@@ -104,6 +104,12 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Soft-delete channels with image-URL-style names from broken M3U parsing' })
   cleanupBadNames() { return this.channelsService.cleanupBadChannelNames(); }
 
+  @Post('fix-quality-names')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin')
+  @ApiOperation({ summary: 'Strip quality/variant suffixes (HD, 720p, (1), (a) etc.) from channel names and merge duplicates' })
+  fixQualityNames() { return this.channelsService.fixQualityNames(); }
+
   @Post('parse-playlist')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')

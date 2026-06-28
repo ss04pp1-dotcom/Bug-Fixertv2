@@ -58,6 +58,7 @@ export default function Channels() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [merging, setMerging] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [fixingQuality, setFixingQuality] = useState(false);
 
   const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
@@ -141,6 +142,29 @@ export default function Channels() {
       alert(typeof msg === "string" ? msg : "Cleanup failed");
     } finally {
       setCleaning(false);
+    }
+  };
+
+  const handleFixQualityNames = async () => {
+    if (!confirm(
+      "এটি সব চ্যানেলের নাম থেকে (HD), (720p), (1080p), (4K), (1), (2), (a), (b) ইত্যাদি suffix সরিয়ে দেবে।\n" +
+      "একই নামের চ্যানেল থাকলে merge হয়ে যাবে।\n\nচালিয়ে যাবেন?"
+    )) return;
+    setFixingQuality(true);
+    try {
+      const res = await apiClient.post<any>("/v1/channels/fix-quality-names");
+      const result = res.data?.data ?? res.data;
+      const examples = (result?.examples ?? []).slice(0, 5).join("\n");
+      alert(
+        `✅ Done!\nRenamed: ${result?.renamed ?? 0}\nMerged: ${result?.merged ?? 0}\nUnchanged: ${result?.unchanged ?? 0}` +
+        (examples ? `\n\nExamples:\n${examples}` : "")
+      );
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Fix failed";
+      alert(typeof msg === "string" ? msg : "Fix failed");
+    } finally {
+      setFixingQuality(false);
     }
   };
 
@@ -286,6 +310,15 @@ export default function Channels() {
           >
             <RefreshCw size={13} className={cleaning ? "animate-spin" : ""} />
             {cleaning ? "Cleaning…" : "Fix Bad Names"}
+          </button>
+          <button
+            onClick={handleFixQualityNames}
+            disabled={fixingQuality}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 disabled:opacity-50"
+            title="Strip (HD), (720p), (1), (a) etc. from channel names and merge duplicates"
+          >
+            <Settings2 size={13} className={fixingQuality ? "animate-spin" : ""} />
+            {fixingQuality ? "Fixing…" : "Fix Quality Names"}
           </button>
           <button onClick={() => setImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20">
             <Upload size={13} /> Bulk Import

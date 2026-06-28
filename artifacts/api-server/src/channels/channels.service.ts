@@ -637,6 +637,92 @@ export class ChannelsService {
     };
   }
 
+  // ── Strip quality / variant suffixes from channel display names ─────────────
+
+  /**
+   * Strip quality/resolution labels and single-char variant suffixes from
+   * every channel's display name, then:
+   *   – If the clean name matches an existing channel → merge the two.
+   *   – Otherwise → rename in-place and re-compute normalizedName.
+   * Channels with an adminNameOverride are never touched.
+   *
+   * Patterns removed:
+   *   (HD) [720p] (1080p) (4K) (FHD) (UHD) (SD)  – quality tags in brackets
+   *   " HD" " 720p" " 4K" at end of name           – bare quality suffix
+   *   (1) (2) … (9)                                 – numbered variants
+   *   (a) (b) … (z) single letter                  – lettered variants
+   */
+  private stripQualityFromName(name: string): string {
+    return name
+      .replace(
+        /[\(\[]\s*(hd|fhd|sd|4k|uhd|720p|1080p|480p|360p|240p|2160p|576p|4320p|\d{1,2}|[a-z])\s*[\)\]]/gi,
+        '',
+      )
+      .replace(/\s+(hd|fhd|sd|4k|uhd|720p|1080p|480p|360p|576p|2160p)$/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async fixQualityNames(): Promise<{
+    renamed: number; merged: number; unchanged: number; examples: string[];
+  }> {
+    const channels = await this.prisma.channel.findMany({
+      where: { deletedAt: null, adminNameOverride: null },
+      select: { id: true, name: true, normalizedName: true },
+    });
+
+    // Build normalizedName → id map from existing channels
+    const normToId = new Map<string, string>();
+    for (const ch of channels) {
+      if (ch.normalizedName) normToId.set(ch.normalizedName, ch.id);
+    }
+
+    // Compute clean name for every channel
+    const candidates = channels
+      .map(ch => ({
+        ...ch,
+        cleanName: this.stripQualityFromName(ch.name),
+        cleanNorm: normalizeName(this.stripQualityFromName(ch.name)),
+      }))
+      .filter(ch => ch.cleanName !== ch.name); // only those that actually change
+
+    let renamed = 0;
+    let merged = 0;
+    const examples: string[] = [];
+
+    for (const ch of candidates) {
+      try {
+        const existingId = normToId.get(ch.cleanNorm);
+
+        if (existingId && existingId !== ch.id) {
+          // A channel with the clean name already exists → merge this one into it
+          await this.githubSyncService.mergeDuplicateGroup(
+            ch.cleanNorm,
+            [existingId, ch.id],
+            'manual',
+          );
+          if (examples.length < 20) examples.push(`"${ch.name}" → merged into "${ch.cleanName}"`);
+          merged++;
+        } else {
+          // No conflict — rename in-place
+          await this.prisma.channel.update({
+            where: { id: ch.id },
+            data: { name: ch.cleanName, normalizedName: ch.cleanNorm },
+          });
+          normToId.set(ch.cleanNorm, ch.id);
+          if (ch.normalizedName && ch.normalizedName !== ch.cleanNorm) normToId.delete(ch.normalizedName);
+          if (examples.length < 20) examples.push(`"${ch.name}" → "${ch.cleanName}"`);
+          renamed++;
+        }
+      } catch (e: any) {
+        this.logger.warn(`fixQualityNames: skipped "${ch.name}": ${e.message}`);
+      }
+    }
+
+    this.logger.log(`fixQualityNames: renamed=${renamed}, merged=${merged}, unchanged=${channels.length - candidates.length}`);
+    return { renamed, merged, unchanged: channels.length - candidates.length, examples };
+  }
+
   // ── Bad-name cleanup ────────────────────────────────────────────────────────
 
   /**
