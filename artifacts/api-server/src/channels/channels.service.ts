@@ -326,7 +326,14 @@ export class ChannelsService {
 
   async setHealthOverride(id: string, override: HealthOverride) {
     await this.findOne(id);
-    return this.prisma.channel.update({ where: { id }, data: { healthOverride: override } });
+    // Sync isActive with the override so the channel list reflects the intent:
+    // FORCE_HEALTHY → make visible to users (isActive = true)
+    // FORCE_OFFLINE → hide from users (isActive = false)
+    // AUTO          → leave isActive unchanged, health determined automatically
+    const extra: { isActive?: boolean } = {};
+    if (override === HealthOverride.FORCE_HEALTHY) extra.isActive = true;
+    if (override === HealthOverride.FORCE_OFFLINE) extra.isActive = false;
+    return this.prisma.channel.update({ where: { id }, data: { healthOverride: override, ...extra } });
   }
 
   async getChannelHealthStats(channelId: string, healthMode: string) {

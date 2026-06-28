@@ -35,6 +35,12 @@ interface ImportHistoryItem {
 
 type HealthOverride = "AUTO" | "FORCE_HEALTHY" | "FORCE_OFFLINE";
 
+interface UserPlayback {
+  total: number;
+  successRate: number | null;
+  health: "healthy" | "unstable" | "offline" | "no_data";
+}
+
 interface FailedChannel {
   id: string;
   name: string;
@@ -42,6 +48,7 @@ interface FailedChannel {
   streamStatus: string;
   healthOverride: HealthOverride;
   updatedAt: string;
+  userPlayback?: UserPlayback;
 }
 
 interface FailedChannelsResponse {
@@ -238,7 +245,8 @@ function FailedChannelsTable() {
                 <tr className="border-b border-border">
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Channel</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Stream URL</th>
-                  <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Status</th>
+                  <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Server Status</th>
+                  <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">User Reports (24h)</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Override</th>
                   <th className="text-left py-2.5 px-3 text-[#555B70] font-medium">Last Checked</th>
                   <th className="text-right py-2.5 px-3 text-[#555B70] font-medium">Action</th>
@@ -265,6 +273,25 @@ function FailedChannelsTable() {
                       )}>
                         {ch.streamStatus}
                       </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {!ch.userPlayback || ch.userPlayback.total === 0 ? (
+                        <span className="text-[#555B70] text-[10px]">No data</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                            ch.userPlayback.health === "healthy"
+                              ? "bg-green-500/15 text-green-400 border-green-500/25"
+                              : ch.userPlayback.health === "unstable"
+                              ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/25"
+                              : "bg-red-500/15 text-red-400 border-red-500/25"
+                          )}>
+                            {ch.userPlayback.successRate}%
+                          </span>
+                          <span className="text-[#555B70] text-[10px]">{ch.userPlayback.total} reports</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-2.5 px-3">
                       <select

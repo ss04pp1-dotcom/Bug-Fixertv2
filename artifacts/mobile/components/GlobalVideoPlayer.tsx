@@ -821,6 +821,11 @@ export default function GlobalVideoPlayer() {
         } else {
           setError('Stream stalled. No data received. Try refreshing.');
           setBuffering(false);
+          // Report stall failure so User Playback health data is accurate
+          if (!reportedRef.current) {
+            reportedRef.current = true;
+            reportPlayback(false);
+          }
         }
       }, STALL_MS);
     } else {

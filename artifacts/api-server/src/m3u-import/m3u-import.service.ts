@@ -721,13 +721,44 @@ export class M3uImportService {
       where.name = { contains: query.search, mode: 'insensitive' };
     }
 
-    const [data, total] = await Promise.all([
+    const [channels, total] = await Promise.all([
       this.prisma.channel.findMany({
         where, skip, take: limit,
         orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.channel.count({ where }),
     ]);
+
+    // Attach last-24h user playback stats to each channel
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const channelIds = channels.map(c => c.id);
+    const events = channelIds.length > 0
+      ? await this.prisma.playbackEvent.findMany({
+          where: { channelId: { in: channelIds }, createdAt: { gte: since } },
+          select: { channelId: true, success: true },
+        })
+      : [];
+
+    const eventsByChannel = new Map<string, { success: number; fail: number }>();
+    for (const ev of events) {
+      const cur = eventsByChannel.get(ev.channelId) ?? { success: 0, fail: 0 };
+      if (ev.success) cur.success += 1; else cur.fail += 1;
+      eventsByChannel.set(ev.channelId, cur);
+    }
+
+    const data = channels.map(ch => {
+      const stats = eventsByChannel.get(ch.id);
+      const total24h = stats ? stats.success + stats.fail : 0;
+      const successRate24h = total24h > 0 ? Math.round((stats!.success / total24h) * 100) : null;
+      return {
+        ...ch,
+        userPlayback: {
+          total: total24h,
+          successRate: successRate24h,
+          health: successRate24h === null ? 'no_data' : successRate24h >= 80 ? 'healthy' : successRate24h >= 50 ? 'unstable' : 'offline',
+        },
+      };
+    });
 
     return {
       data,
