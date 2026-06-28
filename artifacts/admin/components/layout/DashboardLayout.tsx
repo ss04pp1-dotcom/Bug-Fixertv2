@@ -74,6 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const t = setTimeout(() => setChecked(true), 300);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [token, isError]);
 
   if (!checked) {
