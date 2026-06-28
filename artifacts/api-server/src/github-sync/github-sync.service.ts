@@ -88,6 +88,16 @@ export class GitHubSyncService implements OnModuleInit {
     // GithubSyncService (or just need the DI graph to finish wiring) get to construct
     // synchronously; the dedup runs afterwards. Failures are caught and logged so they
     // never crash the bootstrap.
+
+    // Safety: if dedup hangs for any reason, unblock the scheduler after 90 s so
+    // scheduled syncs are never permanently blocked by a stuck dedup.
+    const dedupTimeout = setTimeout(() => {
+      if (!this.dedupReady) {
+        this.logger.warn('Startup deduplication safety timeout (90s) reached — unblocking scheduler');
+        this.dedupReady = true;
+      }
+    }, 90_000);
+
     setImmediate(() => {
       try {
         this.deduplicateExistingChannels()
@@ -97,10 +107,12 @@ export class GitHubSyncService implements OnModuleInit {
           })
           .finally(() => {
             // Always unblock the scheduler, even if dedup partially failed
+            clearTimeout(dedupTimeout);
             this.dedupReady = true;
           });
       } catch (err: any) {
         this.logger.error(`Startup deduplication threw synchronously: ${err.message}`, err.stack);
+        clearTimeout(dedupTimeout);
         this.dedupReady = true;
       }
     });

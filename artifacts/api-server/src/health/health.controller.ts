@@ -5,6 +5,7 @@ import { StorageService } from '../storage/storage.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 interface HealthStatus {
   status: 'ok' | 'error' | 'degraded';
@@ -60,12 +61,14 @@ export class HealthController {
     };
   }
 
+  @Public()
   @Get('healthz')
   @ApiOperation({ summary: 'Basic liveness probe' })
   healthz() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @Get('health')
   @ApiOperation({ summary: 'Health overview' })
   async health() {
@@ -75,6 +78,7 @@ export class HealthController {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @Get('health/database')
   @ApiOperation({ summary: 'Database connectivity check — 503 if unhealthy' })
   async healthDatabase() {
@@ -88,6 +92,7 @@ export class HealthController {
     return { ...result, timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @Get('health/storage')
   @ApiOperation({ summary: 'Storage check — 503 if unreachable' })
   async healthStorage() {
@@ -101,6 +106,7 @@ export class HealthController {
     return { ...result, timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @Get('health/websocket')
   @ApiOperation({ summary: 'WebSocket gateway health check' })
   healthWebSocket() {
@@ -133,6 +139,7 @@ export class HealthController {
     return result;
   }
 
+  @Public()
   @Get('ready')
   @ApiOperation({ summary: 'Kubernetes readiness probe — 503 until DB is reachable' })
   async ready() {
@@ -146,10 +153,12 @@ export class HealthController {
     return { status: 'ready', timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @Get('live')
   @ApiOperation({ summary: 'Kubernetes liveness probe' })
   live() { return { status: 'live', timestamp: new Date().toISOString() }; }
 
+  @Public()
   @Get('status')
   @ApiOperation({ summary: 'Status (alias for /health)' })
   status() { return this.health(); }
