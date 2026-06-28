@@ -4,16 +4,26 @@ import { GitHubSyncStatus, ServerSourceType } from '@prisma/client';
 import { M3uParser } from './parsers/m3u.parser';
 import { JsonParser } from './parsers/json.parser';
 import { ParsedChannel } from './parsers/parser.interface';
+import { LogoResolverService } from './logo-resolver.service';
 
 /**
  * Normalise a channel name for deduplication.
- * Collapses whitespace, hyphens, underscores and dots into a single space
- * so that "Sony HD", "SONY HD", "Sony-HD", "Sony_HD" and "Sony.HD" all
- * produce the same key: "sony hd".
+ * 1. Strips quality/resolution suffixes: (HD), [720p], (1080p), (4K), (FHD) etc.
+ *    These are stream-quality labels, NOT part of the channel identity.
+ *    "Desh TV (1080p)" and "Desh TV (720p)" should map to the same channel.
+ * 2. Collapses whitespace, hyphens, underscores and dots into a single space
+ *    so "Sony HD", "SONY-HD", "Sony_HD" all produce "sony hd".
+ * NOTE: numeric suffixes like "[2]" or "2" are intentionally kept because
+ *   they denote separate streams (e.g. "Toffee 2" ≠ "Toffee").
  */
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()
+    // Strip quality/resolution tags in parentheses or brackets
+    .replace(/[\(\[]\s*(hd|fhd|sd|4k|uhd|720p|1080p|480p|360p|240p|2160p|576p|4320p)\s*[\)\]]/gi, '')
+    // Strip quality suffix at end of name ("Channel HD", "Channel 720p")
+    .replace(/\s+(hd|fhd|sd|4k|uhd|720p|1080p|480p|360p|576p|2160p)$/gi, '')
+    // Collapse whitespace, hyphens, underscores and dots
     .replace(/[\s\-_\.]+/g, ' ')
     .trim();
 }
@@ -56,7 +66,10 @@ export class GitHubSyncService implements OnModuleInit {
    */
   private dedupReady = false;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private logoResolver: LogoResolverService,
+  ) {}
 
   isDedupReady(): boolean {
     return this.dedupReady;
@@ -388,11 +401,29 @@ export class GitHubSyncService implements OnModuleInit {
 
   // ── Fetch with ETag caching ────────────────────────────────────────────────
 
+  /**
+   * Convert a GitHub blob UI URL to a raw content URL so we fetch the actual
+   * file content instead of an HTML page.
+   * github.com/user/repo/blob/REF/path → raw.githubusercontent.com/user/repo/REF/path
+   */
+  private toRawGitHubUrl(url: string): string {
+    return url.replace(
+      /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/,
+      'https://raw.githubusercontent.com/$1/$2/$3',
+    );
+  }
+
   private async fetchContent(
     url: string,
     etag?: string,
     lastModified?: string,
   ): Promise<{ content: string; etag?: string; lastModified?: string; unchanged: boolean }> {
+    // Convert GitHub blob URLs to raw URLs — blob URLs return HTML, not file content
+    const fetchUrl = this.toRawGitHubUrl(url);
+    if (fetchUrl !== url) {
+      this.logger.log(`GitHub blob URL converted to raw: ${fetchUrl}`);
+    }
+
     const headers: Record<string, string> = {
       'User-Agent': 'StreamPro-Sync/1.0',
       'Accept': 'text/plain,application/json,*/*',
@@ -403,7 +434,7 @@ export class GitHubSyncService implements OnModuleInit {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      const res = await fetch(url, { headers, signal: controller.signal });
+      const res = await fetch(fetchUrl, { headers, signal: controller.signal });
       if (res.status === 304) return { content: '', etag, lastModified, unchanged: true };
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const content = await res.text();
@@ -592,6 +623,17 @@ export class GitHubSyncService implements OnModuleInit {
       } else {
         // Create a brand-new channel
         const slug = uniqueSlug(slugify(item.name), slugSet);
+
+        // Auto-fetch logo if M3U source didn't provide one
+        let resolvedLogo = item.logo ?? null;
+        if (!resolvedLogo) {
+          const autoLogo = await this.logoResolver.resolve(item.name, item.githubChannelId);
+          if (autoLogo) {
+            resolvedLogo = autoLogo;
+            this.logger.debug(`Auto-logo resolved for "${item.name}": ${autoLogo}`);
+          }
+        }
+
         try {
           const created = await this.prisma.channel.create({
             data: {
@@ -599,7 +641,7 @@ export class GitHubSyncService implements OnModuleInit {
               slug,
               normalizedName: normalized,
               githubChannelId: item.githubChannelId ?? null,
-              logo: item.logo ?? null,
+              logo: resolvedLogo,
               primaryStreamUrl: item.link,
               isActive: true,
               ...(categoryId ? { categoryId } : {}),
