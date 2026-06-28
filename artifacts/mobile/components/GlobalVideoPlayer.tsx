@@ -850,14 +850,8 @@ export default function GlobalVideoPlayer() {
     } catch {}
   }, [contentId, contentType]);
 
-  // ── Don't render if hidden ───────────────────────────────────────────────
-  if (mode === 'hidden') return null;
-
-  // ── Computed ─────────────────────────────────────────────────────────────
-  const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
-  const isLiveNow  = isLive && duration === 0;
-
-  // ── Common onLoad handler ────────────────────────────────────────────────
+  // ── Common onLoad / onError handlers ────────────────────────────────────
+  // MUST be defined BEFORE any early return (Rules of Hooks).
   const handleLoad = useCallback((data: any) => {
     networkRetryRef.current = 0;
     setDuration(data?.duration || 0);
@@ -940,6 +934,13 @@ export default function GlobalVideoPlayer() {
       }
     }
   }, [srcIdx, setSrcIdx, contentType, reportPlayback]);
+
+  // ── Don't render if hidden ───────────────────────────────────────────────
+  if (mode === 'hidden') return null;
+
+  // ── Computed ─────────────────────────────────────────────────────────────
+  const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
+  const isLiveNow  = isLive && duration === 0;
 
   // ═════════════════════════════════════════════════════════════════════════
   // MINI MODE
