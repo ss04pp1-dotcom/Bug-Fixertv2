@@ -11,13 +11,21 @@ import { LogoResolverService } from './logo-resolver.service';
  * 1. Strips quality/resolution suffixes: (HD), [720p], (1080p), (4K), (FHD) etc.
  *    These are stream-quality labels, NOT part of the channel identity.
  *    "Desh TV (1080p)" and "Desh TV (720p)" should map to the same channel.
- * 2. Collapses whitespace, hyphens, underscores and dots into a single space
- *    so "Sony HD", "SONY-HD", "Sony_HD" all produce "sony hd".
+ * 2. Strips common regional/type suffixes at the end of names:
+ *    "News 24 BD" → "news 24", "Gopal Bhar TV" → "gopal bhar"
+ *    Suffixes stripped: BD, TV, Channel, Bangladesh, India, HD (already above).
+ *    Only stripped when they appear as a standalone word at the end (space-separated),
+ *    so "MTV", "ETV", "NDTV" etc. are NOT affected.
+ * 3. Collapses whitespace, hyphens, underscores and dots into a single space
+ *    so "Sony HD", "SONY-HD", "Sony_HD" all produce "sony".
  * NOTE: numeric suffixes like "[2]" or "2" are intentionally kept because
  *   they denote separate streams (e.g. "Toffee 2" ≠ "Toffee").
  */
 export function normalizeName(name: string): string {
-  return name
+  // These suffixes are stripped repeatedly in case of stacking e.g. "Channel BD TV"
+  const STRIP_SUFFIXES = /\s+(bd|tv|channel|bangladesh|india|pak|pakistan|int|international|official|live)$/gi;
+
+  let result = name
     .toLowerCase()
     // Strip quality/resolution tags in parentheses or brackets
     .replace(/[\(\[]\s*(hd|fhd|sd|4k|uhd|720p|1080p|480p|360p|240p|2160p|576p|4320p)\s*[\)\]]/gi, '')
@@ -26,6 +34,15 @@ export function normalizeName(name: string): string {
     // Collapse whitespace, hyphens, underscores and dots
     .replace(/[\s\-_\.]+/g, ' ')
     .trim();
+
+  // Strip regional/type suffixes repeatedly (handles stacked suffixes)
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(STRIP_SUFFIXES, '').trim();
+  } while (result !== prev);
+
+  return result;
 }
 
 function slugify(name: string): string {
