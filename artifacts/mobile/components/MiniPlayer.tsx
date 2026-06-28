@@ -4,7 +4,7 @@ import {
   Platform, Dimensions, AppState, type AppStateStatus,
 } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,14 +81,16 @@ export default function MiniPlayer() {
   const insets = useSafeAreaInsets();
 
   const {
-    active, title, logo, contentId, contentType,
-    sources, srcIdx, isLive, isPlaying, close, setPlaying,
+    mode, title, logo, contentId, contentType,
+    sources, srcIdx, isLive, isPlaying, hide, setPlaying,
   } = usePlayerStore();
+
+  const active = mode !== 'hidden';
 
   const [showCtrl, setShowCtrl] = React.useState(true);
   const [pip, setPip]           = React.useState(false);
 
-  const ctrlTimer = useRef<ReturnType<typeof setTimeout>>();
+  const ctrlTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Animated values ───────────────────────────────────────────────────────
   const posX  = useSharedValue(SNAP_RIGHT);
@@ -259,7 +261,7 @@ export default function MiniPlayer() {
                 {/* ✕ close — top-right */}
                 <TouchableOpacity
                   style={s.closeBtn}
-                  onPress={close}
+                  onPress={hide}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons name="close" size={13} color="#fff" />

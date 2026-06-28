@@ -123,8 +123,8 @@ export default function SportsScreen() {
 
   const isLoading = activeTab === 'Live Now' ? liveLoading : activeTab === 'Upcoming' ? upcomingLoading : allLoading;
 
-  const handleToggleAlert = (matchId: string) => {
-    toggleAlert.mutate(matchId);
+  const handleToggleAlert = (matchId: string, isAlerted?: boolean) => {
+    toggleAlert.mutate({ matchId, action: isAlerted ? 'remove' : 'add' });
   };
 
   const renderLiveMatch = ({ item }: { item: any }) => (

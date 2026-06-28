@@ -34,7 +34,7 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   // M-032: hold the navigation timeout so we can clear it on unmount.
-  const navTimer = useRef<ReturnType<typeof setTimeout>>();
+  const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Animated glow
   const glowOpacity = useSharedValue(0.25);
