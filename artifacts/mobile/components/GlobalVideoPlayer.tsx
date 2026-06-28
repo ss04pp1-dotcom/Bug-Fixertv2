@@ -30,7 +30,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  runOnJS, FadeIn, FadeOut,
+  FadeIn, FadeOut,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -457,21 +457,24 @@ export default function GlobalVideoPlayer() {
   }, [insets.top, insets.bottom, SH]);
 
   // ── Controls auto-hide ───────────────────────────────────────────────────
-  // IMPORTANT: defined BEFORE any useEffect that lists bumpCtrl in its deps
-  // to avoid TDZ (temporal dead zone) crash on web.
-  const setCtrlHidden = useCallback(() => {
-    setShowCtrl(false);
-    showCtrlRef.current = false;
-  }, []);
-
+  // FIX: removed runOnJS(setCtrlHidden) from the withTiming callback.
+  // Reanimated's Babel plugin turns the withTiming 3rd-arg callback into a
+  // worklet and statically captures the entire component scope — including
+  // `bumpCtrl` which is declared (with `const`) AFTER `startHide`, putting
+  // it in the temporal dead zone (TDZ) when `startHide` is first created.
+  // Solution: use a plain JS setTimeout that fires after the 400ms fade
+  // instead of a Reanimated worklet callback. Zero behaviour change.
   const startHide = useCallback(() => {
     if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
     ctrlTimer.current = setTimeout(() => {
-      ctrlOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
-        if (finished) runOnJS(setCtrlHidden)();
-      });
+      ctrlOpacity.value = withTiming(0, { duration: 400 });
+      // Mirror the animation duration on the JS thread — no worklet needed.
+      setTimeout(() => {
+        setShowCtrl(false);
+        showCtrlRef.current = false;
+      }, 400);
     }, 4500);
-  }, [ctrlOpacity, setCtrlHidden]);
+  }, [ctrlOpacity]);
 
   const bumpCtrl = useCallback(() => {
     if (isLocked) return;
@@ -804,9 +807,11 @@ export default function GlobalVideoPlayer() {
   }, [mode]);
 
   // ── Stall detection ──────────────────────────────────────────────────────
-  const STALL_MS = isLive ? 15_000 : 25_000;
+  // FIX: moved STALL_MS inside the effect so isLive is a proper dep
+  // (was outside causing stale closure when isLive changed mid-play).
   useEffect(() => {
     if (mode === 'hidden') return;
+    const STALL_MS = isLive ? 15_000 : 25_000;
     if (buffering && !playerError && src && !ended) {
       stallTimerRef.current = setTimeout(() => {
         const srcs = sourcesRef.current;
@@ -824,7 +829,7 @@ export default function GlobalVideoPlayer() {
     return () => {
       if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
     };
-  }, [buffering, playerError, src, srcIdx, mode, ended]);
+  }, [buffering, playerError, src, srcIdx, mode, ended, isLive]);
 
   // ── Watch history auto-save (VOD only) ───────────────────────────────────
   useEffect(() => {
