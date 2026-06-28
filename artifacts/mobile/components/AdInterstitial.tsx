@@ -64,21 +64,37 @@ interface AdInterstitialProps {
   onClose: () => void;
 }
 
+// Track whether ad fetch has resolved (null = no ad available)
+type FetchState = 'idle' | 'loading' | 'ready' | 'empty';
+
 export function AdInterstitial({ placement, visible, onClose }: AdInterstitialProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
+  const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [countdown, setCountdown] = useState(5);
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (visible) {
-      fetchInterstitialAd(placement).then(setAd);
+      setFetchState('loading');
       setCountdown(5);
       impressionTracked.current = false;
+      fetchInterstitialAd(placement).then(result => {
+        setAd(result);
+        setFetchState(result ? 'ready' : 'empty');
+      });
     } else {
       setAd(null);
+      setFetchState('idle');
     }
   }, [visible, placement]);
+
+  // If ad fetch finished with no result, auto-close so channel switch proceeds
+  useEffect(() => {
+    if (visible && fetchState === 'empty') {
+      onClose();
+    }
+  }, [visible, fetchState, onClose]);
 
   useEffect(() => {
     if (visible && ad && !impressionTracked.current) {
@@ -103,7 +119,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
     };
   }, [visible]);
 
-  if (!visible || !ad) return null;
+  if (!visible || fetchState !== 'ready' || !ad) return null;
 
   const handlePress = () => {
     trackEvent(ad.id, 'click', placement);

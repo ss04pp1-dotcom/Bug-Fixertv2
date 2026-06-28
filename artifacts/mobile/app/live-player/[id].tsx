@@ -10,7 +10,7 @@
  *
  * Back button → player enters MINI mode (no reload, no rebuffer).
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
   ScrollView, StatusBar, Image, FlatList, useWindowDimensions,
@@ -22,6 +22,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
+import { AdInterstitial } from '@/components/AdInterstitial';
+
+// ── Channel-switch ad gate ─────────────────────────────────────────────────
+// Module-level so counter persists across router.replace() remounts.
+// Show an interstitial after every AD_EVERY channel switches.
+const AD_EVERY = 3;
+let _switchCount = 0;
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -164,8 +171,11 @@ export default function LivePlayerScreen() {
     });
   }, [sources, contentTitle, logoUrl, id, openPlayer]);
 
-  // ── Switch channel ─────────────────────────────────────────────────────────
-  const switchChannel = useCallback((ch: typeof related[0]) => {
+  // ── Ad gate state ───────────────────────────────────────────────────────────
+  const [adVisible, setAdVisible]               = useState(false);
+  const pendingChannel = useRef<typeof related[0] | null>(null);
+
+  const doSwitchChannel = useCallback((ch: typeof related[0]) => {
     router.replace({
       pathname: `/live-player/${ch.id}` as any,
       params: {
@@ -176,6 +186,27 @@ export default function LivePlayerScreen() {
       },
     });
   }, []);
+
+  // ── Switch channel ─────────────────────────────────────────────────────────
+  // Every AD_EVERY switches → show interstitial first, then navigate.
+  const switchChannel = useCallback((ch: typeof related[0]) => {
+    _switchCount += 1;
+    if (_switchCount % AD_EVERY === 0) {
+      pendingChannel.current = ch;
+      setAdVisible(true);
+    } else {
+      doSwitchChannel(ch);
+    }
+  }, [doSwitchChannel]);
+
+  const handleAdClose = useCallback(() => {
+    setAdVisible(false);
+    if (pendingChannel.current) {
+      const ch = pendingChannel.current;
+      pendingChannel.current = null;
+      doSwitchChannel(ch);
+    }
+  }, [doSwitchChannel]);
 
   // ── Loading / error state for the metadata area ────────────────────────────
   if (fetchLoading && sources.length === 0) {
@@ -208,6 +239,13 @@ export default function LivePlayerScreen() {
   return (
     <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
+
+      {/* Channel-switch interstitial ad */}
+      <AdInterstitial
+        placement="channel_switch"
+        visible={adVisible}
+        onClose={handleAdClose}
+      />
 
       {/* Spacer for the video area — singleton overlay covers it visually */}
       <View style={{ height: Math.round(W * 9 / 16), backgroundColor: '#000' }} />
