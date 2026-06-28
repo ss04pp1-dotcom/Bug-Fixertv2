@@ -65,15 +65,45 @@ export class GitHubSyncService implements OnModuleInit {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   async onModuleInit(): Promise<void> {
+    // FIRST: clear any stale `isSyncing: true` rows left over from a previous process
+    // that crashed mid-sync. Without this, those GitHubSources stay locked forever and
+    // the scheduler refuses to re-sync them (see `if (source.isSyncing)` guard in sync()).
+    // This must run BEFORE deduplication so the scheduler sees a clean state on startup.
     try {
-      await this.deduplicateExistingChannels();
+      const cleared = await this.prisma.githubSource.updateMany({
+        where: { isSyncing: true },
+        data: { isSyncing: false, syncStartedAt: null },
+      });
+      if (cleared.count > 0) {
+        this.logger.warn(
+          `Startup: cleared ${cleared.count} stale isSyncing=true GitHubSource row(s) left by a previous crash`,
+        );
+      }
     } catch (e: any) {
-      // Dedup failures must never block the entire app from starting
-      this.logger.error(`Startup deduplication encountered an unhandled error: ${e.message}`);
-    } finally {
-      // Always unblock the scheduler, even if dedup partially failed
-      this.dedupReady = true;
+      this.logger.error(`Startup stale-lock cleanup failed: ${e.message}`);
     }
+
+    // A-050: schedule deduplication on the next event-loop tick via setImmediate so it
+    // does NOT block NestModule init resolution. Other modules that depend on
+    // GithubSyncService (or just need the DI graph to finish wiring) get to construct
+    // synchronously; the dedup runs afterwards. Failures are caught and logged so they
+    // never crash the bootstrap.
+    setImmediate(() => {
+      try {
+        this.deduplicateExistingChannels()
+          .catch((err: Error) => {
+            // Dedup failures must never block the entire app from starting
+            this.logger.error(`Startup deduplication encountered an unhandled error: ${err.message}`, err.stack);
+          })
+          .finally(() => {
+            // Always unblock the scheduler, even if dedup partially failed
+            this.dedupReady = true;
+          });
+      } catch (err: any) {
+        this.logger.error(`Startup deduplication threw synchronously: ${err.message}`, err.stack);
+        this.dedupReady = true;
+      }
+    });
   }
 
   // ── Startup deduplication ─────────────────────────────────────────────────
@@ -212,60 +242,67 @@ export class GitHubSyncService implements OnModuleInit {
     }
 
     // ── PlaybackEvent ────────────────────────────────────────────────────────
-    await this.prisma.$executeRaw`
-      UPDATE playback_events
-      SET channel_id = ${keepId}::uuid
-      WHERE channel_id = ANY(${removeIds}::uuid[])
-    `;
+    // A-037: wrap the cross-relation reassignments + soft-delete + audit log in
+    // a single transaction so a crash between any of them can't leave the
+    // duplicate channels half-merged (e.g. playback_events moved but channels
+    // not soft-deleted, so dedup would re-process them on next startup and
+    // double-move the rows / produce duplicate audit logs).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE playback_events
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
 
-    // ── EpgProgram ───────────────────────────────────────────────────────────
-    await this.prisma.$executeRaw`
-      UPDATE epg_programs
-      SET channel_id = ${keepId}::uuid
-      WHERE channel_id = ANY(${removeIds}::uuid[])
-    `;
+      // ── EpgProgram ───────────────────────────────────────────────────────────
+      await tx.$executeRaw`
+        UPDATE epg_programs
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
 
-    // ── Favorite ─────────────────────────────────────────────────────────────
-    // Delete any favorite-on-duplicate where the user already has a favorite
-    // for the keeper (prevents duplicate (userId, keepId) rows), then
-    // reassign the rest.
-    await this.prisma.$executeRaw`
-      DELETE FROM favorites
-      WHERE channel_id = ANY(${removeIds}::uuid[])
-        AND EXISTS (
-          SELECT 1 FROM favorites f2
-          WHERE f2.user_id  = favorites.user_id
-            AND f2.channel_id = ${keepId}::uuid
-        )
-    `;
-    await this.prisma.$executeRaw`
-      UPDATE favorites
-      SET channel_id = ${keepId}::uuid
-      WHERE channel_id = ANY(${removeIds}::uuid[])
-    `;
+      // ── Favorite ─────────────────────────────────────────────────────────────
+      // Delete any favorite-on-duplicate where the user already has a favorite
+      // for the keeper (prevents duplicate (userId, keepId) rows), then
+      // reassign the rest.
+      await tx.$executeRaw`
+        DELETE FROM favorites
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+          AND EXISTS (
+            SELECT 1 FROM favorites f2
+            WHERE f2.user_id  = favorites.user_id
+              AND f2.channel_id = ${keepId}::uuid
+          )
+      `;
+      await tx.$executeRaw`
+        UPDATE favorites
+        SET channel_id = ${keepId}::uuid
+        WHERE channel_id = ANY(${removeIds}::uuid[])
+      `;
 
-    // ── Soft-delete the duplicate Channel rows ───────────────────────────────
-    await this.prisma.channel.updateMany({
-      where: { id: { in: removeIds } },
-      data: { deletedAt: new Date() },
-    });
+      // ── Soft-delete the duplicate Channel rows ───────────────────────────────
+      await tx.channel.updateMany({
+        where: { id: { in: removeIds } },
+        data: { deletedAt: new Date() },
+      });
 
-    // ── Audit log ────────────────────────────────────────────────────────────
-    await this.prisma.channelMergeLog.create({
-      data: {
-        trigger,
-        normalizedName,
-        keptChannelId: keepId,
-        mergedChannelIds: removeIds,
-        serversMoved,
-        serversDeduplicated,
-        details: {
-          keeperId: keepId,
-          mergedIds: removeIds,
-          serversOnKeeperBefore: keeperServers.length,
-          dupeServersFound: dupeServers.length,
+      // ── Audit log ────────────────────────────────────────────────────────────
+      await tx.channelMergeLog.create({
+        data: {
+          trigger,
+          normalizedName,
+          keptChannelId: keepId,
+          mergedChannelIds: removeIds,
+          serversMoved,
+          serversDeduplicated,
+          details: {
+            keeperId: keepId,
+            mergedIds: removeIds,
+            serversOnKeeperBefore: keeperServers.length,
+            dupeServersFound: dupeServers.length,
+          },
         },
-      },
+      });
     });
 
     this.logger.log(
@@ -393,20 +430,16 @@ export class GitHubSyncService implements OnModuleInit {
 
     const seenServerIds = new Set<string>();
 
-    // Build in-memory dedup maps from the current DB snapshot.
-    // Updated after each successful channel create so later items in the same
-    // sync don't trigger redundant DB lookups.
-    const allChannels = await this.prisma.channel.findMany({
-      where: { deletedAt: null },
-      select: { id: true, normalizedName: true, githubChannelId: true, slug: true },
-    });
-    const byNorm = new Map<string, string>();   // normalizedName → channelId
-    const byGhId = new Map<string, string>();   // githubChannelId → channelId
-    const slugSet = new Set<string>(allChannels.map((c: { id: string; normalizedName: string | null; githubChannelId: string | null; slug: string }) => c.slug));
-    for (const ch of allChannels) {
-      if (ch.normalizedName) byNorm.set(ch.normalizedName, ch.id);
-      if (ch.githubChannelId) byGhId.set(ch.githubChannelId, ch.id);
-    }
+    // A-051: previously this method pre-loaded ALL non-deleted channels into memory
+    // (`allChannels = await prisma.channel.findMany({ where: { deletedAt: null } })`)
+    // and built in-memory `byNorm` / `byGhId` / `slugSet` lookup maps from them.
+    // On a 50k-channel catalog that's hundreds of MB of resident memory and a multi-second
+    // blocking query at the start of every sync. The per-item DB lookup below is cached
+    // in the same maps after first hit, so subsequent parsed items for the same channel
+    // reuse the in-memory entry — same throughput, vastly lower peak memory.
+    const byNorm = new Map<string, string>();   // normalizedName → channelId (within this sync)
+    const byGhId = new Map<string, string>();   // githubChannelId → channelId (within this sync)
+    const slugSet = new Set<string>();           // slugs already used in this sync
 
     const categoryCache = new Map<string, string>(); // groupName → categoryId
 

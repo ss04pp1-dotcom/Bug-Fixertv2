@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateMovieDto } from './dto/create-movie.dto';
+import { AuthenticatedUser } from '../common/interfaces';
 
 @Injectable()
 export class MoviesService {
@@ -14,7 +15,7 @@ export class MoviesService {
     if (search) where.title = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.genre) where.category = { name: { contains: query.genre, mode: 'insensitive' } };
-    if (query.isPremium !== undefined) where.isPremium = query.isPremium;
+    if (query.isPremium !== undefined) where.isPremium = query.isPremium === 'true';
 
     const [data, total] = await Promise.all([
       this.prisma.movie.findMany({
@@ -74,17 +75,29 @@ export class MoviesService {
     });
   }
 
-  async getStreamUrl(id: string) {
+  async getStreamUrl(id: string, user?: AuthenticatedUser) {
     const movie = await this.prisma.movie.findFirst({
       where: { OR: [{ id }, { slug: id }], deletedAt: null },
       select: { id: true, title: true, streamUrl: true, isPremium: true, isActive: true },
     });
     if (!movie) throw new NotFoundException('Movie not found');
     if (!movie.streamUrl) throw new NotFoundException('Stream URL not available for this movie');
+    // Premium-gate: non-premium users (or expired premium) cannot stream premium movies.
+    // This blocks the well-known bypass where the client just hits GET /movies/:id/stream
+    // directly and ignores the isPremium flag returned by the catalog endpoint.
+    if (movie.isPremium) {
+      const isPremium = !!user?.isPremium &&
+        (!user.subscriptionEndsAt || new Date(user.subscriptionEndsAt) > new Date());
+      if (!isPremium) {
+        throw new ForbiddenException('Premium subscription required');
+      }
+    }
     return { streamUrl: movie.streamUrl, id: movie.id, title: movie.title, isPremium: movie.isPremium };
   }
 
   async findRelated(id: string, limit = 10) {
+    // A-057: clamp limit so a client can't ask for thousands of related movies in one shot.
+    const safeLimit = Math.min(parseInt(String(limit)) || 10, 50);
     const movie = await this.findOne(id);
 
     const where: Prisma.MovieWhereInput = {
@@ -101,16 +114,16 @@ export class MoviesService {
       where,
       include: { category: { select: { id: true, name: true } } },
       orderBy: { viewCount: 'desc' },
-      take: limit,
+      take: safeLimit,
     });
 
-    if (related.length < limit) {
+    if (related.length < safeLimit) {
       const existingIds = [movie.id, ...related.map(r => r.id)];
       const fallback = await this.prisma.movie.findMany({
         where: { id: { notIn: existingIds }, isActive: true, deletedAt: null },
         include: { category: { select: { id: true, name: true } } },
         orderBy: { viewCount: 'desc' },
-        take: limit - related.length,
+        take: safeLimit - related.length,
       });
       return [...related, ...fallback];
     }

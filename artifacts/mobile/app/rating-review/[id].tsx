@@ -9,11 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator as RNActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router, useGlobalSearchParams } from 'expo-router';
 import { useReviews, useReviewStats, useCreateReview, useMovie, useSeries } from '@/lib/api-hooks';
+import apiClient from '@/lib/api';
 
 interface Review {
   id: string;
@@ -45,26 +47,36 @@ export default function RatingReviewScreen() {
   const contentData = contentType === 'series' ? seriesData : movieData;
   const contentTitle = contentData?.title || 'Untitled';
   const contentYear = contentData?.releaseYear || contentData?.year || '';
-  const contentDuration = contentData?.duration
-    ? `${Math.floor(contentData.duration / 60)}h ${contentData.duration % 60}m`
-    : '';
+  const dur = typeof contentData?.duration === 'number'
+    ? contentData.duration
+    : parseInt(String(contentData?.duration || ''), 10);
+  const contentDuration = dur && !isNaN(dur)
+    ? `${Math.floor(dur / 60)}h ${dur % 60}m`
+    : (contentData?.duration || '');
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // M-017: local optimistic like state per review (count + isLiked).
+  const [localLikes, setLocalLikes] = useState<Record<string, { count: number; isLiked: boolean }>>({});
 
   const reviews: Review[] = useMemo(() => {
     const items = Array.isArray(reviewsData) ? reviewsData : reviewsData?.data ?? [];
-    return items.map((r: any) => ({
-      id: r.id,
-      name: r.user?.name || r.userName || 'Anonymous',
-      avatar: (r.user?.name || r.userName || 'AN').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-      date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
-      rating: r.rating || 0,
-      text: r.comment || r.text || '',
-      likes: r.likes || 0,
-      isLiked: r.isLiked || false,
-      showFullText: expandedIds.has(r.id),
-    }));
-  }, [reviewsData, expandedIds]);
+    return items.map((r: any) => {
+      const baseLikes = r.likes || 0;
+      const baseIsLiked = r.isLiked || false;
+      const local = localLikes[r.id];
+      return {
+        id: r.id,
+        name: r.user?.name || r.userName || 'Anonymous',
+        avatar: (r.user?.name || r.userName || 'AN').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+        date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+        rating: r.rating || 0,
+        text: r.comment || r.text || '',
+        likes: local ? local.count : baseLikes,
+        isLiked: local ? local.isLiked : baseIsLiked,
+        showFullText: expandedIds.has(r.id),
+      };
+    });
+  }, [reviewsData, expandedIds, localLikes]);
 
   const handleStarPress = (star: number) => {
     setUserRating(star);
@@ -79,8 +91,31 @@ export default function RatingReviewScreen() {
     });
   };
 
-  const toggleLike = (_reviewId: string) => {
-    // Like toggle is visual-only without a dedicated API hook
+  const toggleLike = async (reviewId: string) => {
+    // M-017: optimistic local toggle; fire-and-forget API call when available.
+    const review = reviews.find((r) => r.id === reviewId);
+    const prevCount = review?.likes ?? 0;
+    const prevIsLiked = review?.isLiked ?? false;
+    const nextIsLiked = !prevIsLiked;
+    const nextCount = prevCount + (nextIsLiked ? 1 : -1);
+    setLocalLikes((prev) => ({
+      ...prev,
+      [reviewId]: { count: Math.max(0, nextCount), isLiked: nextIsLiked },
+    }));
+    try {
+      if (nextIsLiked) {
+        await apiClient.post(`/reviews/${reviewId}/like`);
+      } else {
+        await apiClient.delete(`/reviews/${reviewId}/like`);
+      }
+    } catch {
+      // rollback on failure
+      setLocalLikes((prev) => ({
+        ...prev,
+        [reviewId]: { count: prevCount, isLiked: prevIsLiked },
+      }));
+      Alert.alert('Couldn\u2019t update like', 'Please try again.');
+    }
   };
 
   const avgRating = statsData?.averageRating ?? 0;

@@ -5,8 +5,8 @@ info:
   version: 1.0.0
   description: StreamPro — Enterprise TV Streaming Platform API
 servers:
-  - url: /api/v1
-    description: Versioned API base path
+  - url: /v1
+    description: Versioned API base path (NestJS uses URI versioning with defaultVersion '1' and no global /api prefix)
 tags:
   - name: health
     description: Health check
@@ -1061,7 +1061,9 @@ paths:
     get:
       operationId: getSettings
       tags: [settings]
-      summary: Get all settings
+      summary: Get all settings (admin)
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Settings key-value map
@@ -1091,7 +1093,9 @@ paths:
     get:
       operationId: getSetting
       tags: [settings]
-      summary: Get setting by key
+      summary: Get setting by key (admin)
+      security:
+        - bearerAuth: []
       parameters:
         - name: key
           in: path
@@ -1116,6 +1120,74 @@ paths:
       responses:
         "200":
           description: Deleted
+
+  /settings/public:
+    get:
+      operationId: getPublicSettings
+      tags: [settings]
+      summary: Get public settings
+      description: Returns public app configuration (no auth required)
+      security: []
+      responses:
+        "200":
+          description: Public settings
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /settings/app-config:
+    get:
+      operationId: getAppConfig
+      tags: [settings]
+      summary: Get app config (public)
+      security: []
+      responses:
+        "200":
+          description: App configuration
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /settings/bulk:
+    post:
+      operationId: bulkUpdateSettings
+      tags: [settings]
+      summary: Bulk update settings (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+
+  /settings/test-email:
+    post:
+      operationId: testEmailConfig
+      tags: [settings]
+      summary: Test email configuration (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Test result
+
+  /settings/storage/test:
+    post:
+      operationId: testStorageConnection
+      tags: [settings]
+      summary: Test storage connection (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Test result
 
   # ── PARENTAL CONTROL ─────────────────────────────────────────────────────
   /parental-control:
@@ -1257,6 +1329,7 @@ components:
       properties:
         status:
           type: string
+          enum: [ok, error, degraded]
       required: [status]
 
     ErrorResponse:

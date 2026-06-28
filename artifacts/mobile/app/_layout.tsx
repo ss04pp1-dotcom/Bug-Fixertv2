@@ -2,7 +2,7 @@ import React, { useEffect, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import OtaUpdateBanner from '@/components/OtaUpdateBanner';
-import MiniPlayer from '@/components/MiniPlayer';
+import GlobalVideoPlayer from '@/components/GlobalVideoPlayer';
 import { Slot, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -41,14 +41,14 @@ function AppGuards({ children }: { children: React.ReactNode }) {
   }, []);
 
   const { data: forceUpdate } = useQuery({
-    queryKey: ['force-update'],
+    queryKey: ['force-update', 'app-guard'],
     queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: Platform.OS === 'ios' ? 'ios' : 'android' } }).then(unwrap),
     retry: false,
     staleTime: 1000 * 60 * 10,
   });
 
   const { data: geoCheck } = useQuery({
-    queryKey: ['geo-check'],
+    queryKey: ['geo-check', 'app-guard'],
     queryFn: async () => {
       try {
         const Localization = await import('expo-localization');
@@ -136,7 +136,7 @@ export default function RootLayout() {
               <Slot />
             </AppGuards>
             <OtaUpdateBanner />
-            <MiniPlayer />
+            <GlobalVideoPlayer />
           </View>
         </QueryClientProvider>
       </SafeAreaProvider>

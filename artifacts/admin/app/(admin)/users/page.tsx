@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Search, Eye, ChevronLeft, ChevronRight, ChevronDown, Menu, RefreshCw, Ban, CheckCircle, X, Mail, Phone, ShieldCheck, Calendar, Plus, Trash2 } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
+import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
 
 interface User {
   id: string;
@@ -62,7 +62,7 @@ export default function Users() {
     try {
       await call("put", `/v1/users/${id}`, { isActive: !isActive });
       refetch();
-    } catch (e: any) { setActionErr(e?.message ?? "Failed to update user"); }
+    } catch (e: any) { setActionErr(getApiErrorMessage(e) || "Failed to update user"); }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -72,7 +72,7 @@ export default function Users() {
       await call("delete", `/v1/users/${id}`);
       setSelectedUser(null);
       refetch();
-    } catch (e: any) { setActionErr(e?.message ?? "Failed to delete user"); }
+    } catch (e: any) { setActionErr(getApiErrorMessage(e) || "Failed to delete user"); }
   };
 
   const handleCreate = async () => {
@@ -92,7 +92,7 @@ export default function Users() {
       });
       setShowCreate(false);
       setCreateForm(EMPTY_FORM);
-    } catch (e: any) { setCreateError(e?.message ?? "Failed to create user"); return; }
+    } catch (e: any) { setCreateError(getApiErrorMessage(e) || "Failed to create user"); return; }
     refetch();
   };
 

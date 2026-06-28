@@ -1,8 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import * as path from 'path';
 import * as crypto from 'crypto';
+
+// A-033: Allow-list of object key prefixes that the DELETE endpoint may target.
+// Without this guard, an attacker (or a compromised admin token) could delete
+// arbitrary objects by passing any key — including infrastructure-critical files
+// like backups or CDN root assets. Only well-known upload folders are deletable.
+const ALLOWED_DELETE_PREFIXES = [
+  'avatars/',
+  'logos/',
+  'banners/',
+  'posters/',
+  'categories/',
+  'ads/',
+  'uploads/',
+];
 
 export interface UploadedFile {
   fieldname: string;
@@ -167,6 +181,11 @@ export class StorageService {
   }
 
   async delete(key: string): Promise<void> {
+    // A-033: validate key prefix before issuing the delete to the storage backend.
+    const isAllowed = ALLOWED_DELETE_PREFIXES.some(prefix => key.startsWith(prefix));
+    if (!isAllowed) {
+      throw new ForbiddenException(`Delete not allowed for this path (key prefix not in allow-list)`);
+    }
     const cfg = await this.getConfig();
     if (!cfg) {
       this.logger.warn(`Storage not configured — delete skipped for key: ${key}`);

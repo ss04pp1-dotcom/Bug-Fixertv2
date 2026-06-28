@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { apiClient, extractData, getApiErrorMessage } from "@/lib/axios-client";
-import { setToken, setRefreshToken } from "@/lib/auth";
+import { setToken } from "@/lib/auth";
 
 interface LoginPayload {
   accessToken:  string;
-  refreshToken: string;
+  refreshToken?: string; // ignored on client — see D-002 fix in lib/auth.ts
 }
 
 export default function LoginPage() {
@@ -29,9 +29,7 @@ export default function LoginPage() {
       const token   = payload?.accessToken;
       if (!token) throw new Error("No token received");
       setToken(token);
-      if (payload?.refreshToken) {
-        setRefreshToken(payload.refreshToken);
-      }
+      // Refresh token intentionally not stored — see D-002 fix in lib/auth.ts
       router.push("/");
     } catch (err) {
       setError(getApiErrorMessage(err));

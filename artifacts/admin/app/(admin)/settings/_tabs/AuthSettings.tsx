@@ -73,15 +73,22 @@ export default function AuthSettings({ settingsRaw, refetch }: Props) {
 
   const handleSave = async () => {
     try {
+      // ── isPublic distinction ───────────────────────────────────────────
+      // `isPublic: true`  → returned by GET /v1/settings/app-config so the
+      //                     mobile app can read it at runtime (client IDs,
+      //                     app IDs, feature toggles).
+      // `isPublic: false` → server-side secret. NEVER expose to clients.
+      //                     OAuth client secrets must never reach the device.
       const entries: { key: string; value: unknown; isPublic: boolean }[] = [
-        { key: "google_auth_enabled",      value: form.google_auth_enabled,      isPublic: true },
-        { key: "google_client_id_web",     value: form.google_client_id_web,     isPublic: true },
-        { key: "google_client_id_android", value: form.google_client_id_android, isPublic: true },
-        { key: "google_client_id_ios",     value: form.google_client_id_ios,     isPublic: true },
-        { key: "facebook_auth_enabled",    value: form.facebook_auth_enabled,    isPublic: true },
-        { key: "facebook_app_id",          value: form.facebook_app_id,          isPublic: true },
-        { key: "facebook_client_token",    value: form.facebook_client_token,    isPublic: true },
-        { key: "apple_auth_enabled",       value: form.apple_auth_enabled,       isPublic: true },
+        { key: "google_auth_enabled",      value: form.google_auth_enabled,      isPublic: true  },
+        { key: "google_client_id_web",     value: form.google_client_id_web,     isPublic: true  },
+        { key: "google_client_id_android", value: form.google_client_id_android, isPublic: true  },
+        { key: "google_client_id_ios",     value: form.google_client_id_ios,     isPublic: true  },
+        { key: "facebook_auth_enabled",    value: form.facebook_auth_enabled,    isPublic: true  },
+        { key: "facebook_app_id",          value: form.facebook_app_id,          isPublic: true  },
+        // OAuth client tokens / secrets must NOT be public — D-001 fix
+        { key: "facebook_client_token",    value: form.facebook_client_token,    isPublic: false },
+        { key: "apple_auth_enabled",       value: form.apple_auth_enabled,       isPublic: true  },
       ];
       await call("post", "/v1/settings/bulk", { settings: entries });
       setSaved(true);

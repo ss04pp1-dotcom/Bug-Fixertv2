@@ -60,12 +60,6 @@ export class SubscriptionsService {
     let couponCode: string | undefined;
 
     let couponId: string | undefined;
-    if (dto.couponCode) {
-      const couponResult = await this.validateCoupon({ code: dto.couponCode, planId: dto.planId, userId: dto.userId });
-      discount = couponResult.discountAmount;
-      couponCode = dto.couponCode;
-      couponId = couponResult.coupon.id;
-    }
 
     const now = new Date();
     const endsAt = new Date();
@@ -73,10 +67,55 @@ export class SubscriptionsService {
 
     const trialEndsAt = plan.trialDays > 0 ? new Date(Date.now() + plan.trialDays * 86400000) : undefined;
     const status = plan.trialDays > 0 ? 'trial' : 'active';
-    const finalAmount = Math.max(0, plan.price - discount);
+    // NOTE: finalAmount is computed inside the transaction (finalAmountTx) after the coupon
+    // has been validated with FOR UPDATE locking — see the transaction body below.
     const invoiceNumber = `INV-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
+      // Move coupon validation INSIDE the transaction so we read the current usedCount
+      // with row-level locking semantics (SELECT ... FOR UPDATE) and immediately increment it
+      // in the same transaction — this closes the race window where two concurrent
+      // `subscribe()` calls both pass the `usedCount < maxUses` check before either commits.
+      if (dto.couponCode) {
+        // SELECT FOR UPDATE — Postgres locks the row so concurrent transactions block
+        // until this one commits. Prisma doesn't expose FOR UPDATE directly, so use $queryRaw.
+        const [locked] = await tx.$queryRaw<{ id: string; is_active: boolean; expires_at: Date | null; max_uses: number | null; used_count: number; per_user_limit: number; discount_type: string; discount_value: number; min_purchase: number | null; plan_ids: string[] }[]>`
+          SELECT id, is_active, expires_at, max_uses, used_count, per_user_limit,
+                 discount_type, discount_value, min_purchase, plan_ids
+          FROM coupons
+          WHERE code = ${dto.couponCode}
+          FOR UPDATE
+        `;
+        if (!locked) throw new NotFoundException('Coupon not found');
+        if (!locked.is_active) throw new BadRequestException('Coupon is inactive');
+        if (locked.expires_at && locked.expires_at < new Date()) throw new BadRequestException('Coupon has expired');
+        if (locked.max_uses && locked.used_count >= locked.max_uses) throw new BadRequestException('Coupon usage limit reached');
+
+        if (dto.userId && locked.per_user_limit > 0) {
+          const usageCount = await tx.couponUsage.count({
+            where: { couponId: locked.id, userId: dto.userId },
+          });
+          if (usageCount >= locked.per_user_limit) throw new BadRequestException('Per-user coupon limit reached');
+        }
+
+        if (locked.plan_ids && locked.plan_ids.length > 0 && !locked.plan_ids.includes(plan.id)) {
+          throw new BadRequestException('Coupon not valid for this plan');
+        }
+        if (locked.min_purchase && plan.price < locked.min_purchase) {
+          throw new BadRequestException(`Minimum purchase of ${locked.min_purchase} required`);
+        }
+
+        discount = locked.discount_type === 'percentage'
+          ? (plan.price * locked.discount_value) / 100
+          : locked.discount_value;
+        discount = Math.min(discount, plan.price);
+        couponCode = dto.couponCode;
+        couponId = locked.id;
+      }
+
+      // Recompute finalAmount now that discount is final.
+      const finalAmountTx = Math.max(0, plan.price - discount);
+
       const existing = await tx.subscription.findUnique({ where: { userId: dto.userId } });
 
       // Always use the real UUID from the fetched plan (dto.planId may be a slug)
@@ -115,7 +154,7 @@ export class SubscriptionsService {
           userId: dto.userId,
           subscriptionId: sub.id,
           gateway: dto.gateway || 'pending',
-          amount: finalAmount,
+          amount: finalAmountTx,
           currency: plan.currency || 'USD',
           status: 'pending',
           invoiceNumber,
@@ -129,12 +168,15 @@ export class SubscriptionsService {
     return result;
   }
 
-  async verifyAndActivate(dto: VerifySubscriptionDto, userId?: string) {
+  async verifyAndActivate(dto: VerifySubscriptionDto, userId?: string, isAdmin = false) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: dto.paymentId },
       include: { subscription: { include: { plan: true } } },
     });
-    if (!payment || (userId && payment.userId !== userId)) {
+    // Admin callers (isAdmin=true) may verify any payment — they're operating from
+    // the admin-only `POST /subscriptions/verify` route guarded by @Roles('super_admin','admin').
+    // Regular users may only verify their own payments (used by the legacy self-verify flow).
+    if (!payment || (userId && !isAdmin && payment.userId !== userId)) {
       throw new NotFoundException('Payment not found');
     }
     if (payment.status === 'completed') throw new ConflictException('Payment already verified');

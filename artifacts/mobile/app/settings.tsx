@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings, useUpdateSetting } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
+import { Config } from '@/constants/config';
 
 const C = {
   bg: '#0A0A0F',
@@ -60,7 +61,7 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', iconColor: '#EC4899', type: 'nav', route: '/notifications' },
       { id: 'parentalcontrol', label: 'Parental Control', icon: 'shield-checkmark-outline', iconColor: '#22C55E', type: 'nav', route: '/parental-control' },
       { id: 'language', label: 'Language', icon: 'globe-outline', iconColor: '#06B6D4', type: 'nav', route: '/language' },
-      { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: 'v2.4.1' },
+      { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: `v${Config.APP_VERSION}` },
     ],
   },
   ...(__DEV__ ? [{
@@ -84,7 +85,17 @@ export default function SettingsScreen() {
 
   const handleToggle = (key: string, value: boolean) => {
     setToggles((prev) => ({ ...prev, [key]: value }));
-    updateSetting.mutate({ key, value });
+    // M-024: don't hit the admin /settings endpoint from the user app. The
+    // useUpdateSetting hook now points at /auth/profile/preferences — but if
+    // the backend hasn't shipped that route yet we still keep the toggle in
+    // local state so the UI works. A toast acknowledges the save.
+    updateSetting.mutate(
+      { key, value },
+      {
+        onError: () =>
+          Alert.alert('Saved locally', 'Couldn\u2019t sync preference to the server — saved on this device for now.'),
+      },
+    );
   };
 
   const handleLogout = () => {
@@ -140,9 +151,10 @@ export default function SettingsScreen() {
                     {item.type === 'toggle' && item.key ? (
                       <Switch
                         value={
-                          settingsData?.[item.key] !== undefined
-                            ? Boolean(settingsData[item.key])
-                            : toggles[item.key] ?? false
+                          // M-024: local `toggles` is the source of truth so the UI
+                          // stays responsive even if the user-preferences endpoint is missing.
+                          toggles[item.key] ??
+                          (settingsData?.[item.key] !== undefined ? Boolean(settingsData[item.key]) : false)
                         }
                         onValueChange={(val) => handleToggle(item.key!, val)}
                         trackColor={{ false: '#2A2A3A', true: C.primary }}

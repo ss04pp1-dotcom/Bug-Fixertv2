@@ -59,11 +59,19 @@ export default function SettingsPage() {
   // ── Maintenance (controlled state) ──────────────────────────────────
   const [maintEnabled, setMaintEnabled] = useState(false);
   const [maintMessage, setMaintMessage] = useState("We're performing scheduled maintenance. We'll be back shortly!");
+  // D-036 fix: estimated end time was a dead input (no value/onChange).
+  // Bind it to state and persist it as `maintenance_end_time`.
+  const [maintEndTime, setMaintEndTime] = useState("");
 
   useEffect(() => {
     if (!settingsRaw) return;
     setMaintEnabled(Boolean(settings["maintenance_enabled"] ?? false));
     if (settings["maintenance_message"]) setMaintMessage(String(settings["maintenance_message"]));
+    if (settings["maintenance_end_time"]) {
+      const iso = String(settings["maintenance_end_time"]);
+      // datetime-local expects yyyy-MM-ddTHH:mm (local time, no Z)
+      setMaintEndTime(iso.slice(0, 16));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsRaw]);
 
@@ -133,9 +141,11 @@ export default function SettingsPage() {
   const saveMaintenance = async (explicitEnabled?: boolean) => {
     const value = explicitEnabled !== undefined ? explicitEnabled : maintEnabled;
     try {
+      // D-036 fix: persist the estimated end time alongside the message/enabled flag.
       await Promise.all([
         call("post", "/v1/settings", { key: "maintenance_enabled", value, isPublic: true }),
         call("post", "/v1/settings", { key: "maintenance_message",  value: maintMessage, isPublic: true }),
+        call("post", "/v1/settings", { key: "maintenance_end_time", value: maintEndTime || null, isPublic: true }),
       ]);
       setMaintEnabled(value);
       flash(); refetch();
@@ -284,6 +294,8 @@ export default function SettingsPage() {
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Estimated End Time (optional)</label>
                   <input type="datetime-local"
+                    value={maintEndTime}
+                    onChange={e => setMaintEndTime(e.target.value)}
                     className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary transition-colors" />
                 </div>
               </div>

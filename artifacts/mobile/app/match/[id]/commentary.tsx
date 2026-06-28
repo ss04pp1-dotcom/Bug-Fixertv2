@@ -224,7 +224,7 @@ export default function CommentaryScreen() {
     }));
   }, [commentaryData]);
 
-  const overSummary = commentaryData?.overSummary;
+  const overSummary = Array.isArray(commentaryData) ? null : commentaryData?.overSummary;
 
   if (isLoading) {
     return (

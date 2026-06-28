@@ -82,8 +82,9 @@ export default function StorageSettings({ settingsRaw, refetch }: Props) {
         ),
       });
       toast.success(`${meta.name} connection verified`);
-    } catch {
-      toast.info(`${meta.name} config saved — connection will be verified on first upload`);
+    } catch (err) {
+      // D-023 fix: don't pretend a failure is a deferred success — surface it.
+      toast.error("Connection failed: " + getApiErrorMessage(err));
     } finally {
       setTesting(false);
     }

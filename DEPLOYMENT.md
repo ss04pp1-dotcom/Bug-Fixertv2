@@ -115,7 +115,7 @@ Click **Create Web Service** — Render will build and deploy automatically.
 
 Your API will be live at: `https://streampro-api.onrender.com`
 
-**Verify:** `https://streampro-api.onrender.com/api/healthz` → should return `{"status":"ok"}`
+**Verify:** `https://streampro-api.onrender.com/healthz` → should return `{"status":"ok"}`
 
 > ⚠️ **Free tier note:** Render free services spin down after 15 minutes of inactivity. Upgrade to Starter ($7/month) to keep it always-on.
 
@@ -166,8 +166,10 @@ CORS_ORIGIN=https://your-project.pages.dev
 ### 4.1 Update API URL
 Create `artifacts/mobile/.env`:
 ```
-EXPO_PUBLIC_API_URL=https://streampro-api.onrender.com/api/v1
+EXPO_PUBLIC_API_URL=https://streampro-api.onrender.com
 ```
+
+> Note: `constants/config.ts` already appends `/v1`, so `EXPO_PUBLIC_API_URL` should be the bare host with no path.
 
 ### 4.2 Build with EAS
 ```bash
@@ -203,7 +205,7 @@ npx eas build --platform ios --profile production
 ### Mobile App (EAS Build)
 | Variable | Required | Description |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | ✅ | Full Render API URL e.g. `https://streampro-api.onrender.com/api/v1` |
+| `EXPO_PUBLIC_API_URL` | ✅ | Bare Render API host (no path) e.g. `https://streampro-api.onrender.com` — `constants/config.ts` appends `/v1` |
 
 ---
 
@@ -244,7 +246,7 @@ pnpm --filter @workspace/mobile run typecheck
 - Render doesn't run migrations automatically — run them manually or add a pre-deploy hook
 
 ### Render service sleeps (free tier)
-- Free tier sleeps after 15 min inactivity. Upgrade to Starter or use a cron service to ping `/api/healthz` every 10 minutes
+- Free tier sleeps after 15 min inactivity. Upgrade to Starter or use a cron service to ping `/healthz` every 10 minutes
 
 ### Admin login fails after deployment
 - Verify `NEXT_PUBLIC_API_URL` points to your Render URL (not localhost)

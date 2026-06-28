@@ -29,20 +29,38 @@ export default function OTPVerificationScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
+  const endTimeRef = useRef<number>(0);
+
+  // M-044: single interval based on an absolute end-time ref — avoids recreating
+  // setInterval on every tick (which the old `[timer]` dep did).
   useEffect(() => {
-    if (timer > 0) {
-      const int = setInterval(() => setTimer(t => t - 1), 1000);
-      return () => clearInterval(int);
-    }
-  }, [timer]);
+    endTimeRef.current = Date.now() + 59000;
+    const int = setInterval(() => {
+      const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
+      setTimer(remaining);
+      if (remaining <= 0) clearInterval(int);
+    }, 250);
+    return () => clearInterval(int);
+  }, []);
 
   const handleChange = (text: string, index: number) => {
     const digit = text.replace(/\D/g, '');
+    // M-025: smart paste — if the user pastes 2+ digits, distribute them across boxes.
+    if (digit.length > 1) {
+      const newOtp = [...otp];
+      for (let i = 0; i < OTP_LENGTH && i < digit.length; i++) {
+        newOtp[i] = digit[i];
+      }
+      setOtp(newOtp);
+      inputRefs.current[Math.min(digit.length, OTP_LENGTH) - 1]?.focus();
+      return;
+    }
+    const singleDigit = digit.slice(0, 1);
     const newOtp = [...otp];
-    newOtp[index] = digit;
+    newOtp[index] = singleDigit;
     setOtp(newOtp);
 
-    if (digit && index < OTP_LENGTH - 1) {
+    if (singleDigit && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -61,9 +79,15 @@ export default function OTPVerificationScreen() {
     if (code.length < OTP_LENGTH) return;
     setIsLoading(true);
     try {
-      await apiClient.post('/auth/verify-otp', { contact, code, mode });
+      // M-009: backend expects `identifier` (not `contact`) and `type` (not `mode`).
+      await apiClient.post('/auth/verify-otp', { identifier: contact, code, type: 'forgot_password' });
       if (mode === 'reset') {
-        router.replace('/(auth)/reset-password' as any);
+        // M-009: forward `contact` and verified `code` so the reset-password screen
+        // can include them in the final /auth/reset-password call.
+        router.replace({
+          pathname: '/(auth)/reset-password' as any,
+          params: { contact, code },
+        } as any);
       } else {
         router.replace('/(main)');
       }
@@ -79,8 +103,16 @@ export default function OTPVerificationScreen() {
   const handleResend = async () => {
     if (timer > 0) return;
     try {
-      await apiClient.post('/auth/forgot-password', { contact });
+      // M-009: forgot-password endpoint expects `identifier`.
+      await apiClient.post('/auth/forgot-password', { identifier: contact });
+      // M-044: restart the absolute end-time and re-arm the interval
+      endTimeRef.current = Date.now() + 59000;
       setTimer(59);
+      const int = setInterval(() => {
+        const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
+        setTimer(remaining);
+        if (remaining <= 0) clearInterval(int);
+      }, 250);
     } catch (err) {
       Alert.alert('Error', 'Failed to resend code');
     }

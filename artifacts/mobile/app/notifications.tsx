@@ -102,6 +102,11 @@ export default function NotificationsScreen() {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const [activeTab, setActiveTab] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refetch(); } finally { setRefreshing(false); }
+  };
 
   const notifications: NotificationItem[] = React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) return [];
@@ -210,8 +215,8 @@ export default function NotificationsScreen() {
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          onRefresh={() => refetch()}
-          refreshing={false}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
         />
       )}
     </SafeAreaView>

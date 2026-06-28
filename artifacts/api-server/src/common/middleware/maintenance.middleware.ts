@@ -1,4 +1,5 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -16,7 +17,10 @@ export class MaintenanceMiddleware implements NestMiddleware {
   private cachedConfig: MaintenanceConfig | null = null;
   private cacheExpiresAt = 0;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
     const url = req.url ?? '';
@@ -39,23 +43,24 @@ export class MaintenanceMiddleware implements NestMiddleware {
     const config = await this.getConfig();
     if (!config.enabled) return next();
 
-    // Allow admins through — decode JWT payload without signature verification.
-    // (Signature is still verified by JwtAuthGuard on every protected endpoint.)
+    // Allow admins through — VERIFY the JWT signature (not just base64-decode the payload).
+    // The previous implementation decoded the payload without checking the HMAC, which meant
+    // any client could forge a `role: 'super_admin'` claim and bypass maintenance mode.
     if (config.allowAdmins) {
       const authHeader = req.headers['authorization'] as string | undefined;
       if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
         try {
-          const parts = authHeader.slice(7).split('.');
-          if (parts.length === 3) {
-            const payload = JSON.parse(
-              Buffer.from(parts[1], 'base64url').toString('utf8'),
-            ) as { role?: string };
-            if (payload.role === 'super_admin' || payload.role === 'admin') {
-              return next();
-            }
+          // verifyAsync throws if the signature is invalid or the token is expired —
+          // any failure falls through to the maintenance block below.
+          const payload = await this.jwtService.verifyAsync<{ role?: string }>(token, {
+            secret: process.env.JWT_ACCESS_SECRET,
+          });
+          if (payload.role === 'super_admin' || payload.role === 'admin') {
+            return next();
           }
         } catch {
-          // Malformed token — fall through to maintenance block
+          // Invalid/expired token — treat as non-admin (fall through to maintenance block).
         }
       }
     }

@@ -18,7 +18,11 @@ export class GeoBlockController {
 
   @Public() @Get('check/auto') @ApiOperation({ summary: 'Check geo-block using request IP headers (CF-IPCountry or X-Country)' })
   checkAuto(@Req() req: Request) {
-    const country = ((req.headers['cf-ipcountry'] ?? req.headers['x-country']) as string | undefined)?.toUpperCase() || 'US';
+    // A-045: do NOT default missing country headers to 'US' — that whitelists every
+    // anonymous request that doesn't carry a country header (VPN/proxy users, direct
+    // connections, internal probes). Default to 'UNKNOWN' and have the service treat
+    // it as blocked (deny-by-default).
+    const country = ((req.headers['cf-ipcountry'] ?? req.headers['x-country']) as string | undefined)?.toUpperCase() || 'UNKNOWN';
     return this.geoBlockService.isBlocked(country);
   }
 

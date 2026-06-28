@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   Github, Plus, RefreshCw, Trash2, Edit, ToggleLeft, ToggleRight,
   CheckCircle, XCircle, Clock, Loader2, ExternalLink, ChevronDown, ChevronUp,
   Server, Tv, AlertTriangle, Zap,
 } from "lucide-react";
-import { useApiQuery, useApiMutation, useApiCallState, useInvalidate } from "@/lib/use-api";
+import { useApiQuery, useApiCallState, useInvalidate, getApiErrorMessage } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface GitHubSource {
@@ -122,13 +123,21 @@ export default function GitHubSourcesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this GitHub source and all its servers?")) return;
-    await apiClient.delete(`/v1/github-sources/${id}`);
-    await invalidate(KEY);
+    try {
+      await apiClient.delete(`/v1/github-sources/${id}`);
+      await invalidate(KEY);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to delete GitHub source");
+    }
   }
 
   async function handleToggle(source: GitHubSource) {
-    await apiClient.patch(`/v1/github-sources/${source.id}`, { enabled: !source.enabled });
-    await invalidate(KEY);
+    try {
+      await apiClient.patch(`/v1/github-sources/${source.id}`, { enabled: !source.enabled });
+      await invalidate(KEY);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to toggle GitHub source");
+    }
   }
 
   async function handleSyncNow(id: string, force = false) {
@@ -140,8 +149,9 @@ export default function GitHubSourcesPage() {
         invalidate(KEY);
         setSyncingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
       }, 2000);
-    } catch {
+    } catch (e) {
       setSyncingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      toast.error(getApiErrorMessage(e) || "Failed to sync GitHub source");
     }
   }
 
@@ -220,8 +230,8 @@ export default function GitHubSourcesPage() {
                   : source.enabled ? "due now" : "disabled";
 
                 return (
-                  <>
-                    <tr key={source.id} className="hover:bg-white/[0.02] transition-colors">
+                  <React.Fragment key={source.id}>
+                    <tr className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button
@@ -312,7 +322,7 @@ export default function GitHubSourcesPage() {
 
                     {/* Expanded sync log row */}
                     {expanded && source.syncLogs?.length > 0 && (
-                      <tr key={`${source.id}-log`} className="bg-white/[0.015]">
+                      <tr className="bg-white/[0.015]">
                         <td colSpan={7} className="px-8 py-3">
                           <p className="text-xs text-[#8B92A5] font-medium mb-2">Recent sync logs</p>
                           <div className="space-y-1.5">
@@ -343,7 +353,7 @@ export default function GitHubSourcesPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>

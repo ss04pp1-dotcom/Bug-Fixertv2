@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   StyleSheet,
   FlatList,
   ListRenderItem,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useSeries } from '@/lib/api-hooks';
 
 interface Episode {
   id: string;
@@ -23,84 +25,56 @@ interface Episode {
   gradientColors: [string, string];
 }
 
-const MOCK_EPISODES: Episode[] = [
-  {
-    id: 'e1',
-    number: 1,
-    title: 'The Awakening',
-    description: 'Dr. Maya Lin discovers an ancient artifact that holds the key to understanding the darkness spreading across the world.',
-    duration: '52 min',
-    progress: 1.0,
-    isNew: false,
-    isCurrent: false,
-    gradientColors: ['#10B981', '#059669'],
-  },
-  {
-    id: 'e2',
-    number: 2,
-    title: 'Shadows Gather',
-    description: 'As strange events intensify, Agent Cole is drawn into a conspiracy that threatens to unravel everything he believes in.',
-    duration: '48 min',
-    progress: 1.0,
-    isNew: false,
-    isCurrent: false,
-    gradientColors: ['#2563EB', '#1D4ED8'],
-  },
-  {
-    id: 'e3',
-    number: 3,
-    title: 'Into the Dark',
-    description: 'The team ventures into the shadow realm, where the rules of reality no longer apply and danger lurks at every turn.',
-    duration: '55 min',
-    progress: 0.45,
-    isNew: false,
-    isCurrent: true,
-    gradientColors: ['#7C3AED', '#6D28D9'],
-  },
-  {
-    id: 'e4',
-    number: 4,
-    title: 'The Reckoning',
-    description: 'Past mistakes come back to haunt the heroes as they face their greatest challenge yet in the heart of the storm.',
-    duration: '50 min',
-    progress: 0,
-    isNew: false,
-    isCurrent: false,
-    gradientColors: ['#EC4899', '#DB2777'],
-  },
-  {
-    id: 'e5',
-    number: 5,
-    title: 'Final Stand',
-    description: 'With time running out, the group must make a desperate last stand against the forces of darkness consuming the world.',
-    duration: '58 min',
-    progress: 0,
-    isNew: false,
-    isCurrent: false,
-    gradientColors: ['#EF4444', '#DC2626'],
-  },
-  {
-    id: 'e6',
-    number: 6,
-    title: 'New Dawn',
-    description: 'In the explosive season finale, sacrifices must be made and the true nature of the darkness is finally revealed.',
-    duration: '54 min',
-    progress: 0,
-    isNew: true,
-    isCurrent: false,
-    gradientColors: ['#F59E0B', '#D97706'],
-  },
+const EPISODE_GRADIENTS: [string, string][] = [
+  ['#10B981', '#059669'],
+  ['#2563EB', '#1D4ED8'],
+  ['#7C3AED', '#6D28D9'],
+  ['#EC4899', '#DB2777'],
+  ['#EF4444', '#DC2626'],
+  ['#F59E0B', '#D97706'],
 ];
+
+// M-004: Normalize episodes coming from the API (which may be nested under
+// series.seasons[].episodes or flat on series.episodes) into the UI shape.
+const extractEpisodes = (series: any, seasonNumber: number): Episode[] => {
+  if (!series) return [];
+  const seasons: any[] = Array.isArray(series.seasons) ? series.seasons : [];
+  const season = seasons.find((s: any) =>
+    Number(s.number ?? s.seasonNumber ?? s.season) === seasonNumber,
+  );
+  const rawList: any[] = season?.episodes || series.episodes || [];
+  return rawList.map((e: any, idx: number) => ({
+    id: String(e.id ?? e.episodeId ?? `e-${idx + 1}`),
+    number: Number(e.number ?? e.episodeNumber ?? e.episode ?? idx + 1),
+    title: e.title ?? e.name ?? `Episode ${idx + 1}`,
+    description: e.description ?? e.overview ?? e.summary ?? '',
+    duration: e.duration ? String(e.duration) : e.runtime ? `${e.runtime} min` : '-- min',
+    progress: Number(e.progress ?? e.watchProgress ?? 0),
+    isNew: Boolean(e.isNew),
+    isCurrent: Boolean(e.isCurrent),
+    gradientColors: EPISODE_GRADIENTS[idx % EPISODE_GRADIENTS.length],
+  }));
+};
+
+const extractSeasons = (series: any): { number: number; label: string; episodeCount: number }[] => {
+  if (!series) return [{ number: 1, label: 'S1', episodeCount: 0 }];
+  const seasons: any[] = Array.isArray(series.seasons) ? series.seasons : [];
+  if (seasons.length === 0) return [{ number: 1, label: 'S1', episodeCount: 0 }];
+  return seasons.map((s: any, i: number) => ({
+    number: Number(s.number ?? s.seasonNumber ?? s.season ?? i + 1),
+    label: `S${Number(s.number ?? s.seasonNumber ?? s.season ?? i + 1)}`,
+    episodeCount: Array.isArray(s.episodes) ? s.episodes.length : 0,
+  }));
+};
 
 export default function SeasonEpisodesScreen() {
   const { id, seasonId } = useLocalSearchParams<{ id: string; seasonId: string }>();
-  const [activeSeason, setActiveSeason] = useState(Number(seasonId) || 2);
+  const [activeSeason, setActiveSeason] = useState(Number(seasonId) || 1);
 
-  const seasons = [
-    { number: 1, label: 'S1', episodeCount: 8 },
-    { number: 2, label: 'S2', episodeCount: 6 },
-    { number: 3, label: 'S3', episodeCount: 10 },
-  ];
+  // M-004: fetch the real series from the API instead of using MOCK_EPISODES.
+  const { data: series, isLoading } = useSeries(String(id || ''));
+  const seasons = useMemo(() => extractSeasons(series), [series]);
+  const episodes = useMemo(() => extractEpisodes(series, activeSeason), [series, activeSeason]);
 
   const renderEpisodeItem: ListRenderItem<Episode> = ({ item }) => (
     <TouchableOpacity
@@ -109,7 +83,7 @@ export default function SeasonEpisodesScreen() {
         item.isCurrent && styles.episodeRowCurrent,
       ]}
       activeOpacity={0.7}
-      onPress={() => router.push({ pathname: `/player/${id}` as any, params: { type: 'series', season: String(item.number) } })}
+      onPress={() => router.push({ pathname: `/player/${id}` as any, params: { type: 'series', season: String(activeSeason), episode: String(item.number) } })}
     >
       {/* Left Border for Current */}
       {item.isCurrent && <View style={styles.currentBorder} />}
@@ -217,7 +191,7 @@ export default function SeasonEpisodesScreen() {
           <Ionicons name="arrow-back" size={24} color="#F2F2F7" />
         </TouchableOpacity>
         <View style={styles.titleSection}>
-          <Text style={styles.screenTitle}>Nightfall</Text>
+          <Text style={styles.screenTitle}>{series?.title || 'Series'}</Text>
           <Text style={styles.seasonSubtitle}>Season {activeSeason}</Text>
         </View>
         <TouchableOpacity style={styles.dropdownButton} activeOpacity={0.7}>
@@ -226,14 +200,25 @@ export default function SeasonEpisodesScreen() {
       </View>
 
       {/* Episodes List */}
-      <FlatList
-        data={MOCK_EPISODES}
-        keyExtractor={(item) => item.id}
-        renderItem={renderEpisodeItem}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color="#7C3AED" size="large" />
+        </View>
+      ) : episodes.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="film-outline" size={48} color="#6B6B80" />
+          <Text style={styles.emptyText}>No episodes available for this season.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={episodes}
+          keyExtractor={(item) => item.id}
+          renderItem={renderEpisodeItem}
+          ListHeaderComponent={renderHeader}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
@@ -242,6 +227,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#05070F',
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#B3B8C8',
+    textAlign: 'center',
   },
   topBar: {
     flexDirection: 'row',

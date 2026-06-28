@@ -10,6 +10,14 @@ export class GeoBlockService {
   }
 
   async isBlocked(countryCode: string) {
+    // A-045: deny-by-default for unknown country codes. Previously a request with no
+    // country header (or one we don't have an explicit GeoRestriction row for) was
+    // allowed through — which means a misconfigured proxy or direct connection from
+    // a sanctioned region would bypass geo-blocking entirely. The controller now
+    // sends 'UNKNOWN' for missing headers; treat it as blocked.
+    if (countryCode === 'UNKNOWN') {
+      return { countryCode, isBlocked: true };
+    }
     const restriction = await this.prisma.geoRestriction.findUnique({ where: { countryCode } });
     return { countryCode, isBlocked: restriction?.isBlocked ?? false };
   }

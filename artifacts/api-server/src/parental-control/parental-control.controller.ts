@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ParentalControlService, SetParentalControlDto } from './parental-control.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -19,6 +20,9 @@ export class ParentalControlController {
     return this.parentalControlService.set(userId, dto);
   }
 
+  // Throttle PIN verification to 5 attempts per 60s per IP — blocks brute-force attacks
+  // against the 4-6 digit PIN (only ~10⁴–10⁶ possible values).
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('verify-pin') @ApiOperation({ summary: 'Verify parental PIN' })
   verifyPin(@CurrentUser('id') userId: string, @Body() body: { pin: string }) {
     return this.parentalControlService.verifyPin(userId, body.pin);

@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException, Logger, Optional, Inject } from '@nestjs/common';
 import { Prisma, PaymentStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreatePaymentDto, RefundDto, WebhookDto, CreateGatewayDto } from './dto/payments.dto';
 import { Request } from 'express';
@@ -9,7 +10,10 @@ import { Request } from 'express';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() @Inject(AuditService) private auditService?: AuditService,
+  ) {}
 
   async findAll(query: PaginationDto & { status?: string; search?: string }) {
     const where: Prisma.PaymentWhereInput = {};
@@ -53,9 +57,25 @@ export class PaymentsService {
     if (!dto.amount || dto.amount <= 0) {
       throw new BadRequestException('Payment amount must be greater than zero');
     }
+    // Verify the subscription belongs to the caller — prevents a client from creating
+    // a payment against someone else's subscription and then claiming it as their own.
+    if (dto.subscriptionId) {
+      const sub = await this.prisma.subscription.findUnique({ where: { id: dto.subscriptionId } });
+      if (!sub || sub.userId !== dto.userId) {
+        throw new ForbiddenException('Subscription does not belong to the requesting user');
+      }
+      // Use the plan's price as the authoritative amount — ignore the client-supplied
+      // `amount` to prevent users from paying $0.01 for a $9.99 plan and then demanding activation.
+      const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: sub.planId } });
+      if (plan) {
+        dto = { ...dto, amount: plan.price, currency: plan.currency || dto.currency };
+      }
+    }
     const invoiceNumber = `INV-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    // Client-created payments are ALWAYS `pending` — they can only be flipped to `completed`
+    // by an admin (verify) or a signed webhook. Never trust the client's status field.
     return this.prisma.payment.create({
-      data: { ...dto, invoiceNumber } as Prisma.PaymentCreateInput,
+      data: { ...dto, invoiceNumber, status: 'pending' } as Prisma.PaymentCreateInput,
     });
   }
 
@@ -65,10 +85,11 @@ export class PaymentsService {
 
     return this.prisma.$transaction(async (tx) => {
       // Re-read inside transaction to prevent race condition where two simultaneous
-      // verify calls both see status !== 'completed' before either commits
+      // verify calls both see status !== 'completed' before either commits.
+      // Only `pending` payments can be verified — blocks re-verifying refunded/failed/completed.
       const current = await tx.payment.findUnique({ where: { id } });
-      if (!current || current.status === 'completed') {
-        throw new BadRequestException('Payment already verified');
+      if (!current || current.status !== 'pending') {
+        throw new BadRequestException('Only pending payments can be verified');
       }
       const updated = await tx.payment.update({
         where: { id },
@@ -92,6 +113,17 @@ export class PaymentsService {
           });
         }
       }
+      // A-061: audit the manual verify — admin-side payment verifications are
+      // financially meaningful (they grant premium access) and should be traceable.
+      if (this.auditService) {
+        this.auditService.log({
+          action: 'payment.verify',
+          resource: 'payment',
+          resourceId: id,
+          newValues: { status: 'completed', userId: payment.userId, amount: payment.amount } as unknown as Prisma.InputJsonValue,
+          level: 'info',
+        }).catch(() => undefined);
+      }
       return updated;
     });
   }
@@ -100,6 +132,10 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status === 'refunded') throw new BadRequestException('Payment already refunded');
+    // Only completed payments can be refunded — blocks refunding pending/failed payments
+    // (which would otherwise let an admin mark a never-paid payment as refunded and trigger
+    // the coupon decrement side-effect on a payment that never activated the subscription).
+    if (payment.status !== 'completed') throw new BadRequestException('Only completed payments can be refunded');
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.payment.update({
@@ -126,6 +162,16 @@ export class PaymentsService {
             data: { usedCount: { decrement: 1 } },
           });
         }
+      }
+      // A-061: audit refunds — they reverse revenue and revoke premium access.
+      if (this.auditService) {
+        this.auditService.log({
+          action: 'payment.refund',
+          resource: 'payment',
+          resourceId: id,
+          newValues: { status: 'refunded', reason: dto.reason, userId: payment.userId, amount: payment.amount } as unknown as Prisma.InputJsonValue,
+          level: 'warning',
+        }).catch(() => undefined);
       }
       return updated;
     });
@@ -161,7 +207,7 @@ export class PaymentsService {
 
     const gateway = await this.prisma.paymentGateway.findFirst({
       where: { slug: gatewaySlug, isActive: true },
-    }).catch(() => null);
+    });
 
     if (!gateway?.webhookSecret) {
       this.logger.error(`Webhook rejected: no secret configured for gateway ${gatewaySlug}`);
@@ -172,48 +218,63 @@ export class PaymentsService {
       this.logger.error('Webhook rejected: raw body not captured');
       throw new BadRequestException('Raw body not available for signature verification');
     }
-    const expected = 'sha256=' + crypto
-      .createHmac('sha256', gateway.webhookSecret)
-      .update(rawBody)
-      .digest('hex');
-    const received = (signature ?? '').padEnd(expected.length, '\0').slice(0, expected.length);
-    const expectedBuf = Buffer.from(expected);
-    const receivedBuf = Buffer.from(received);
-    if (expectedBuf.length !== receivedBuf.length || !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
-      throw new UnauthorizedException('Invalid webhook signature');
-    }
+
+    // Per-gateway signature verification — each gateway has its own signing scheme.
+    // Stripe uses `t=timestamp,v1=hex` HMAC; SSLCommerz/PayPal/bKash have different formats.
+    // See verifyStripeSignature / verifySslcommerzSignature / verifyPaypalSignature below.
+    this.verifyGatewaySignature(gatewaySlug, rawBody, signature ?? '', gateway.webhookSecret);
 
     if (payload.transactionId) {
-      const existing = await this.prisma.payment.findFirst({ where: { gatewayTxId: payload.transactionId } });
-      if (existing) {
-        await this.prisma.payment.update({
+      // Idempotency check: if the payment is already 'completed' the webhook is a replay
+      // (the gateway retries on 5xx) — skip re-processing so we don't double-extend the
+      // subscription or write duplicate history rows. We still return 200 OK so the gateway
+      // stops retrying.
+      //
+      // Wrap the entire status update + subscription activation + user update + history create
+      // in a single transaction so a crash mid-flow can't leave the subscription active while
+      // the payment row is still pending (or vice versa). On failure, the exception propagates
+      // to the controller which returns 500 — the gateway will retry the webhook.
+      await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.payment.findFirst({ where: { gatewayTxId: payload.transactionId } });
+        if (!existing) return; // Nothing to update — not a payment we know about.
+
+        if (existing.status === 'completed') {
+          // Already processed — idempotent no-op.
+          this.logger.log(`Webhook idempotency: payment ${existing.id} already completed, skipping.`);
+          return;
+        }
+
+        const newStatus: PaymentStatus =
+          payload.status === 'success' ? 'completed'
+          : payload.status === 'failed' ? 'failed'
+          : 'pending';
+
+        await tx.payment.update({
           where: { id: existing.id },
           data: {
             webhookPayload: payload as Prisma.InputJsonValue,
-            status: payload.status === 'success' ? 'completed' : payload.status === 'failed' ? 'failed' : 'pending',
-            paidAt: payload.status === 'success' ? new Date() : undefined,
+            status: newStatus,
+            paidAt: newStatus === 'completed' ? new Date() : undefined,
           },
-        }).catch((e: Error) => {
-          this.logger.error(`Webhook DB update failed for txId ${payload.transactionId}: ${e.message}`, e.stack);
         });
 
-        if (payload.status === 'success' && existing.subscriptionId) {
-          const sub = await this.prisma.subscription.findUnique({
+        if (newStatus === 'completed' && existing.subscriptionId) {
+          const sub = await tx.subscription.findUnique({
             where: { id: existing.subscriptionId },
             include: { plan: true },
           });
           if (sub) {
             const endsAt = new Date();
             endsAt.setDate(endsAt.getDate() + sub.plan.durationDays);
-            await this.prisma.subscription.update({
+            await tx.subscription.update({
               where: { id: sub.id },
               data: { status: 'active', endsAt, nextRenewalAt: endsAt },
             });
-            await this.prisma.user.update({
+            await tx.user.update({
               where: { id: existing.userId },
               data: { isPremium: true, subscriptionEndsAt: endsAt },
             });
-            await this.prisma.subscriptionHistory.create({
+            await tx.subscriptionHistory.create({
               data: {
                 userId: existing.userId,
                 subscriptionId: sub.id,
@@ -225,10 +286,100 @@ export class PaymentsService {
             });
           }
         }
-      }
+      });
     }
 
     return { received: true, gateway: gatewaySlug, event: payload.event };
+  }
+
+  /**
+   * Dispatch signature verification to the correct per-gateway verifier.
+   * Throws UnauthorizedException when the signature is invalid or NotImplemented
+   * for gateways that haven't been wired up yet.
+   */
+  private verifyGatewaySignature(gatewaySlug: string, rawBody: string, signature: string, secret: string): void {
+    switch (gatewaySlug) {
+      case 'stripe':
+        if (!this.verifyStripeSignature(rawBody, signature, secret)) {
+          throw new UnauthorizedException('Invalid webhook signature');
+        }
+        return;
+      case 'sslcommerz':
+        if (!this.verifySslcommerzSignature(rawBody, signature, secret)) {
+          throw new UnauthorizedException('Invalid webhook signature');
+        }
+        return;
+      case 'paypal':
+        if (!this.verifyPaypalSignature(rawBody, signature, secret)) {
+          throw new UnauthorizedException('Invalid webhook signature');
+        }
+        return;
+      default: {
+        // Legacy / generic gateways: keep the original `sha256=<hex>` HMAC scheme
+        // so existing integrations (bKash, manual gateways, etc.) keep working.
+        const expected = 'sha256=' + crypto
+          .createHmac('sha256', secret)
+          .update(rawBody)
+          .digest('hex');
+        const received = signature.padEnd(expected.length, '\0').slice(0, expected.length);
+        const expectedBuf = Buffer.from(expected);
+        const receivedBuf = Buffer.from(received);
+        if (expectedBuf.length !== receivedBuf.length || !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
+          throw new UnauthorizedException('Invalid webhook signature');
+        }
+      }
+    }
+  }
+
+  /**
+   * Stripe webhook signature verification.
+   * Stripe sends `Stripe-Signature: t=<timestamp>,v1=<hex>` and computes the
+   * signature as HMAC-SHA256(`<timestamp>.<rawBody>`, webhook_secret).
+   * https://docs.stripe.com/webhooks#verify-events
+   */
+  private verifyStripeSignature(rawBody: string, signature: string, secret: string): boolean {
+    try {
+      const parts = signature.split(',').map(s => s.trim());
+      const tPart = parts.find(p => p.startsWith('t='));
+      const v1Part = parts.find(p => p.startsWith('v1='));
+      if (!tPart || !v1Part) return false;
+      const timestamp = tPart.slice(2);
+      const provided = v1Part.slice(3);
+      const signedPayload = `${timestamp}.${rawBody}`;
+      const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+      // Optional: reject signatures older than 5 minutes to prevent replay.
+      const ageSec = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
+      if (isNaN(ageSec) || ageSec > 300) return false;
+      const a = Buffer.from(expected);
+      const b = Buffer.from(provided);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * SSLCommerz signature verification — STUB.
+   * TODO: implement verify_key/verify_sign POST param validation per SSLCommerz docs.
+   * Throws NotImplemented until wired up — callers must configure the gateway slug as
+   * something other than `sslcommerz` until this is implemented.
+   */
+  private verifySslcommerzSignature(_rawBody: string, _signature: string, _secret: string): boolean {
+    // NOTE: SSLCommerz uses a verify_key/verify_sign POST-param flow rather than a
+    // header signature. Full implementation pending — not used in production yet.
+    // Returning true here would be insecure; throw so it can't be silently bypassed.
+    throw new Error('SSLCommerz signature verification not implemented yet — configure gateway slug as something else or implement me.');
+  }
+
+  /**
+   * PayPal signature verification — STUB.
+   * TODO: implement PayPal-Transmission-Sig + certificate chain verification.
+   * https://developer.paypal.com/api/rest/webhooks/
+   */
+  private verifyPaypalSignature(_rawBody: string, _signature: string, _secret: string): boolean {
+    // NOTE: PayPal requires cert-chain verification (PayPal-Cert-Url + PayPal-Auth-Algo +
+    // transmission signature). Full implementation pending.
+    throw new Error('PayPal signature verification not implemented yet — configure gateway slug as something else or implement me.');
   }
 
   async getStats() {

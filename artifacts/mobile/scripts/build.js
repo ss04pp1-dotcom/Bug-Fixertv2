@@ -191,10 +191,23 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   process.exit(1);
 }
 
-async function downloadFile(url, outputPath) {
+async function downloadFile(url, outputPath, parentSignal) {
   const controller = new AbortController();
   const fiveMinMS = 5 * 60 * 1_000;
   const timeoutId = setTimeout(() => controller.abort(), fiveMinMS);
+
+  // If the parent download operation is cancelled (e.g. the overall
+  // downloadBundlesAndManifests timeout fired), abort this fetch too so the
+  // underlying socket is released instead of leaking until the 5-minute
+  // per-file timer expires.
+  const onParentAbort = () => controller.abort();
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort();
+    } else {
+      parentSignal.addEventListener("abort", onParentAbort, { once: true });
+    }
+  }
 
   try {
     console.log(`Downloading: ${url}`);
@@ -219,15 +232,22 @@ async function downloadFile(url, outputPath) {
     }
 
     if (error.name === "AbortError") {
-      throw new Error(`Download timeout after 5m: ${url}`);
+      const reason =
+        parentSignal && parentSignal.aborted
+          ? "parent operation cancelled"
+          : "5m per-file timeout";
+      throw new Error(`Download aborted (${reason}): ${url}`);
     }
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    if (parentSignal) {
+      parentSignal.removeEventListener("abort", onParentAbort);
+    }
   }
 }
 
-async function downloadBundle(platform, timestamp) {
+async function downloadBundle(platform, timestamp, signal) {
   const entryPath = path.resolve(projectRoot, "node_modules", "expo-router", "entry");
   const bundlePath = path.relative(workspaceRoot, entryPath);
   const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
@@ -248,13 +268,23 @@ async function downloadBundle(platform, timestamp) {
   );
 
   console.log(`Fetching ${platform} bundle...`);
-  await downloadFile(url.toString(), output);
+  await downloadFile(url.toString(), output, signal);
   console.log(`${platform} bundle ready`);
 }
 
-async function downloadManifest(platform) {
+async function downloadManifest(platform, signal) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 300_000);
+
+  // Propagate parent cancellation (overall download timeout) to this fetch.
+  const onParentAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", onParentAbort, { once: true });
+    }
+  }
 
   try {
     console.log(`Fetching ${platform} manifest...`);
@@ -272,29 +302,36 @@ async function downloadManifest(platform) {
     return manifest;
   } catch (error) {
     if (error.name === "AbortError") {
+      const reason =
+        signal && signal.aborted
+          ? "parent operation cancelled"
+          : "5m per-manifest timeout";
       throw new Error(
-        `Manifest download timeout after 5m for platform: ${platform}`,
+        `Manifest download aborted (${reason}) for platform: ${platform}`,
       );
     }
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    if (signal) {
+      signal.removeEventListener("abort", onParentAbort);
+    }
   }
 }
 
-async function downloadBundlesAndManifests(timestamp) {
+async function downloadBundlesAndManifests(timestamp, signal) {
   console.log("Downloading bundles and manifests...");
   console.log("This may take several minutes for production builds...");
 
   try {
     // Bundles are sequential — Metro can't handle both platforms simultaneously
     // without stalling. Manifests are cheap and run in parallel after.
-    await downloadBundle("ios", timestamp);
-    await downloadBundle("android", timestamp);
+    await downloadBundle("ios", timestamp, signal);
+    await downloadBundle("android", timestamp, signal);
 
     const [iosManifest, androidManifest] = await Promise.all([
-      downloadManifest("ios"),
-      downloadManifest("android"),
+      downloadManifest("ios", signal),
+      downloadManifest("android", signal),
     ]);
 
     console.log("All downloads completed successfully");
@@ -354,6 +391,21 @@ function extractAssets(timestamp) {
 
   extractFromBundle(bundles.ios, "ios");
   extractFromBundle(bundles.android, "android");
+
+  // Sanity check: if no assets were extracted but the bundle clearly contains
+  // an `httpServerLocation` literal, the regex above is stale (Metro may have
+  // changed the serialized asset shape). Fail loudly instead of silently
+  // shipping a build with broken asset URLs.
+  if (assetsMap.size === 0) {
+    const bundleHasAssets =
+      bundles.ios.includes("httpServerLocation") ||
+      bundles.android.includes("httpServerLocation");
+    if (bundleHasAssets) {
+      console.warn(
+        "[build] Asset regex did not match — bundle may have broken asset URLs",
+      );
+    }
+  }
 
   return Array.from(assetsMap.values());
 }
@@ -475,9 +527,9 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       Number(timestamp.split("-")[0]),
     ).toISOString();
     manifest.extra.expoClient.hostUri =
-      baseUrl.replace("https://", "") + "/" + platform;
+      baseUrl.replace("https://", "");
     manifest.extra.expoGo.debuggerHost =
-      baseUrl.replace("https://", "") + "/" + platform;
+      baseUrl.replace("https://", "");
     manifest.extra.expoGo.packagerOpts.dev = false;
 
     if (manifest.assets && manifest.assets.length > 0) {
@@ -521,9 +573,19 @@ async function main() {
   await startMetro(domain, expoPublicReplId);
 
   const downloadTimeout = 600000;
-  const downloadPromise = downloadBundlesAndManifests(timestamp);
+  // AbortController is wired through downloadBundlesAndManifests →
+  // downloadBundle / downloadManifest → downloadFile so that when the overall
+  // 10-minute budget elapses, all in-flight fetches are cancelled and their
+  // sockets are released. Without this the timeout fires but the fetches keep
+  // running in the background, holding the process open and leaking sockets.
+  const downloadController = new AbortController();
+  const downloadPromise = downloadBundlesAndManifests(
+    timestamp,
+    downloadController.signal,
+  );
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => {
+      downloadController.abort();
       reject(
         new Error(
           `Overall download timeout after ${downloadTimeout / 1000} seconds. ` +

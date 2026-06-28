@@ -63,9 +63,12 @@ export function usePresence() {
 
     const { io } = await import("socket.io-client");
 
-    // FIX 9: WEBSOCKET_URL use করো, `/ws` namespace append করো
+    // D-047 fix: pass `auth` as a FUNCTION so socket.io re-fetches the token
+    // on every reconnect. Previously auth was a static object captured at
+    // connect time, so a refreshed token (after 401 / re-login) was never
+    // picked up and the socket kept failing to authenticate.
     const socket = io(`${getWsUrl()}/ws`, {
-      auth:       { token: `Bearer ${token}` },
+      auth:       (cb: (payload: { token: string }) => void) => cb({ token: `Bearer ${getToken()}` }),
       transports: ["websocket", "polling"],
       reconnection:        true,
       reconnectionAttempts: 10,
@@ -132,8 +135,9 @@ export function usePresenceStats() {
 
       const { io } = await import("socket.io-client");
       // FIX 9: WEBSOCKET_URL use করো
+      // D-047 fix: `auth` as a function so reconnects pick up a refreshed token.
       const socket = io(`${getWsUrl()}/ws`, {
-        auth:       { token: `Bearer ${token}` },
+        auth:       (cb: (payload: { token: string }) => void) => cb({ token: `Bearer ${getToken()}` }),
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 10,

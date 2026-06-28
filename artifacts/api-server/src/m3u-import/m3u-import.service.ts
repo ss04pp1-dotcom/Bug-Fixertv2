@@ -5,7 +5,8 @@ import { StreamValidationService, ValidationResult } from './stream-validation.s
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { join } from 'path';
 import { StreamType, ChannelStreamStatus, ImportJobStatus, ImportChannelStatus, ServerSourceType } from '@prisma/client';
 import { normalizeName } from '../github-sync/github-sync.service';
@@ -55,7 +56,7 @@ export class M3uImportService {
     const storedName = `${fileHash}_${safeName}`;
     const filePath = join(this.UPLOAD_DIR, storedName);
 
-    writeFileSync(filePath, file.buffer);
+    await fsPromises.writeFile(filePath, file.buffer);
 
     // Create import job record
     const job = await this.prisma.importJob.create({
@@ -103,7 +104,7 @@ export class M3uImportService {
 
     try {
       // Parse M3U file
-      const content = readFileSync(filePath, 'utf-8');
+      const content = await fsPromises.readFile(filePath, 'utf-8');
       const channels = this.m3uParser.parse(content);
 
       if (channels.length === 0) {
@@ -146,7 +147,7 @@ export class M3uImportService {
       });
 
       // Cleanup file
-      try { unlinkSync(filePath); } catch {}
+      try { await fsPromises.unlink(filePath); } catch {}
 
       // Mark completed
       await this.prisma.importJob.update({
@@ -332,9 +333,14 @@ export class M3uImportService {
           });
 
           if (sameNameOffline) {
-            // Log the offline duplicate before hard-deleting it
+            // Log the offline duplicate before soft-deleting it
             await this.logDeletedChannel(sameNameOffline, 'duplicate_replaced_by_working');
-            await this.prisma.channel.delete({ where: { id: sameNameOffline.id } });
+            // SOFT-DELETE only — preserves audit history and FK relations (servers, EPG, favorites).
+            // A scheduled purge job can hard-delete rows whose deletedAt is older than 30 days.
+            await this.prisma.channel.update({
+              where: { id: sameNameOffline.id },
+              data: { deletedAt: new Date(), isActive: false },
+            });
           }
 
           // Create new channel with race-condition-safe slug generation
@@ -840,14 +846,21 @@ export class M3uImportService {
       return { deleted: 0 };
     }
 
-    this.logger.log(`Auto-cleanup: deleting ${inactiveChannels.length} channels inactive for 7+ days`);
+    this.logger.log(`Auto-cleanup: soft-deleting ${inactiveChannels.length} channels inactive for 7+ days`);
 
     for (const channel of inactiveChannels) {
       await this.logDeletedChannel(channel, 'inactive_7_days');
-      await this.prisma.channel.delete({ where: { id: channel.id } });
+      // SOFT-DELETE — preserves audit history, EPG, favorites, and FK relations.
+      // A 30-day grace period should be observed by a separate purge job before
+      // hard-deleting these rows (gives ops a chance to restore channels that were
+      // offline due to a temporary upstream issue, not a real deletion).
+      await this.prisma.channel.update({
+        where: { id: channel.id },
+        data: { deletedAt: new Date(), isActive: false },
+      });
     }
 
-    this.logger.log(`Auto-cleanup: deleted ${inactiveChannels.length} channels`);
+    this.logger.log(`Auto-cleanup: soft-deleted ${inactiveChannels.length} channels`);
     return { deleted: inactiveChannels.length };
   }
 }

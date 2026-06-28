@@ -23,14 +23,15 @@ pnpm --filter @workspace/api-server exec tsc --noEmit
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | JWT signing secret |
+| `DATABASE_URL` | PostgreSQL connection string (Supabase transaction pooler, port 6543) |
+| `JWT_ACCESS_SECRET` | JWT access token signing secret |
 | `JWT_REFRESH_SECRET` | Refresh token secret |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account ID |
-| `R2_ACCESS_KEY_ID` | R2 access key |
-| `R2_SECRET_ACCESS_KEY` | R2 secret key |
-| `R2_BUCKET` | R2 bucket name |
-| `R2_PUBLIC_URL` | Public CDN URL for R2 assets |
+| `CLOUDFLARE_R2_ACCOUNT_ID` | Cloudflare R2 account ID |
+| `CLOUDFLARE_R2_ACCESS_KEY_ID` | R2 access key ID |
+| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | R2 secret key |
+| `CLOUDFLARE_R2_BUCKET_NAME` | R2 bucket name |
+| `CLOUDFLARE_R2_PUBLIC_URL` | Public CDN URL for R2 assets |
+| `DIRECT_URL` | Direct DB connection (port 5432) for Prisma migrations |
 | `REDIS_URL` | Redis URL (BullMQ job queues) |
 
 ## Stack
@@ -93,7 +94,7 @@ artifacts/
 
 ## Architecture decisions
 
-- **Global URI versioning**: All NestJS routes use `/api/v1/...` via `VersioningType.URI`. Endpoints that must remain unversioned (health, ad SDK) use `VERSION_NEUTRAL`.
+- **Global URI versioning**: All NestJS routes use `/v1/...` via `VersioningType.URI` with `defaultVersion: '1'`. The server does NOT call `setGlobalPrefix('api')`, so actual paths are `/v1/...` not `/api/v1/...`. Endpoints that must remain unversioned (health, ad SDK) use `VERSION_NEUTRAL`. Health endpoints are at root (e.g. `/healthz`).
 - **No `any` types**: All Prisma queries use typed inputs (`Prisma.XxxWhereInput`, `Prisma.XxxCreateInput`, typed enums from `@prisma/client`). `strictPropertyInitialization: false` is set only for NestJS DTOs (class-validator pattern requires uninitialized class properties).
 - **OTP security**: The `forgotPassword` endpoint returns only `{ message }` — the OTP code is never included in the API response. It is sent out-of-band via email.
 - **WebSocket JWT**: The Socket.IO gateway (`StreamProGateway`) verifies a JWT on every `handleConnection` via `WsJwtGuard`. Unauthenticated connections are immediately disconnected.

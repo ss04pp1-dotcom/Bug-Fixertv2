@@ -1,11 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SupportService {
+  private readonly logger = new Logger(SupportService.name);
+
   constructor(private prisma: PrismaService) {}
 
   private async nextTicketNo(): Promise<string> {
+    // A-042: two concurrent `create()` calls could compute the same `count + 1`
+    // value and one of them would fail with a P2002 unique-constraint violation
+    // on ticketNo. We expose the count+format helper here; the retry loop around
+    // the create() call (see `create()`) handles the actual P2002 by re-deriving
+    // a fresh ticketNo from the now-bumped count.
     const count = await this.prisma.supportTicket.count();
     return `TKT${String(count + 1).padStart(4, '0')}`;
   }
@@ -30,10 +37,33 @@ export class SupportService {
   }
 
   async create(dto: { userEmail: string; subject: string; description?: string; priority?: string }) {
-    const ticketNo = await this.nextTicketNo();
-    return this.prisma.supportTicket.create({
-      data: { ticketNo, userEmail: dto.userEmail, subject: dto.subject, description: dto.description, priority: dto.priority ?? 'Medium' },
-    });
+    // A-042: wrap the create in a retry loop that catches P2002 (unique constraint on
+    // ticketNo). Two concurrent create() calls can both compute the same `count + 1`
+    // value before either INSERT commits; one will fail with P2002 — on retry the
+    // count() will reflect the now-committed ticket and produce a fresh number.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ticketNo = await this.nextTicketNo();
+      try {
+        return await this.prisma.supportTicket.create({
+          data: {
+            ticketNo,
+            userEmail: dto.userEmail,
+            subject: dto.subject,
+            description: dto.description,
+            priority: dto.priority ?? 'Medium',
+          },
+        });
+      } catch (e: any) {
+        lastErr = e;
+        if (e?.code === 'P2002' && attempt < 2) {
+          this.logger.warn(`create() ticketNo collision (${ticketNo}) on attempt ${attempt + 1} — retrying`);
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastErr;
   }
 
   async update(id: string, dto: { status?: string; priority?: string; assignedTo?: string }) {

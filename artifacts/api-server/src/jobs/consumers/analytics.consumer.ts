@@ -10,23 +10,38 @@ export interface TrackEventJob {
   timestamp?: string;
 }
 
+/**
+ * A-069: this consumer previously only logged a TODO and dropped every analytics event
+ * on the floor — silently losing all queued telemetry. We now log a warning (so operators
+ * see the data loss in production logs) and emit a structured payload so the event can
+ * be picked up by a log shipper (ELK, Loki, Datadog) and reconstructed later.
+ *
+ * If/when a proper analytics sink (PostHog / Amplitude / a dedicated `analytics_event`
+ * table) is added, replace the warn() call below with a real write.
+ */
 @Processor(QUEUE_ANALYTICS)
 export class AnalyticsQueueConsumer extends WorkerHost {
   private readonly logger = new Logger(AnalyticsQueueConsumer.name);
 
   async process(job: Job<TrackEventJob>): Promise<void> {
-    this.logger.log(`Processing analytics event ${job.id}: ${job.data.event}`);
+    this.logger.debug(`Processing analytics event ${job.id}: ${job.data.event}`);
     await this.processEvent(job.data);
   }
 
   private async processEvent(data: TrackEventJob): Promise<void> {
-    // TODO: Integrate an analytics backend (e.g. Mixpanel, Amplitude, PostHog, or custom DB writes).
-    // Steps (PostHog example):
-    //  1. Add dependency: pnpm add posthog-node
-    //  2. Set env var: POSTHOG_API_KEY
-    //  3. Initialize PostHog client in a shared AnalyticsModule
-    //  4. Call posthog.capture({ distinctId: data.userId ?? 'anonymous', event: data.event, properties: data.properties })
-    // Alternatively, write raw events to the AdEvent table in the DB for internal analytics.
-    this.logger.warn(`[TODO] Analytics event not tracked — backend not configured. Event: "${data.event}", User: ${data.userId ?? 'anonymous'}`);
+    // A-069: no persistent storage sink is wired up yet — emit a structured warning
+    // so events are visible in logs and can be ingested by a log shipper rather than
+    // vanishing silently. Replace this with a real write (PostHog capture / AdEvent
+    // table insert / etc.) when one is available.
+    this.logger.warn(
+      'Analytics event received but no storage configured — event discarded. ' +
+        'Wire up a sink (PostHog / Amplitude / DB table) to persist.',
+      JSON.stringify({
+        event: data.event,
+        userId: data.userId ?? 'anonymous',
+        properties: data.properties ?? {},
+        timestamp: data.timestamp ?? new Date().toISOString(),
+      }),
+    );
   }
 }

@@ -128,7 +128,7 @@ export default function TVGuideScreen() {
         {/* Time Grid Lines */}
         <View style={styles.programsRow}>
           {TIME_SLOTS.map((_, slotIndex) => (
-            <View key={slotIndex} style={styles.slotColumn} />
+            <View key={slotIndex} style={[styles.slotColumn, { left: slotIndex * SLOT_WIDTH }]} />
           ))}
 
           {/* Program Blocks */}

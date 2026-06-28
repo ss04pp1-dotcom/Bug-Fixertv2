@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Headers, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto, UpsertGatewayDto, PaymentsQueryDto } from './dto/payments.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -59,6 +60,7 @@ export class PaymentsController {
   deleteGateway(@Param('id') id: string) { return this.svc.deleteGateway(id); }
 
   @Public()
+  @SkipThrottle()
   @Post('webhook')
   @ApiOperation({ summary: 'Payment gateway webhook (public)' })
   webhook(@Body() payload: WebhookDto, @Headers('x-gateway-signature') signature: string, @Req() req: Request) {

@@ -3,7 +3,8 @@
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { CheckCircle, Clock, AlertCircle, Plus, X, RefreshCw, Menu, Trash2 } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
+import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
+import { toast } from "sonner";
 
 interface Ticket {
   id: string;
@@ -55,6 +56,8 @@ export default function Support() {
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  const [actionErr, setActionErr] = useState("");
+
   const createTicket = async () => {
     const userEmail = emailRef.current?.value?.trim();
     const subject   = subjectRef.current?.value?.trim();
@@ -64,20 +67,38 @@ export default function Support() {
       emailRef.current?.focus();
       return;
     }
-    await call("post", "/v1/support", { userEmail, subject, description: descRef.current?.value || undefined, priority });
-    setShowCreate(false);
-    refetchAll();
+    setActionErr("");
+    try {
+      await call("post", "/v1/support", { userEmail, subject, description: descRef.current?.value || undefined, priority });
+      setShowCreate(false);
+      refetchAll();
+    } catch (e) {
+      setActionErr(getApiErrorMessage(e) || "Failed to create ticket");
+      toast.error(getApiErrorMessage(e) || "Failed to create ticket");
+    }
   };
 
   const updateStatus = async (id: string, status: string) => {
-    await call("put", `/v1/support/${id}`, { status });
-    refetchAll();
+    setActionErr("");
+    try {
+      await call("put", `/v1/support/${id}`, { status });
+      refetchAll();
+    } catch (e) {
+      setActionErr(getApiErrorMessage(e) || "Failed to update status");
+      toast.error(getApiErrorMessage(e) || "Failed to update status");
+    }
   };
 
   const deleteTicket = async (id: string) => {
     if (!confirm("Delete this ticket?")) return;
-    await call("delete", `/v1/support/${id}`, undefined);
-    refetchAll();
+    setActionErr("");
+    try {
+      await call("delete", `/v1/support/${id}`, undefined);
+      refetchAll();
+    } catch (e) {
+      setActionErr(getApiErrorMessage(e) || "Failed to delete ticket");
+      toast.error(getApiErrorMessage(e) || "Failed to delete ticket");
+    }
   };
 
   return (
@@ -89,6 +110,7 @@ export default function Support() {
           {stats && <span className="text-[10px] text-[#8B92A5] bg-white/5 px-2 py-0.5 rounded-full">{stats.total} total</span>}
         </div>
         <div className="flex items-center gap-2">
+          {actionErr && <span className="text-xs text-red-400 mr-2 truncate max-w-[200px]">{actionErr}</span>}
           <button onClick={refetchAll} disabled={isLoading}
             className="w-8 h-8 rounded-lg border border-border flex items-center justify-center text-[#8B92A5] hover:bg-white/5 disabled:opacity-50">
             <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />

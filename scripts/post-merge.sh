@@ -7,6 +7,6 @@ pnpm install --no-frozen-lockfile
 # Regenerate Prisma client after schema/dependency changes
 cd artifacts/api-server
 npx prisma generate || true
-cd /home/runner/workspace
+cd - >/dev/null
 
 echo "post-merge setup complete"

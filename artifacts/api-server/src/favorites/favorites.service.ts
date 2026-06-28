@@ -1,9 +1,10 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Prisma, PrismaClientKnownRequestError } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class FavoritesService {
+  private readonly logger = new Logger(FavoritesService.name);
   constructor(private prisma: PrismaService) {}
 
   async getMyFavorites(userId: string) {
@@ -37,11 +38,27 @@ export class FavoritesService {
       if (!sr) throw new BadRequestException('Series not found or unavailable');
     }
 
-    const existing = await this.prisma.favorite.findFirst({
-      where: { userId, channelId: body.channelId, movieId: body.movieId, seriesId: body.seriesId },
-    });
-    if (existing) return existing;
-    return this.prisma.favorite.create({ data: { userId, ...body } });
+    // Race-condition-safe create: instead of findFirst+create (which has a TOCTOU window
+    // where two concurrent identical requests both pass the findFirst check and both create
+    // duplicate favorite rows), we just try to create and gracefully handle the P2002
+    // unique-constraint violation by returning the existing row.
+    // The composite unique constraint lives on (userId, channelId, movieId, seriesId) —
+    // see prisma/schema.prisma `@@unique([userId, channelId, movieId, seriesId])`.
+    try {
+      return await this.prisma.favorite.create({ data: { userId, ...body } });
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+        // Already favorited by a concurrent request — return the existing row.
+        const existing = await this.prisma.favorite.findFirst({
+          where: { userId, channelId: body.channelId, movieId: body.movieId, seriesId: body.seriesId },
+        });
+        if (existing) return existing;
+        // Should not happen — the constraint fired but we couldn't find the row.
+        this.logger.error(`P2002 on favorites.create but findFirst returned null — userId=${userId}, body=${JSON.stringify(body)}`);
+        throw e;
+      }
+      throw e;
+    }
   }
 
   async remove(userId: string, body: { channelId?: string; movieId?: string; seriesId?: string }) {

@@ -48,6 +48,10 @@ export default function SignupScreen() {
       setError('Password must be at least 8 characters');
       return;
     }
+    if (password !== password.trim()) {
+      setError('Password has leading or trailing spaces');
+      return;
+    }
     setIsLoading(true);
     try {
       const body: Record<string, string> = { name: name.trim(), password };

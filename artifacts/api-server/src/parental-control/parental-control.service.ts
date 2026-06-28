@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { IsString, IsOptional, IsBoolean, IsArray, MinLength } from 'class-validator';
 
 export class SetParentalControlDto {
-  pin?: string;
-  maxAgeRating?: string;
-  restrictedCategories?: string[];
-  isEnabled?: boolean;
+  @IsOptional() @IsString() @MinLength(4) pin?: string;
+  @IsOptional() @IsString() maxAgeRating?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) restrictedCategories?: string[];
+  @IsOptional() @IsBoolean() isEnabled?: boolean;
 }
 
 @Injectable()
@@ -21,8 +22,15 @@ export class ParentalControlService {
   }
 
   async set(userId: string, dto: SetParentalControlDto) {
-    const data: Record<string, unknown> = { ...dto };
-    if (dto.pin) data['pin'] = await bcrypt.hash(dto.pin, 10);
+    // A-046: explicitly extract `pin` from the spread so an empty-string pin (which
+    // previously flowed through `...dto` into the data object and overwrote any
+    // existing hash with the empty string) is now ignored. Only hash & persist the
+    // pin when the caller explicitly provided a non-empty value.
+    const { pin, ...rest } = dto;
+    const data: Record<string, unknown> = { ...rest };
+    if (pin) {
+      data['pin'] = await bcrypt.hash(pin, 10);
+    }
 
     return this.prisma.parentalSetting.upsert({
       where: { userId },

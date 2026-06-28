@@ -102,10 +102,9 @@ export default function SeriesPage() {
     setSub(true);
     setMutationError(null);
     try {
-      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      // D-033 fix: don't send a client-generated slug — server derives it from title.
       await call("post", "/v1/series", {
         title,
-        slug,
         year: yearRef.current?.value ? Number(yearRef.current.value) : undefined,
         poster: newPoster || undefined,
         banner: newBanner || undefined,

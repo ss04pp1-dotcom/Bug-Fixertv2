@@ -110,9 +110,21 @@ export class AdvertisementsService {
   }
 
   async activateProvider(id: string) {
-    await this.prisma.adProvider.updateMany({ data: { isSelected: false } });
-    const provider = await this.prisma.adProvider.update({
-      where: { id }, data: { isSelected: true, isActive: true },
+    // A-034: wrap the "deselect all" + "select this one" in a single transaction so a crash
+    // between them cannot leave the system in a state where NO provider is selected (or,
+    // worse, where two are). The updateMany is scoped to `isSelected: true` so we only
+    // touch providers that are currently the active one — previously the unscoped
+    // `updateMany({ data: { isSelected: false } })` flipped every provider's isSelected
+    // flag (including providers the admin explicitly deactivated).
+    const provider = await this.prisma.$transaction(async (tx) => {
+      await tx.adProvider.updateMany({
+        where: { isSelected: true },
+        data: { isSelected: false },
+      });
+      return tx.adProvider.update({
+        where: { id },
+        data: { isSelected: true, isActive: true },
+      });
     });
     await this.upsertSettings({ activeProviderId: id });
     return provider;

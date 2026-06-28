@@ -947,7 +947,7 @@ CREATE INDEX "channels_is_active_idx" ON "channels" USING btree ("is_active");--
 CREATE INDEX "channels_category_id_idx" ON "channels" USING btree ("category_id");--> statement-breakpoint
 CREATE INDEX "channels_created_at_idx" ON "channels" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "channels_last_active_at_idx" ON "channels" USING btree ("last_active_at");--> statement-breakpoint
-CREATE INDEX "channels_normalized_name_idx" ON "channels" USING btree ("normalized_name");--> statement-breakpoint
+CREATE UNIQUE INDEX "channels_normalized_name_key" ON "channels" USING btree ("normalized_name");--> statement-breakpoint
 CREATE INDEX "channel_merge_logs_created_at_idx" ON "channel_merge_logs" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "channel_merge_logs_kept_channel_id_idx" ON "channel_merge_logs" USING btree ("kept_channel_id");--> statement-breakpoint
 CREATE INDEX "deleted_channel_logs_deleted_at_idx" ON "deleted_channel_logs" USING btree ("deleted_at");--> statement-breakpoint

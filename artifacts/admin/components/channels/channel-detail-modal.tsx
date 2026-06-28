@@ -10,6 +10,8 @@ import {
 import { apiClient } from "@/lib/axios-client";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { cn } from "@/lib/utils";
+// D-041 fix: surface mutation failures via toast instead of blocking alert().
+import { toast } from "sonner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +186,8 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       await loadDetail();
       onSaved();
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Failed to save");
+      // D-041 fix: toast instead of alert so the UI stays interactive.
+      toast.error(e?.response?.data?.message ?? "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -203,7 +206,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       await loadDetail();
       onSaved();
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Failed to save overrides");
+      toast.error(e?.response?.data?.message ?? "Failed to save overrides");
     } finally {
       setOverrideSaving(false);
     }
@@ -217,7 +220,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       await loadDetail();
       onSaved();
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Failed to reset");
+      toast.error(e?.response?.data?.message ?? "Failed to reset");
     } finally {
       setResetingField(null);
     }
@@ -235,7 +238,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       if (Array.isArray(updated)) setServers(updated);
       else await loadDetail();
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Failed to update server");
+      toast.error(e?.response?.data?.message ?? "Failed to update server");
     } finally {
       setTogglingIds(prev => { const n = new Set(prev); n.delete(srv.id); return n; });
     }
@@ -248,7 +251,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       await apiClient.delete(`/v1/channels/${detail.id}/servers/${srv.id}`);
       setServers(prev => prev.filter(s => s.id !== srv.id));
     } catch (e: any) {
-      alert(e?.response?.data?.message ?? "Failed to delete");
+      toast.error(e?.response?.data?.message ?? "Failed to delete");
     } finally {
       setDeletingIds(prev => { const n = new Set(prev); n.delete(srv.id); return n; });
     }

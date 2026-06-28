@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Plus, Flag, RefreshCw, Trash2, Menu, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Flag, RefreshCw, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { useApi, useApiCallState, useInvalidate } from "@/lib/use-api";
 
 interface FeatureFlag {
@@ -35,7 +35,9 @@ export default function FeatureFlagsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // D-037 fix: removed dead `sidebarOpen` state — the mobile menu button never
+  // opened a drawer (there's no drawer to open on this page), so it was a
+  // no-op button that misled users. The hamburger is removed below.
 
   const flagList: FeatureFlag[] = Array.isArray(flags) ? flags : [];
 
@@ -43,7 +45,8 @@ export default function FeatureFlagsPage() {
     setActionErr("");
     try {
       await call("post", `/v1/feature-flags/${flag.name}/toggle`, {});
-      invalidate([["/v1/feature-flags"]]);
+      // D-011 fix: flat query-key array, not array-of-array
+      invalidate(["/v1/feature-flags"]);
       refetch();
     } catch (e: any) { setActionErr(e?.message ?? "Failed to toggle flag"); }
   };
@@ -83,9 +86,8 @@ export default function FeatureFlagsPage() {
     <>
       <div className="flex items-center justify-between px-6 py-[13px] border-b border-border">
         <div className="flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(v => !v)} className="lg:hidden">
-            <Menu size={18} className="text-[#8B92A5]" />
-          </button>
+          {/* D-037 fix: dead hamburger button removed — `sidebarOpen` was
+              declared but never rendered into a drawer. */}
           <h1 className="text-sm font-bold text-white">Feature Flags</h1>
           {flagList.length > 0 && (
             <span className="text-xs text-[#8B92A5] bg-white/5 px-2 py-0.5 rounded-full">

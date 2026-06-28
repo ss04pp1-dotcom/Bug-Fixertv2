@@ -7,7 +7,7 @@ interface User {
   name: string;
   email: string;
   avatar?: string;
-  plan: 'free' | 'premium';
+  plan: string;
 }
 
 interface AuthState {

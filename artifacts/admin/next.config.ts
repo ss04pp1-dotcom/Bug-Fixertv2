@@ -6,8 +6,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? (isProduction ? "" : "/adm
 const nextConfig: NextConfig = {
   basePath,
   trailingSlash: true,
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  // D-003 fix: do NOT silence ESLint or TypeScript errors during build.
+  // Hiding these errors let real bugs ship. If the build fails, fix the
+  // reported issues rather than bypassing the checks.
   images: {
     unoptimized: true,
   },

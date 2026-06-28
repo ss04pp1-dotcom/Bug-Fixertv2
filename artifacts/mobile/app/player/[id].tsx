@@ -1,7 +1,20 @@
+/**
+ * Movie / Series Player Screen
+ *
+ * This screen NO LONGER mounts a video player.
+ * The player is the SINGLETON GlobalVideoPlayer mounted at _layout.tsx.
+ * This screen just:
+ *   1. Fetches the stream URL from the API
+ *   2. Calls useGlobalPlayer.open({...}) to load it into the singleton
+ *   3. Shows metadata below (poster, overview, episodes, related)
+ *
+ * When the user presses back, the player auto-transitions to MINI mode
+ * (no reload, no rebuffer) via the back-handler in GlobalVideoPlayer.
+ */
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Platform, Image,
+  ScrollView, StatusBar, Platform, Image, BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +22,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
-import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
 import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
-import { usePlayerStore } from '@/lib/player-store';
+import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -30,13 +42,51 @@ function getUnsupportedUrlReason(url: string): string | null {
 
 const { width: SW } = Dimensions.get('window');
 
+function buildStreamSource(
+  rawUrl: string,
+  label: string,
+  quality: string,
+  data?: { cookie?: string; userAgent?: string; referer?: string; origin?: string },
+): PlayerSource {
+  let url = rawUrl;
+  let pipeHeaders: Record<string, string> = {};
+
+  if (url.includes('|')) {
+    const pipeIdx = url.indexOf('|');
+    const rawPipe = url.substring(pipeIdx + 1);
+    url = url.substring(0, pipeIdx).trim();
+    for (const pair of rawPipe.split('&')) {
+      const eq = pair.indexOf('=');
+      if (eq === -1) continue;
+      const k = decodeURIComponent(pair.substring(0, eq).trim()).toLowerCase();
+      const v = decodeURIComponent(pair.substring(eq + 1).trim());
+      if (k && v) pipeHeaders[k] = v;
+    }
+  }
+
+  const headers: Record<string, string> = {};
+  const cookie    = data?.cookie    || pipeHeaders['cookie'];
+  const userAgent = data?.userAgent || pipeHeaders['user-agent'];
+  const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
+  const origin    = data?.origin    || pipeHeaders['origin'];
+  // NOTE: We intentionally do NOT set User-Agent by default.
+  // IPTV servers throttle browser UAs. ExoPlayer's native okhttp UA gets full bitrate.
+  // Only set UA if the source explicitly provides one (some servers require a specific UA).
+  if (cookie)    headers['Cookie']     = cookie;
+  if (userAgent) headers['User-Agent'] = userAgent;
+  if (referer)   headers['Referer']    = referer;
+  if (origin)    headers['Origin']     = origin;
+
+  return { label, url, quality, ...(Object.keys(headers).length ? { headers } : {}) };
+}
+
 export default function PlayerScreen() {
   const { id, type, title: titleParam, season } = useLocalSearchParams<{
     id: string; type?: string; title?: string; season?: string;
   }>();
   const insets = useSafeAreaInsets();
 
-  // Channels always use the live player — redirect immediately
+  // Channels → redirect to live-player
   useEffect(() => {
     if (type === 'channel' && id) {
       router.replace({
@@ -49,14 +99,17 @@ export default function PlayerScreen() {
   const cType = (type || 'movie') as 'movie' | 'series';
 
   // ── Stream sources ──────────────────────────────────────────────────────────
-  const [sources, setSources]       = useState<StreamSource[]>([]);
+  const [sources, setSources]       = useState<PlayerSource[]>([]);
   const [srcLoading, setSrcLoad]    = useState(true);
   const [srcError, setSrcError]     = useState(false);
   const [srcErrorMsg, setSrcErrMsg] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
 
   // ── Series episode state ────────────────────────────────────────────────────
-  const [epIdx, setEpIdx]       = useState(season ? parseInt(season) - 1 : 0);
+  const [epIdx, setEpIdx]       = useState(() => {
+    const s = season ? parseInt(season, 10) : NaN;
+    return Number.isNaN(s) ? 0 : Math.max(0, s - 1);
+  });
   const [activeTab, setActiveTab] = useState<'info' | 'episodes' | 'related'>('info');
 
   // ── Content data ────────────────────────────────────────────────────────────
@@ -92,42 +145,6 @@ export default function PlayerScreen() {
     return Array.isArray(d) ? d.slice(0, 12) : [];
   }, [relatedRaw]);
 
-  // ── Build headers from stream source data ────────────────────────────────────
-  const buildStreamSource = useCallback((
-    rawUrl: string,
-    label: string,
-    quality: string,
-    data?: { cookie?: string; userAgent?: string; referer?: string; origin?: string },
-  ): StreamSource => {
-    let url = rawUrl;
-    let pipeHeaders: Record<string, string> = {};
-
-    if (url.includes('|')) {
-      const pipeIdx = url.indexOf('|');
-      const rawPipe = url.substring(pipeIdx + 1);
-      url = url.substring(0, pipeIdx).trim();
-      for (const pair of rawPipe.split('&')) {
-        const eq = pair.indexOf('=');
-        if (eq === -1) continue;
-        const k = decodeURIComponent(pair.substring(0, eq).trim()).toLowerCase();
-        const v = decodeURIComponent(pair.substring(eq + 1).trim());
-        if (k && v) pipeHeaders[k] = v;
-      }
-    }
-
-    const headers: Record<string, string> = {};
-    const cookie    = data?.cookie    || pipeHeaders['cookie'];
-    const userAgent = data?.userAgent || pipeHeaders['user-agent'];
-    const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
-    const origin    = data?.origin    || pipeHeaders['origin'];
-    if (cookie)    headers['Cookie']     = cookie;
-    if (userAgent) headers['User-Agent'] = userAgent;
-    if (referer)   headers['Referer']    = referer;
-    if (origin)    headers['Origin']     = origin;
-
-    return { label, url, quality, ...(Object.keys(headers).length ? { headers } : {}) };
-  }, []);
-
   // ── Load stream ─────────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
     setSrcLoad(true); setSrcError(false); setSrcErrMsg(''); setYoutubeUrl(null);
@@ -141,7 +158,7 @@ export default function PlayerScreen() {
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         const headerData = { cookie: d?.cookie, userAgent: d?.userAgent || d?.user_agent, referer: d?.referer, origin: d?.origin };
-        const srcs: StreamSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
+        const srcs: PlayerSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
         if (d?.backupStreamUrl && d.backupStreamUrl !== url)
           srcs.push(buildStreamSource(d.backupStreamUrl, 'Server 2', 'SD', headerData));
         setSources(srcs);
@@ -162,7 +179,7 @@ export default function PlayerScreen() {
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         const headerData = { cookie: ep?.cookie, userAgent: ep?.userAgent || ep?.user_agent, referer: ep?.referer, origin: ep?.origin };
-        const srcs: StreamSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
+        const srcs: PlayerSource[] = [buildStreamSource(url, 'Server 1', 'HD', headerData)];
         if (ep?.backupStreamUrl && ep.backupStreamUrl !== url)
           srcs.push(buildStreamSource(ep.backupStreamUrl, 'Server 2', 'SD', headerData));
         setSources(srcs);
@@ -172,51 +189,51 @@ export default function PlayerScreen() {
     } finally {
       setSrcLoad(false);
     }
-  }, [id, cType, epIdx, buildStreamSource]);
+  }, [id, cType, epIdx]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
-  // ── Navigation ──────────────────────────────────────────────────────────────
-  const handleNext = episodes.length > 0 && epIdx < episodes.length - 1
-    ? () => setEpIdx(i => i + 1) : undefined;
-  const handlePrev = episodes.length > 0 && epIdx > 0
-    ? () => setEpIdx(i => i - 1) : undefined;
+  // ── Open the singleton player once sources are ready ───────────────────────
+  const openPlayer = useGlobalPlayer((s) => s.open);
 
-  const epList = episodes.map((ep: any, i: number) => ({
-    id:     ep.id || String(i),
-    title:  ep.title || ep.name || `Episode ${i + 1}`,
-    number: ep.episodeNumber || i + 1,
-  }));
+  useEffect(() => {
+    if (sources.length === 0 || youtubeUrl) return;
+    openPlayer({
+      title: contentTitle,
+      logo: poster,
+      contentId: id,
+      contentType: cType,
+      sources,
+      isLive: false,
+    });
+  }, [sources, youtubeUrl, contentTitle, poster, id, cType, openPlayer]);
 
-  const openMiniPlayer = usePlayerStore((s) => s.open);
-  const closeMiniPlayer = usePlayerStore((s) => s.close);
+  // ── When episode changes, reload stream (the open effect will fire again) ──
+  // epIdx already in loadStream deps, so it auto-reloads.
 
-  // Close mini player when full player opens
-  useEffect(() => { closeMiniPlayer(); }, [id]);
+  // ── Back button → minimize to mini (NO reload) ──────────────────────────────
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Let GlobalVideoPlayer handle back (it will enterMini)
+      return false;
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleBack = useCallback(() => {
-    if (sources.length > 0) {
-      openMiniPlayer({
-        title: contentTitle,
-        logo: poster,
-        contentId: id,
-        contentType: cType,
-        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-        isLive: false,
-      });
-    }
+    // The GlobalVideoPlayer's back handler already calls enterMini() which
+    // shrinks the player without reload. We just navigate away from this screen.
     if (router.canGoBack()) router.back();
     else router.replace('/(main)');
-  }, [sources, contentTitle, poster, id, cType, openMiniPlayer]);
+  }, []);
 
-  // ── Shared below-player content ─────────────────────────────────────────────
+  // ── Below-player content ─────────────────────────────────────────────────────
   const belowPlayer = (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
     >
-      {/* Content header */}
       <View style={s.infoRow}>
         {poster ? (
           <Image source={{ uri: poster }} style={s.poster} resizeMode="cover" />
@@ -235,7 +252,6 @@ export default function PlayerScreen() {
         </View>
       </View>
 
-      {/* Tab bar */}
       {(episodes.length > 0 || related.length > 0 || overview) && (
         <View style={s.tabBar}>
           {(['info', ...(episodes.length > 0 ? ['episodes'] : []), ...(related.length > 0 ? ['related'] : [])] as const).map(tab => (
@@ -249,14 +265,12 @@ export default function PlayerScreen() {
         </View>
       )}
 
-      {/* Info tab */}
       {activeTab === 'info' && overview ? (
         <View style={s.section}>
           <Text style={s.overviewTxt}>{overview}</Text>
         </View>
       ) : null}
 
-      {/* Episodes tab */}
       {activeTab === 'episodes' && episodes.length > 0 && (
         <View style={s.section}>
           <Text style={s.sectionTitle}>Episodes</Text>
@@ -279,7 +293,6 @@ export default function PlayerScreen() {
         </View>
       )}
 
-      {/* Related tab */}
       {activeTab === 'related' && related.length > 0 && (
         <View style={s.section}>
           <View style={s.relGrid}>
@@ -305,49 +318,29 @@ export default function PlayerScreen() {
     </ScrollView>
   );
 
-  // ── YouTube URL → embed player + show related below ─────────────────────────
+  // ── YouTube embed (separate path — doesn't use singleton) ───────────────────
   if (youtubeUrl) {
     return (
       <View style={s.root}>
         <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-
         <View style={[s.ytHeader, { paddingTop: insets.top + 4 }]}>
           <TouchableOpacity onPress={handleBack} style={s.ytBack} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.ytTitle} numberOfLines={1}>{contentTitle}</Text>
         </View>
-
         <YouTubeVideoBox url={youtubeUrl} />
-
         {belowPlayer}
       </View>
     );
   }
 
-  // ── Normal stream player ────────────────────────────────────────────────────
+  // ── Normal: player is in the singleton overlay; this screen shows metadata ──
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-
-      <PremiumVideoPlayer
-        sources={sources}
-        title={contentTitle}
-        isLoading={srcLoading}
-        hasError={srcError}
-        errorMessage={srcErrorMsg}
-        onBack={handleBack}
-        onRetry={loadStream}
-        onRefreshStream={loadStream}
-        contentId={cType === 'series' && episodes[epIdx]?.id ? episodes[epIdx].id : id}
-        contentType={cType}
-        episodes={epList}
-        currentEpIdx={epIdx}
-        onEpisodeChange={setEpIdx}
-        onNext={handleNext}
-        onPrev={handlePrev}
-      />
-
+      {/* Spacer for the video area (singleton covers it visually) */}
+      <View style={{ height: Math.round(SW * 9 / 16), backgroundColor: '#000' }} />
       {belowPlayer}
     </View>
   );
@@ -355,42 +348,28 @@ export default function PlayerScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-
-  ytHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingBottom: 8, gap: 10,
-    backgroundColor: C.bg,
-  },
-  ytBack: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  ytHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 10, backgroundColor: C.bg },
+  ytBack: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center' },
   ytTitle: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-
   infoRow:   { flexDirection: 'row', padding: 14, gap: 12 },
   poster:    { width: 72, height: 100, borderRadius: 8, overflow: 'hidden', backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' },
   infoText:  { flex: 1, justifyContent: 'center', gap: 8 },
   infoTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
   metaRow:   { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   metaChip:  { color: C.dim, fontSize: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-
   tabBar:       { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', marginHorizontal: 14 },
   tabItem:      { paddingVertical: 10, paddingHorizontal: 4, marginRight: 18, position: 'relative' },
   tabTxt:       { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
   tabTxtActive: { color: '#fff' },
   tabUnderline: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: C.primary, borderRadius: 1 },
-
   section:      { paddingHorizontal: 14, paddingTop: 16 },
   sectionTitle: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 12 },
   overviewTxt:  { color: C.dim, fontSize: 14, lineHeight: 22 },
-
   epBox:      { width: 46, height: 46, borderRadius: 10, backgroundColor: C.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   epBoxActive:{ borderColor: C.primary },
   epGrad:     { width: '100%', height: '100%', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   epTxt:      { color: '#fff', fontSize: 14, fontWeight: '600' },
   epTxtA:     { color: '#fff', fontSize: 14, fontWeight: '700' },
-
   relGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   relCard:   { width: (SW - 38 - 10) / 2 },
   relThumb:  { width: '100%', height: 100, borderRadius: 8, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', backgroundColor: C.card },

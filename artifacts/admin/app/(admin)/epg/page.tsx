@@ -108,14 +108,15 @@ export default function EPG() {
 
     if (file && isM3u) {
       setShowImport(false);
-      router.push("/admin/m3u-import");
+      // (admin) route group doesn't add a URL segment — D-006 fix
+      router.push("/m3u-import");
       toast.info("Upload your M3U file on the M3U Import page.");
       return;
     }
 
     if (importUrl && isM3u) {
       setShowImport(false);
-      router.push("/admin/m3u-import");
+      router.push("/m3u-import");
       toast.info("Use the M3U Import page to import M3U playlists.");
       return;
     }
@@ -137,7 +138,7 @@ export default function EPG() {
         });
         toast.success("File uploaded for import. Track progress on the M3U Import page.");
         setShowImport(false);
-        router.push("/admin/m3u-import");
+        router.push("/m3u-import");
       } catch (e: any) {
         setImportErr(e?.response?.data?.message ?? e?.message ?? "Upload failed");
       } finally {
@@ -151,12 +152,20 @@ export default function EPG() {
 
   const saveProgram = async () => {
     if (!chId || !formTitle.trim()) return;
-    const today = todayIso();
+    // D-015 fix: construct a proper local datetime and convert to UTC.
+    // Previously `${today}T${formStart}:00Z` falsely declared local time as UTC.
+    const buildUtc = (hhmm: string): string | undefined => {
+      if (!hhmm) return undefined;
+      const [hours, minutes] = hhmm.split(":").map(Number);
+      const d = new Date();
+      d.setHours(hours, minutes, 0, 0);
+      return d.toISOString();
+    };
     const payload = {
       channelId:  chId,
       title:      formTitle.trim(),
-      startTime:  formStart ? `${today}T${formStart}:00Z`  : undefined,
-      endTime:    formEnd   ? `${today}T${formEnd}:00Z`    : undefined,
+      startTime:  buildUtc(formStart),
+      endTime:    buildUtc(formEnd),
       category:   formCategory || undefined,
     };
     setEpgErr("");

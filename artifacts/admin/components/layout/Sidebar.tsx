@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Tv, Film, Library, Tag, Users, CreditCard,
@@ -13,7 +12,8 @@ import {
   HeartPulse, Trash2, Github,
 } from "lucide-react";
 import { clearToken } from "@/lib/auth";
-import { apiClient, extractData } from "@/lib/axios-client";
+import { apiClient } from "@/lib/axios-client";
+import { useApiQuery } from "@/lib/use-api";
 
 const NAV_ITEMS = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/"              },
@@ -90,26 +90,21 @@ function NavItem({ item, collapsed }: { item: (typeof NAV_ITEMS)[0]; collapsed: 
 
 export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
   const router = useRouter();
-  const [profile, setProfile] = useState<AdminProfile | null>(null);
-
-  useEffect(() => {
-    apiClient.get("/v1/auth/profile")
-      .then(res => setProfile(extractData<AdminProfile>(res)))
-      .catch((err) => {
-        if (err?.response?.status === 401) {
-          clearToken();
-          router.push("/login");
-        } else {
-          console.error("Failed to fetch admin profile in sidebar:", err);
-        }
-      });
-  }, [router]);
+  // D-008: same query key as DashboardLayout — React Query dedupes the
+  // in-flight request so we don't fetch /v1/auth/profile twice on mount.
+  const { data: profile } = useApiQuery<AdminProfile>(
+    ["/v1/auth/profile"],
+    "/v1/auth/profile",
+    { retry: false },
+  );
 
   const displayName = profile?.identifier ?? "Admin";
   const roleLabel   = profile?.role?.name ?? "Super Admin";
   const initial     = displayName[0]?.toUpperCase() ?? "A";
 
-  const handleLogout = () => {
+  // D-009: also notify the server so the session is revoked.
+  const handleLogout = async () => {
+    try { await apiClient.post("/v1/auth/logout"); } catch {}
     clearToken();
     router.push("/login");
   };

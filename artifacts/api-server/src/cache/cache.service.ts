@@ -19,6 +19,17 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   private cleanupTimer?: NodeJS.Timeout;
 
   onModuleInit() {
+    // A-027: This is a single-process in-memory cache backed by a plain Map. It does NOT
+    // scale horizontally: in a multi-instance deployment each pod maintains its own cache,
+    // so writes performed on instance A are invisible to instance B (stale reads, cache
+    // stampedes, duplicate work). For production, swap this implementation for Redis
+    // (ioredis) using the same get/set/del/delByPrefix/flush/getOrSet interface.
+    if (process.env.REDIS_URL) {
+      this.logger.warn(
+        'REDIS_URL is set but the in-memory CacheService is being used — ' +
+          'cache will not be shared across instances. Migrate CacheService to Redis for production.',
+      );
+    }
     this.cleanupTimer = setInterval(() => {
       const removed = this.cleanup();
       if (removed > 0) this.logger.debug(`Cache cleanup: removed ${removed} expired entries`);

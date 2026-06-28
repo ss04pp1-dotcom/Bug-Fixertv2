@@ -99,15 +99,39 @@ function serveStaticFile(urlPath, res) {
 
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || "application/octet-stream";
-  const content = fs.readFileSync(filePath);
-  res.writeHead(200, { "content-type": contentType });
-  res.end(content);
+
+  // Cache static assets (JS/CSS/fonts/images) — they are content-hashed by the
+  // Expo bundler so aggressive caching is safe. HTML is never cached.
+  const cacheable = [
+    ".js", ".css", ".woff", ".woff2", ".ttf", ".otf",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+  ];
+  const headers = { "content-type": contentType };
+  if (cacheable.includes(ext)) {
+    headers["cache-control"] = "public, max-age=3600";
+  }
+  res.writeHead(200, headers);
+
+  // Stream the file instead of buffering it into memory — avoids OOM on large
+  // bundle assets under low-memory containers (e.g. Render free tier).
+  const stream = fs.createReadStream(filePath);
+  stream.on("error", () => {
+    if (!res.headersSent) res.writeHead(500);
+    res.end("Internal Server Error");
+  });
+  stream.pipe(res);
 }
 
 const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 const appName = getAppName();
 
 const server = http.createServer((req, res) => {
+  // This is a static-file host — only allow safe, idempotent methods.
+  if (!["GET", "HEAD"].includes(req.method)) {
+    res.writeHead(405, { Allow: "GET, HEAD" });
+    return res.end();
+  }
+
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   let pathname = url.pathname;
 

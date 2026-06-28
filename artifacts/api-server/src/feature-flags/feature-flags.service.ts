@@ -10,7 +10,14 @@ export class FeatureFlagsService {
   }
 
   async getEnabled() {
-    const flags = await this.prisma.featureFlag.findMany({ where: { isEnabled: true } });
+    // A-058: cap at 20 + sort deterministically. Public feature-flag lookup
+    // shouldn't return hundreds of rows; the most-recently-created enabled flags
+    // are usually the most relevant for the mobile config payload.
+    const flags = await this.prisma.featureFlag.findMany({
+      where: { isEnabled: true },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 20,
+    });
     const result: Record<string, boolean> = {};
     for (const f of flags) result[f.name] = true;
     return result;
@@ -37,7 +44,13 @@ export class FeatureFlagsService {
   }
 
   async delete(name: string) {
-    await this.prisma.featureFlag.delete({ where: { name } }).catch(() => {});
+    // A-065: previously this used `.catch(() => {})` to silently swallow the
+    // P2025 not-found error, which meant deleting a non-existent flag returned
+    // a 200 OK with "deleted" — misleading the admin into thinking they removed
+    // a real flag. Verify existence first and 404 if missing.
+    const existing = await this.prisma.featureFlag.findUnique({ where: { name } });
+    if (!existing) throw new NotFoundException('Feature flag not found');
+    await this.prisma.featureFlag.delete({ where: { name } });
     return { message: 'Feature flag deleted' };
   }
 }

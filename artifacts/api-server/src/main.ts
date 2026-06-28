@@ -49,13 +49,14 @@ async function bootstrap(): Promise<void> {
     ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean)
     : [];
 
-  // Convert wildcard entries like "https://*.replit.dev" into RegExp patterns
-  // Use .+ (not [^.]+) so a single * matches multiple subdomain levels
+  // Convert wildcard entries like "https://*.replit.dev" into RegExp patterns.
+  // Use [^.]+ (single subdomain level) instead of .+ so "https://*.example.com"
+  // matches "https://api.example.com" but NOT "https://attacker.example.com.evil.com".
+  // If multi-level wildcard matching is genuinely needed, configure each level explicitly.
   const originPatterns: Array<string | RegExp> = allowedOrigins.map(o => {
     if (o.includes('*')) {
-      // Escape all regex special chars first, then replace * with .+ for wildcard matching
-      // Note: /\*/g not /\\\*/g — the latter looks for a literal backslash+asterisk
-      const escaped = o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.+');
+      // Escape all regex special chars first, then replace * with [^.]+ for single-level wildcard.
+      const escaped = o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]+');
       return new RegExp(`^${escaped}$`);
     }
     return o;
@@ -67,7 +68,10 @@ async function bootstrap(): Promise<void> {
     );
   }
 
-  const isProduction = process.env['NODE_ENV'] === 'production';
+  // SECURITY: when no allowed origins are configured, reject ALL cross-origin requests
+  // (returning `false` from the origin callback sets CORS `Access-Control-Allow-Origin: null`).
+  // `CORS_ORIGIN` must be set explicitly in every environment — including staging/preview —
+  // because the previous "open in development" default leaked the API to any localhost port.
   app.enableCors({
     origin: allowedOrigins.length > 0
       ? (origin, callback) => {
@@ -77,7 +81,7 @@ async function bootstrap(): Promise<void> {
             callback(new Error(`CORS: origin not allowed — ${origin}`));
           }
         }
-      : (isProduction ? false : true),
+      : false,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     exposedHeaders: ['X-Request-ID'],

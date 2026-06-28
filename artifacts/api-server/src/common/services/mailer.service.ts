@@ -72,11 +72,13 @@ export class MailerService {
     const html   = this.render(opts.template, opts.context);
 
     if (!config) {
-      const isDev = process.env['NODE_ENV'] !== 'production';
-      if (isDev && opts.context['otp']) {
-        this.logger.log(`[SMTP unconfigured — DEV ONLY] To: ${opts.to} | Subject: ${opts.subject} | OTP: ${String(opts.context['otp'])}`);
+      // SECURITY: never log the OTP in production — log scrapers (ELK, Datadog, CloudWatch)
+      // would persist it indefinitely and turn every "I forgot my password" email into a
+      // credential leak. In dev it's useful for local testing without a real SMTP server.
+      if (process.env.NODE_ENV === 'development') {
+        this.logger.log(`[SMTP unconfigured] To: ${opts.to} | Subject: ${opts.subject}${opts.context['otp'] ? ` | OTP: ${String(opts.context['otp'])}` : ''}`);
       } else {
-        this.logger.warn(`[SMTP unconfigured] Email not sent → ${opts.to} | Subject: ${opts.subject}`);
+        this.logger.warn('SMTP not configured, email skipped');
       }
       return;
     }

@@ -13,29 +13,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useMovie, useToggleFavorite, useRelatedMovies } from '@/lib/api-hooks';
+import { useMovie, useToggleFavorite, useRelatedMovies, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// ─── Fallback Data ───────────────────────────────────────────────────
-
-const FALLBACK_CAST = [
-  { id: '1', name: 'Cillian Murphy', initials: 'CM' },
-  { id: '2', name: 'Emily Blunt', initials: 'EB' },
-  { id: '3', name: 'Matt Damon', initials: 'MD' },
-  { id: '4', name: 'Robert Downey Jr', initials: 'RD' },
-  { id: '5', name: 'Florence Pugh', initials: 'FP' },
-];
-
-const FALLBACK_SIMILAR = [
-  { id: '1', title: 'The Last Mission', gradientColors: ['#7C3AED', '#2563EB'] },
-  { id: '2', title: 'Dark Horizon', gradientColors: ['#EC4899', '#7C3AED'] },
-  { id: '3', title: 'Shadow Realm', gradientColors: ['#2563EB', '#10B981'] },
-  { id: '4', title: 'Night Watch', gradientColors: ['#F5C518', '#EF4444'] },
-  { id: '5', title: 'Steel Empire', gradientColors: ['#EF4444', '#7C3AED'] },
-  { id: '6', title: 'Ocean Deep', gradientColors: ['#10B981', '#2563EB'] },
-];
+// M-023: removed FALLBACK_CAST and FALLBACK_SIMILAR — show empty states instead.
 
 const GRADIENTS: [string, string][] = [
   ['#7C3AED', '#2563EB'], ['#EC4899', '#7C3AED'], ['#2563EB', '#10B981'],
@@ -44,13 +27,19 @@ const GRADIENTS: [string, string][] = [
 
 export default function MovieDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [isBookmarked, setIsBookmarked] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Movie');
 
   const { data: movieData, isLoading, isError, refetch } = useMovie(id || '');
   const { data: relatedData } = useRelatedMovies(id || '');
+  // M-022: pull favorites from the server and derive the bookmark state.
+  const { data: favorites } = useFavorites();
   const toggleFav = useToggleFavorite();
+
+  const isBookmarked = useMemo(
+    () => (favorites || []).some((f: any) => f.id === id),
+    [favorites, id],
+  );
 
   const movie = useMemo(() => {
     if (!movieData) return null;
@@ -72,32 +61,29 @@ export default function MovieDetailsScreen() {
   }, [movieData, id]);
 
   const cast = useMemo(() => {
-    if (movie?.cast && movie.cast.length > 0) {
-      return movie.cast.map((c: any) => ({
-        id: c.id || String(Math.random()),
-        name: c.name || '',
-        initials: (c.name || '??').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
-      }));
-    }
-    return FALLBACK_CAST;
+    // M-023: return real cast only — no fallback fake entries.
+    if (!movie?.cast || movie.cast.length === 0) return [];
+    return movie.cast.map((c: any) => ({
+      id: c.id || String(Math.random()),
+      name: c.name || '',
+      initials: (c.name || '??').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
+    }));
   }, [movie]);
 
   const similar = useMemo(() => {
-    const relatedList = (Array.isArray(relatedData) && relatedData.length > 0 ? relatedData : null) || movie?.similar;
-    if (relatedList && relatedList.length > 0) {
-      return relatedList.map((s: any, i: number) => ({
-        id: s.id || String(i + 1),
-        title: s.title || s.name || '',
-        gradientColors: GRADIENTS[i % GRADIENTS.length],
-      }));
-    }
-    return FALLBACK_SIMILAR;
+    // M-023: prefer API related data, then movie.similar, otherwise empty.
+    const relatedList = Array.isArray(relatedData) && relatedData.length > 0 ? relatedData : movie?.similar || [];
+    if (!relatedList || relatedList.length === 0) return [];
+    return relatedList.map((s: any, i: number) => ({
+      id: s.id || String(i + 1),
+      title: s.title || s.name || '',
+      gradientColors: GRADIENTS[i % GRADIENTS.length],
+    }));
   }, [movie, relatedData]);
 
   const handleToggleFavorite = () => {
-    const nextState = !isBookmarked;
-    setIsBookmarked(nextState);
-    toggleFav.mutate({ type: 'movie', id: id || '', action: nextState ? 'add' : 'remove' });
+    // M-022: drive the toggle off the server-derived state.
+    toggleFav.mutate({ type: 'movie', id: id || '', action: isBookmarked ? 'remove' : 'add' });
   };
 
   const handleShare = async () => {
@@ -230,25 +216,33 @@ export default function MovieDetailsScreen() {
 
           {/* Cast */}
           <Text style={styles.sectionTitle}>Cast</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.castScrollContent}
-          >
-            {cast.map((member: any) => (
-              <View key={member.id} style={styles.castItem}>
-                <LinearGradient
-                  colors={['#13131C', '#1A1A24']}
-                  style={styles.castAvatar}
-                >
-                  <Text style={styles.castInitials}>{member.initials}</Text>
-                </LinearGradient>
-                <Text style={styles.castName} numberOfLines={1}>
-                  {member.name}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
+          {cast.length === 0 ? (
+            // M-023: empty state instead of fake cast cards.
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={32} color="#6B6B80" />
+              <Text style={styles.emptyText}>No cast information</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.castScrollContent}
+            >
+              {cast.map((member: any) => (
+                <View key={member.id} style={styles.castItem}>
+                  <LinearGradient
+                    colors={['#13131C', '#1A1A24']}
+                    style={styles.castAvatar}
+                  >
+                    <Text style={styles.castInitials}>{member.initials}</Text>
+                  </LinearGradient>
+                  <Text style={styles.castName} numberOfLines={1}>
+                    {member.name}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
           {/* Tabs */}
           <View style={styles.tabsContainer}>
@@ -270,27 +264,35 @@ export default function MovieDetailsScreen() {
 
           {/* More Like This */}
           {activeTab === 'More Like This' && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.similarScrollContent}
-            >
-              {similar.map((s: any) => (
-                <TouchableOpacity key={s.id} activeOpacity={0.8} onPress={() => router.push(`/movie/${s.id}`)}>
-                  <LinearGradient
-                    colors={s.gradientColors}
-                    style={styles.similarCard}
-                  >
-                    <View style={styles.similarCardOverlay}>
-                      <Ionicons name="play-circle" size={32} color="rgba(255,255,255,0.6)" />
-                    </View>
-                  </LinearGradient>
-                  <Text style={styles.similarTitle} numberOfLines={2}>
-                    {s.title}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            similar.length === 0 ? (
+              // M-023: empty state instead of fake similar cards.
+              <View style={styles.emptyState}>
+                <Ionicons name="film-outline" size={32} color="#6B6B80" />
+                <Text style={styles.emptyText}>No similar movies</Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.similarScrollContent}
+              >
+                {similar.map((s: any) => (
+                  <TouchableOpacity key={s.id} activeOpacity={0.8} onPress={() => router.push(`/movie/${s.id}`)}>
+                    <LinearGradient
+                      colors={s.gradientColors}
+                      style={styles.similarCard}
+                    >
+                      <View style={styles.similarCardOverlay}>
+                        <Ionicons name="play-circle" size={32} color="rgba(255,255,255,0.6)" />
+                      </View>
+                    </LinearGradient>
+                    <Text style={styles.similarTitle} numberOfLines={2}>
+                      {s.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )
           )}
 
         </View>
@@ -547,5 +549,16 @@ const styles = StyleSheet.create({
     width: 140,
     fontFamily: 'Inter',
     fontWeight: '500',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B6B80',
+    fontFamily: 'Inter',
   },
 });

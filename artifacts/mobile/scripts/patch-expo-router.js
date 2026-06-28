@@ -14,7 +14,10 @@ const initCorePath = path.join(__dirname, '..', 'node_modules', 'react-native', 
 const initCoreFile = path.join(initCorePath, 'InitializeCore.js');
 if (!fs.existsSync(initCoreFile)) {
   fs.mkdirSync(initCorePath, { recursive: true });
-  fs.writeFileSync(initCoreFile, '// Stub for React Native 0.77+ compatibility (InitializeCore was removed)\n');
+  // Stub for React Native 0.77+ compatibility — InitializeCore was removed
+  // but some libraries still import it. Export an empty function so
+  // `require('react-native/Libraries/Core/InitializeCore')()` doesn't throw.
+  fs.writeFileSync(initCoreFile, 'module.exports = function() {};\n');
   console.log('[patch-rn] created InitializeCore stub');
 } else {
   console.log('[patch-rn] InitializeCore stub already exists');

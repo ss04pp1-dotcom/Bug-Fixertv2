@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { AdEventDto } from './dto/advertisements.dto';
 import { VERSION_NEUTRAL } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Ads Config & Events')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +21,7 @@ export class AdsConfigController {
 
   @Public()
   @Post('impression')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Track ad impression event' })
   trackImpression(@Body() dto: AdEventDto, @Req() req: Request) {
     return this.svc.trackEvent('impression', dto, req);
@@ -27,6 +29,7 @@ export class AdsConfigController {
 
   @Public()
   @Post('click')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Track ad click event' })
   trackClick(@Body() dto: AdEventDto, @Req() req: Request) {
     return this.svc.trackEvent('click', dto, req);
@@ -34,6 +37,7 @@ export class AdsConfigController {
 
   @Public()
   @Post('error')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Track ad error event' })
   trackError(@Body() dto: AdEventDto, @Req() req: Request) {
     return this.svc.trackEvent('error', dto, req);
@@ -41,6 +45,7 @@ export class AdsConfigController {
 
   @Public()
   @Post('session')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Track ad session event' })
   trackSession(@Body() dto: AdEventDto, @Req() req: Request) {
     return this.svc.trackEvent('session', dto, req);
@@ -48,6 +53,7 @@ export class AdsConfigController {
 
   @Public()
   @Post('revenue')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Track ad revenue event' })
   trackRevenue(@Body() dto: AdEventDto, @Req() req: Request) {
     return this.svc.trackEvent('revenue', dto, req);

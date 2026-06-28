@@ -4,16 +4,20 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  ResponsiveContainer,
 } from "recharts";
 import { NoSSR } from "@/components/no-ssr";
 import {
   Users, Wifi, Film, Library, DollarSign, TrendingUp,
   CalendarDays, ChevronDown, Menu, RefreshCw,
-  Radio, Smartphone, Activity, WifiOff,
+  Radio, Smartphone, Activity, WifiOff, Globe,
 } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 import { usePresenceStats } from "@/lib/use-presence";
+
+// (D-048) Removed hardcoded `countryData` pie chart — it was illustrative
+// only and there is no backing API for country breakdown yet. The dashboard
+// now shows a "Country breakdown coming soon" placeholder instead.
 
 interface DashboardStats {
   users: { total: number; active: number; premium: number; newToday: number };
@@ -28,14 +32,6 @@ interface PaymentItem {
   id: string; amount: number; status: string; createdAt: string;
   subscription?: { plan?: { name: string } };
 }
-
-const countryData = [
-  { name: "Bangladesh", value: 45, color: "#7C3AED" },
-  { name: "India",      value: 20, color: "#3B82F6" },
-  { name: "Pakistan",   value: 10, color: "#10B981" },
-  { name: "USA",        value:  5, color: "#F59E0B" },
-  { name: "Others",     value: 20, color: "#6B7280" },
-];
 
 const CustomTooltip = ({ active, payload, label }: {
   active?: boolean; payload?: { value: number }[]; label?: string
@@ -228,24 +224,16 @@ export default function Dashboard() {
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-white">Top Countries</h2>
-                <span className="text-[9px] text-[#8B92A5] bg-white/5 px-1.5 py-0.5 rounded">Illustrative</span>
+                <span className="text-[9px] text-[#8B92A5] bg-white/5 px-1.5 py-0.5 rounded">Coming soon</span>
               </div>
-              <div className="flex justify-center mb-3">
-                <PieChart width={160} height={160}>
-                  <Pie data={countryData} cx={80} cy={80} innerRadius={50} outerRadius={74}
-                    paddingAngle={2} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
-                    {countryData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                </PieChart>
-              </div>
-              <div className="space-y-2">
-                {countryData.map(c => (
-                  <div key={c.name} className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
-                    <span className="text-xs text-[#8B92A5] flex-1">{c.name}</span>
-                    <span className="text-xs font-semibold text-white">{c.value}%</span>
-                  </div>
-                ))}
+              {/* D-048 fix: the previous pie chart here used hardcoded
+                  `countryData` (Bangladesh 45%, India 20%, …) with no real
+                  backing API. Replaced with a placeholder so the dashboard
+                  doesn't present fabricated metrics as live data. */}
+              <div className="flex flex-col items-center justify-center h-[160px] text-center">
+                <Globe size={28} className="text-[#8B92A5] mb-2" />
+                <p className="text-xs text-[#8B92A5]">Country breakdown</p>
+                <p className="text-xs text-[#8B92A5]">coming soon</p>
               </div>
             </div>
           </div>
@@ -266,7 +254,7 @@ export default function Dashboard() {
               {recentUsers.map(u => (
                 <div key={u.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
                   <div className="w-7 h-7 rounded-full gradient-primary flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                    {u.email[0].toUpperCase()}
+                    {(u.email?.[0] ?? 'U').toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-white truncate">{u.email}</div>

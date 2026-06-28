@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Save, Shield, Bell, Key, LogOut, Camera, Menu, RefreshCw, Activity, Clock, Globe, Monitor } from "lucide-react";
 import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
+import { clearToken } from "@/lib/auth";
 import { toast } from "sonner";
 
 interface AuditLog {
@@ -54,8 +55,7 @@ export default function Profile() {
   const { data: auditLogs, isLoading: auditLoading } = useApi<{ data: AuditLog[]; total: number }>("/v1/audit?limit=20&page=1");
   const { call, loading: mutating }  = useApiCallState();
 
-  const firstRef   = useRef<HTMLInputElement>(null);
-  const lastRef    = useRef<HTMLInputElement>(null);
+  const displayRef  = useRef<HTMLInputElement>(null);
   const curPwRef   = useRef<HTMLInputElement>(null);
   const newPwRef   = useRef<HTMLInputElement>(null);
   const confPwRef  = useRef<HTMLInputElement>(null);
@@ -65,18 +65,18 @@ export default function Profile() {
   const roleLabel    = profile?.role?.name ?? "Super Admin";
   const initials     = displayName[0]?.toUpperCase() ?? "A";
 
+  // D-034 fix: don't split the identifier into first/last — many admins log
+  // in with an email or a single handle, and "Foo Bar"→["Foo","Bar"] is a
+  // lossy transform. Use a single Display Name field bound directly to
+  // profile.identifier and let the server persist it as `name`.
   useEffect(() => {
     if (!profile) return;
-    const parts = displayName.split(" ");
-    if (firstRef.current) firstRef.current.value = parts[0] ?? "";
-    if (lastRef.current)  lastRef.current.value  = parts.slice(1).join(" ") || "";
+    if (displayRef.current) displayRef.current.value = profile.identifier ?? "";
   }, [profile]);
 
   const save = async () => {
     if (!profile) return;
-    const first = firstRef.current?.value?.trim() ?? "";
-    const last  = lastRef.current?.value?.trim() ?? "";
-    const name  = [first, last].filter(Boolean).join(" ") || undefined;
+    const name = displayRef.current?.value?.trim() || undefined;
     setSaveError("");
     try {
       const result = await call("put", "/v1/auth/profile", { name });
@@ -118,20 +118,34 @@ export default function Profile() {
   };
 
   const handleLogout = async () => {
-    await call("post", "/v1/auth/logout");
-    window.location.href = "/login";
+    try {
+      await call("post", "/v1/auth/logout");
+    } catch {
+      // ignore — we're logging out anyway
+    } finally {
+      clearToken();
+      window.location.href = "/login";
+    }
   };
 
-  const revokeSession = async (id: string) => {
+  const revokeSession = async (sessionId: string) => {
     if (!confirm("Revoke this session? That device will be logged out.")) return;
-    await call("delete", `/v1/auth/sessions/${id}`);
-    refetchSessions();
+    try {
+      await call("delete", `/v1/auth/sessions/${sessionId}`);
+      refetchSessions();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to revoke session");
+    }
   };
 
   const revokeAll = async () => {
     if (!confirm("This will log out ALL other sessions. Continue?")) return;
-    await call("post", "/v1/auth/logout-all");
-    refetchSessions();
+    try {
+      await call("post", "/v1/auth/logout-all");
+      refetchSessions();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to revoke sessions");
+    }
   };
 
   return (
@@ -194,13 +208,9 @@ export default function Profile() {
         {activeTab === "profile" && (
           <div className="bg-card border border-border rounded-xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white mb-2">Personal Information</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-xs text-[#8B92A5] mb-1.5 block">First Name</label>
-                <input ref={firstRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
-              </div>
-              <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Last Name</label>
-                <input ref={lastRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
-              </div>
+            <div>
+              <label className="text-xs text-[#8B92A5] mb-1.5 block">Display Name</label>
+              <input ref={displayRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" placeholder="Your display name" />
             </div>
             <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Email</label>
               <input defaultValue={displayEmail} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
@@ -333,8 +343,11 @@ export default function Profile() {
                 </div>
                 <div className={cn("w-10 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-colors", notifToggles[n.key] ? "bg-primary" : "bg-white/10")}
                   onClick={() => {
+                    // D-039 fix: the toggles are local-only — there's no API yet.
+                    // Keep the visual state so the UI feels alive, but make it
+                    // clear to the admin that the preference isn't persisted.
                     setNotifToggles(v => ({ ...v, [n.key]: !v[n.key] }));
-                    toast.info("Notification preferences are coming soon!");
+                    toast.info("Notification preferences are not yet available");
                   }}>
                   <div className={cn("w-4 h-4 rounded-full bg-white transition-all", notifToggles[n.key] ? "ml-auto" : "")} />
                 </div>

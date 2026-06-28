@@ -87,10 +87,9 @@ export default function Categories() {
     setSub(true);
     setMutationError(null);
     try {
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      // D-033 fix: don't send a client-generated slug — server derives it from name.
       await call("post", "/v1/categories", {
         name,
-        slug,
         icon: iconRef.current?.value || undefined,
         image: newImage || undefined,
       });

@@ -17,6 +17,7 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _onUnauthorized: (() => void) | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -42,6 +43,24 @@ export function setBaseUrl(url: string | null): void {
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register a callback invoked whenever the API returns HTTP 401.
+ *
+ * `customFetch` intentionally does NOT perform silent token-refresh / retry
+ * logic itself — token refresh is session state that belongs at the React
+ * Query / app shell layer (e.g. a QueryClient `onError` handler that calls
+ * the auth provider, refreshes, and `query.invalidate()`).
+ *
+ * This callback is purely a notification hook: when a 401 is observed, the
+ * callback fires (synchronously) BEFORE the `ApiError` is thrown, giving the
+ * host app a chance to redirect to login, clear the stored token, etc.
+ *
+ * Pass `null` to clear the callback.
+ */
+export function setOnUnauthorized(cb: (() => void) | null): void {
+  _onUnauthorized = cb;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -363,6 +382,17 @@ export async function customFetch<T = unknown>(
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {
+    // Surface 401s to the host app so it can clear tokens / redirect to
+    // login. The actual ApiError is still thrown below so React Query retry
+    // handlers and `onError` callbacks see the failure.
+    if (response.status === 401 && _onUnauthorized) {
+      try {
+        _onUnauthorized();
+      } catch {
+        // Never let a faulty onUnauthorized callback swallow the original
+        // API error.
+      }
+    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   FlatList,
   ListRenderItem,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTrending } from '@/lib/api-hooks';
 
 interface TrendingItem {
   id: string;
@@ -25,91 +27,49 @@ interface TrendingItem {
   type: 'movie' | 'series' | 'live' | 'sports';
 }
 
-interface TrendingTopic {
-  id: string;
-  name: string;
-  count: number;
-}
-
 const TABS = ['All', 'Movies', 'Series', 'Live', 'Sports'];
 
-const MOCK_TRENDING: TrendingItem[] = [
-  {
-    id: '1',
-    rank: 1,
-    title: 'Oppenheimer',
-    genre: 'Biography, Drama',
-    year: '2023',
-    rating: '8.5',
-    imdbRating: '8.3',
-    badge: '🔥 Hot',
-    gradientColors: ['#7C3AED', '#2563EB'],
-    type: 'movie',
-  },
-  {
-    id: '2',
-    rank: 2,
-    title: 'Nightfall S2',
-    genre: 'Sci-Fi, Thriller',
-    year: '2024',
-    rating: '9.1',
-    imdbRating: '8.9',
-    badge: '⬆️ Rising',
-    gradientColors: ['#10B981', '#059669'],
-    type: 'series',
-  },
-  {
-    id: '3',
-    rank: 3,
-    title: 'IND vs AUS 3rd T20',
-    genre: 'Cricket, Live',
-    year: 'Live',
-    rating: '-',
-    imdbRating: '-',
-    badge: '🔴 Live',
-    gradientColors: ['#EF4444', '#DC2626'],
-    type: 'live',
-  },
-  {
-    id: '4',
-    rank: 4,
-    title: 'The Dark Knight Rises',
-    genre: 'Action, Thriller',
-    year: '2012',
-    rating: '8.4',
-    imdbRating: '8.1',
-    badge: '🔥 Hot',
-    gradientColors: ['#EC4899', '#7C3AED'],
-    type: 'movie',
-  },
-  {
-    id: '5',
-    rank: 5,
-    title: 'F1: Monaco Grand Prix',
-    genre: 'Racing, Sports',
-    year: '2024',
-    rating: '-',
-    imdbRating: '-',
-    badge: '⬆️ Rising',
-    gradientColors: ['#F59E0B', '#D97706'],
-    type: 'sports',
-  },
+const GRADIENTS: [string, string][] = [
+  ['#7C3AED', '#2563EB'],
+  ['#10B981', '#059669'],
+  ['#EF4444', '#DC2626'],
+  ['#EC4899', '#7C3AED'],
+  ['#F59E0B', '#D97706'],
 ];
 
-const MOCK_TOPICS: TrendingTopic[] = [
-  { id: 't1', name: 'Action', count: 245 },
-  { id: 't2', name: 'Drama', count: 189 },
-  { id: 't3', name: 'Sci-Fi', count: 156 },
-  { id: 't4', name: 'Comedy', count: 132 },
-  { id: 't5', name: 'Horror', count: 98 },
-  { id: 't6', name: 'Romance', count: 87 },
-  { id: 't7', name: 'Documentary', count: 76 },
-  { id: 't8', name: 'Anime', count: 64 },
-];
+// M-005: Map API movie shape → TrendingItem. Hide 'live' items that don't
+// resolve to a movie/series ID (they have no detail screen to navigate to).
+const mapTrendingItem = (movie: any, index: number): TrendingItem | null => {
+  if (!movie || !movie.id) return null;
+  const year = movie.releaseYear || movie.year ||
+    (movie.releaseDate ? String(new Date(movie.releaseDate).getFullYear()) : '--');
+  const genres = Array.isArray(movie.genres)
+    ? movie.genres.map((g: any) => typeof g === 'string' ? g : (g?.name ?? '')).filter(Boolean)
+    : [];
+  return {
+    id: String(movie.id),
+    rank: index + 1,
+    title: movie.title || movie.name || 'Untitled',
+    genre: genres.join(', ') || 'Movie',
+    year,
+    rating: movie.rating ? String(movie.rating) : '-',
+    imdbRating: movie.imdbRating ? String(movie.imdbRating) : '-',
+    badge: movie.isTrending ? '🔥 Hot' : '⬆️ Rising',
+    gradientColors: GRADIENTS[index % GRADIENTS.length],
+    type: 'movie',
+  };
+};
 
 export default function TrendingScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
+
+  // M-005: pull real trending movies from the API.
+  const { data: trendingData, isLoading } = useTrending();
+  const allItems = useMemo(
+    () => (trendingData || []).map(mapTrendingItem).filter(Boolean) as TrendingItem[],
+    [trendingData],
+  );
 
   const toggleLike = (id: string) => {
     setLikedItems((prev) => {
@@ -123,20 +83,18 @@ export default function TrendingScreen() {
     });
   };
 
-  const filteredItems =
-    activeTab === 0
-      ? MOCK_TRENDING
-      : MOCK_TRENDING.filter((item) => {
-          const tabMap: Record<number, string> = {
-            1: 'movie',
-            2: 'series',
-            3: 'live',
-            4: 'sports',
-          };
-          return item.type === tabMap[activeTab];
-        });
+  const filteredItems = useMemo(() => {
+    if (activeTab === 0) return allItems;
+    const tabMap: Record<number, string> = {
+      1: 'movie',
+      2: 'series',
+      3: 'live',
+      4: 'sports',
+    };
+    return allItems.filter((item) => item.type === tabMap[activeTab]);
+  }, [allItems, activeTab]);
 
-  const renderTrendingItem: ListRenderItem<TrendingItem> = ({ item, index }) => (
+  const renderTrendingItem: ListRenderItem<TrendingItem> = ({ item }) => (
     <View style={styles.trendingItem}>
       {/* Large Faded Rank */}
       <Text style={styles.rankNumber}>#{item.rank}</Text>
@@ -150,9 +108,8 @@ export default function TrendingScreen() {
             router.push(`/movie/${item.id}`);
           } else if (item.type === 'series') {
             router.push(`/series/${item.id}`);
-          } else if (item.type === 'live') {
-            router.push(`/live-player/${item.id}`);
           }
+          // 'live' / 'sports' items have no movie id from /movies/trending — skip.
         }}
       >
         <LinearGradient
@@ -206,8 +163,6 @@ export default function TrendingScreen() {
           onPress={() => {
             if (item.type === 'movie' || item.type === 'series') {
               router.push(`/player/${item.id}?type=${item.type}&title=${encodeURIComponent((item as any).title || '')}`);
-            } else {
-              router.push(`/live-player/${item.id}`);
             }
           }}
         >
@@ -231,23 +186,16 @@ export default function TrendingScreen() {
     </View>
   );
 
-  const renderTopicsHeader = () => (
-    <View style={styles.topicsSection}>
-      <Text style={styles.topicsTitle}>Trending Topics</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.topicsScrollContent}
-      >
-        {MOCK_TOPICS.map((topic) => (
-          <View key={topic.id} style={styles.topicChip}>
-            <Text style={styles.topicName}>{topic.name}</Text>
-            <View style={styles.topicCountBadge}>
-              <Text style={styles.topicCountText}>{topic.count}</Text>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+  const renderEmpty = () => (
+    <View style={styles.emptyState}>
+      {isLoading ? (
+        <ActivityIndicator color="#7C3AED" size="large" />
+      ) : (
+        <>
+          <Ionicons name="trending-up-outline" size={48} color="#6B6B80" />
+          <Text style={styles.emptyText}>No trending content available right now.</Text>
+        </>
+      )}
     </View>
   );
 
@@ -305,7 +253,7 @@ export default function TrendingScreen() {
         renderItem={renderTrendingItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={renderTopicsHeader}
+        ListEmptyComponent={renderEmpty}
       />
     </View>
   );
@@ -315,6 +263,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#05070F',
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#B3B8C8',
+    textAlign: 'center',
   },
   topBar: {
     flexDirection: 'row',

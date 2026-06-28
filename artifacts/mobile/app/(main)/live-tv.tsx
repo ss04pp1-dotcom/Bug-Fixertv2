@@ -52,7 +52,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'Kids': ['kids', 'cartoon', 'disney', 'nickelodeon', 'nick', 'cartoon network', 'boomerang', 'baby', 'junior', 'junior', 'cbeebies', 'pbs kids', 'discovery kids'],
   'Religious': ['religious', 'islamic', 'christian', 'peace', 'quran', 'bible', 'islamic', 'muslim', 'church', 'gospel', 'hindu', 'dharma', 'prayer', 'god', 'divine'],
   'International': ['international', 'global', 'world', 'uk', 'usa', 'us', 'france', 'germany', 'spain', 'italy', 'arabic', 'indian', 'pakistan', 'turkey', 'russia', 'china', 'japan', 'korean'],
-  'IPTV': ['iptv', 'stream', 'live', 'hd', 'fhd', 'uhd', '4k'],
+  'IPTV': ['iptv', 'm3u8'],
 };
 
 function matchesCategory(name: string, category: string): boolean {
@@ -71,8 +71,8 @@ export default function LiveTVScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch ALL channels once (limit 500), filter client-side
-  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 500 });
+  // M-040: reduced from 500 to 100 to load faster (true pagination would use useInfiniteQuery)
+  const { data: allChannels, isLoading, refetch } = useLiveChannels({ limit: 100 });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

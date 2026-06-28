@@ -26,7 +26,9 @@ export default defineConfig({
       target: "generated",
       client: "react-query",
       mode: "split",
-      baseUrl: "/api",
+      // NestJS uses URI versioning with defaultVersion '1' and does NOT call
+      // setGlobalPrefix('api'), so actual routes are /v1/... not /api/v1/...
+      baseUrl: "/v1",
       clean: true,
       prettier: true,
       override: {
@@ -60,12 +62,16 @@ export default defineConfig({
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
-            body: ['bigint', 'date'],
-            response: ['bigint', 'date'],
+            // Do NOT coerce `bigint` on the body/response — JSON has no bigint
+            // type, and zod's `bigint()` coercion silently mangles large
+            // numeric IDs. Numbers that exceed MAX_SAFE_INTEGER should surface
+            // as a parse error rather than becoming a wrong bigint.
+            body: ['date'],
+            response: ['date'],
           },
         },
         useDates: true,
-        useBigInt: true,
+        useBigInt: false,
       },
     },
   },

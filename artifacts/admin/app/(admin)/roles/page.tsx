@@ -3,7 +3,8 @@
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Plus, Edit, Trash2, Users, Shield, Menu, RefreshCw } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
+import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
+import { toast } from "sonner";
 
 interface Role {
   id: string;
@@ -44,19 +45,28 @@ export default function Roles() {
     const name = nameRef.current?.value?.trim();
     if (!name) return;
     const body = { name, description: descRef.current?.value?.trim() || undefined, permissions: selectedPerms };
-    if (selected) {
-      await call("put", `/v1/roles/${selected.id}`, body);
-    } else {
-      await call("post", "/v1/roles", body);
+    // D-025 fix: keep modal open on failure so the user can fix input
+    try {
+      if (selected) {
+        await call("put", `/v1/roles/${selected.id}`, body);
+      } else {
+        await call("post", "/v1/roles", body);
+      }
+      closeModal();
+      refetch();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to save role");
     }
-    closeModal();
-    refetch();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this role?")) return;
-    await call("delete", `/v1/roles/${id}`);
-    refetch();
+    try {
+      await call("delete", `/v1/roles/${id}`);
+      refetch();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to delete role");
+    }
   };
 
   const togglePerm = (p: string) => {

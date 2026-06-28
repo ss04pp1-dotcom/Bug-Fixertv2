@@ -1768,8 +1768,8 @@
           "method": "btree",
           "with": {}
         },
-        "channels_normalized_name_idx": {
-          "name": "channels_normalized_name_idx",
+        "channels_normalized_name_key": {
+          "name": "channels_normalized_name_key",
           "columns": [
             {
               "expression": "normalized_name",
@@ -1778,7 +1778,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}

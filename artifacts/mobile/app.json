@@ -17,12 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.streampro.app",
       "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        },
         "UIBackgroundModes": [
-          "audio",
-          "fetch",
           "audio",
           "fetch"
         ],
@@ -41,10 +36,6 @@
         "android.permission.INTERNET",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.INTERNET",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
@@ -55,7 +46,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://streampro.app/"
         }
       ],
       "expo-font",
@@ -91,7 +82,9 @@
       "cdnUrl": "",
       "eas": {
         "projectId": "63455f05-97aa-406d-b0fd-8f86b2187fc9"
-      }
+      },
+      "easProjectId": "63455f05-97aa-406d-b0fd-8f86b2187fc9",
+      "note": "Verify this EAS project ID matches an active project via 'eas project:info'. If placeholder, set updates.enabled=false."
     }
   }
 }

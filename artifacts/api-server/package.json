@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "dev": "redis-server --daemonize yes --logfile /tmp/redis.log --port 6379 2>/dev/null || true; pnpm exec prisma generate; pnpm exec nest start --watch",
+        "dev": "if ! pgrep -x redis-server >/dev/null 2>&1; then redis-server --daemonize yes --logfile /tmp/redis.log --port 6379 2>/dev/null || echo '[warn] Redis not started — BullMQ jobs will fail'; fi; pnpm exec prisma generate; pnpm exec nest start --watch",
         "build": "pnpm exec prisma generate && pnpm exec nest build",
         "start": "node dist/main",
         "typecheck": "tsc --noEmit",

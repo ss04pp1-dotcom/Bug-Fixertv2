@@ -93,7 +93,13 @@ export default function WatchHistoryScreen() {
                 style={s.historyCard}
                 onPress={() => router.push(isMovie ? `/movie/${content.id}` : `/series/${content.id}`)}
               >
-                <Image source={{ uri: getImageUrl(content.posterUrl || content.thumbnailUrl) }} style={s.poster} />
+                {(content.posterUrl || content.thumbnailUrl) ? (
+                  <Image source={{ uri: getImageUrl(content.posterUrl || content.thumbnailUrl) }} style={s.poster} />
+                ) : (
+                  <View style={[s.poster, { backgroundColor: '#1E1E2E', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="film-outline" size={24} color="#4A4A5A" />
+                  </View>
+                )}
                 <View style={s.infoArea}>
                   <Text style={s.title} numberOfLines={1}>{content.title}</Text>
                   <Text style={s.meta}>{isMovie ? 'Movie' : 'Series'} • Watched {progressPercent}% • {dateStr}</Text>

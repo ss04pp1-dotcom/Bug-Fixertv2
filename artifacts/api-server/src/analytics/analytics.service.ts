@@ -2,15 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { SubscriptionStatus, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../websocket/presence.service';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class AnalyticsService {
   constructor(
     private prisma: PrismaService,
     private presence: PresenceService,
+    private cacheService: CacheService,
   ) {}
 
   async getDashboardStats() {
+    // A-059: dashboard aggregates multiple COUNT()/aggregate() queries that don't change
+    // second-to-second — cache for 60s to absorb dashboard auto-refresh storms.
+    return this.cacheService.getOrSet(
+      'analytics:dashboard',
+      () => this.computeDashboardStats(),
+      60_000,
+    );
+  }
+
+  private async computeDashboardStats() {
     const now = new Date();
     const startOfDay = new Date(now.setHours(0, 0, 0, 0));
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);

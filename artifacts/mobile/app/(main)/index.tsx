@@ -46,14 +46,16 @@ function SectionHeader({ title, dot, onSeeAll }: { title: string; dot?: boolean;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (dot) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        ])
-      ).start();
-    }
+    // M-033: capture the loop handle and stop it on cleanup to avoid leaks.
+    if (!dot) return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
   }, [dot, pulseAnim]);
 
   return (
@@ -118,17 +120,16 @@ export default function HomeScreen() {
     }));
   }, [bannersData]);
 
+  const heroIdxRef = useRef(0);
+
   useEffect(() => {
+    if (heroes.length === 0) return;
     const timer = setInterval(() => {
-      if (heroes.length > 0 && heroRef.current) {
-        let nextIdx = heroIdx + 1;
-        if (nextIdx >= heroes.length) nextIdx = 0;
-        heroRef.current.scrollToIndex({ index: nextIdx, animated: true });
-        setHeroIdx(nextIdx);
-      }
+      heroIdxRef.current = (heroIdxRef.current + 1) % heroes.length;
+      heroRef.current?.scrollToIndex({ index: heroIdxRef.current, animated: true });
     }, 4000);
     return () => clearInterval(timer);
-  }, [heroIdx, heroes]);
+  }, [heroes.length]);
 
   const liveMatches = useMemo(() => {
     if (!liveMatchData || !Array.isArray(liveMatchData)) return [];
@@ -198,7 +199,11 @@ export default function HomeScreen() {
   }, [upcomingData]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) setHeroIdx(viewableItems[0].index ?? 0);
+    if (viewableItems.length > 0) {
+      const idx = viewableItems[0].index ?? 0;
+      setHeroIdx(idx);
+      heroIdxRef.current = idx;
+    }
   }).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -210,12 +215,15 @@ export default function HomeScreen() {
 
   const pulseAnimFilter = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    Animated.loop(
+    // M-033: capture the loop handle so it can be stopped on unmount.
+    const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnimFilter, { toValue: 0.4, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnimFilter, { toValue: 1, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
   }, [pulseAnimFilter]);
 
   const FILTERS = ['All', 'Movies', 'Series', 'Live sports'];
@@ -305,7 +313,7 @@ export default function HomeScreen() {
                 <View style={s.heroCardWrap}>
                   <Pressable style={s.heroCard} onPress={() => {
                     if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
-                    else router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`);
+                    else router.push(`/player/${item.id}?type=${item.type || item.contentType || 'movie'}&title=${encodeURIComponent(item.title)}`);
                   }}>
                     <LinearGradient colors={['#3D1A5C', '#1a0535']} style={s.heroBg}>
                       {item.poster ? (
@@ -321,7 +329,7 @@ export default function HomeScreen() {
                         <View style={s.heroBtns}>
                           <Pressable style={s.heroPlayBtn} onPress={() => {
                             if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
-                            else router.push(`/player/${item.id}?type=movie&title=${encodeURIComponent(item.title)}`);
+                            else router.push(`/player/${item.id}?type=${item.type || item.contentType || 'movie'}&title=${encodeURIComponent(item.title)}`);
                           }}>
                             <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.heroPlayGrad}>
                               <Ionicons name="play" size={18} color="#fff" />
@@ -421,7 +429,7 @@ export default function HomeScreen() {
         {/* Continue Watching */}
         {continueItems.length > 0 && (
           <>
-            <SectionHeader title="Continue Watching" onSeeAll={() => {}} />
+            <SectionHeader title="Continue Watching" onSeeAll={() => router.push('/watch-history')} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
               {continueItems.map((item) => (
                 <Pressable key={item.id} style={s.continueCard}

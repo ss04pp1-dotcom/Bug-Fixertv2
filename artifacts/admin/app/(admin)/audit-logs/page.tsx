@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Search, ChevronDown, Download, Shield, Menu, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useApi } from "@/lib/use-api";
@@ -30,12 +30,19 @@ const levelStyles: Record<string, string> = {
 
 export default function AuditLogs() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [level, setLevel]   = useState("all");
   const [page, setPage]     = useState(1);
 
+  // D-013 fix: debounce search so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const params = new URLSearchParams({ page: String(page), limit: "20" });
   if (level !== "all") params.set("level", level);
-  if (search) params.set("search", search);
+  if (debouncedSearch) params.set("search", debouncedSearch);
 
   const { data, isLoading: loading, error, refetch } = useApi<AuditLogsResponse>(`/v1/audit?${params}`);
 
@@ -77,9 +84,14 @@ export default function AuditLogs() {
               const csv = [header, ...rows].join('\n');
               const blob = new Blob([csv], { type: 'text/csv' });
               const a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
+              // D-027/28/29 fix: revoke the object URL so we don't leak blob refs
+              const url = URL.createObjectURL(blob);
+              a.href = url;
               a.download = `audit-logs-${new Date().toISOString().slice(0,10)}.csv`;
+              document.body.appendChild(a);
               a.click();
+              URL.revokeObjectURL(url);
+              document.body.removeChild(a);
             }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5"
           >
@@ -112,7 +124,7 @@ export default function AuditLogs() {
             <Search size={14} className="text-[#8B92A5] shrink-0" />
             <input
               value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              onChange={e => { setSearch(e.target.value); }}
               placeholder="Search by user, action, or resource…"
               className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1"
             />

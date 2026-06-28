@@ -135,7 +135,6 @@ export class NotificationsService {
 
   async send(id: string) {
     const notification = await this.findOne(id);
-    await this.prisma.notification.update({ where: { id }, data: { sentAt: new Date() } });
 
     const firebase = await this.getFcmApp();
     if (firebase) {
@@ -150,19 +149,42 @@ export class NotificationsService {
           if (notification.isPremium != null) conditions.push({ isPremium: notification.isPremium });
           if (conditions.length) where['OR'] = conditions;
         }
-        const users = await this.prisma.user.findMany({ where, select: { fcmToken: true }, take: 500 });
-        const tokens = users.map(u => u.fcmToken!).filter(Boolean);
-        if (tokens.length) {
-          const result = await firebase.messaging().sendEachForMulticast({
-            tokens,
-            notification: { title: notification.title, body: notification.body },
+
+        // Paginate through ALL matching users in batches of 500 so large audiences
+        // actually receive the push — the previous `take: 500` silently truncated.
+        let skip = 0;
+        const batchSize = 500;
+        let totalSent = 0;
+        let totalFailed = 0;
+        while (true) {
+          const users = await this.prisma.user.findMany({
+            where,
+            select: { fcmToken: true },
+            take: batchSize,
+            skip,
           });
-          this.logger.log(`Push sent: ${result.successCount} ok, ${result.failureCount} failed`);
+          if (users.length === 0) break;
+          const tokens = users.map(u => u.fcmToken!).filter(Boolean);
+          if (tokens.length) {
+            const result = await firebase.messaging().sendEachForMulticast({
+              tokens,
+              notification: { title: notification.title, body: notification.body },
+            });
+            totalSent += result.successCount;
+            totalFailed += result.failureCount;
+          }
+          if (users.length < batchSize) break;
+          skip += batchSize;
         }
+        this.logger.log(`Push sent: ${totalSent} ok, ${totalFailed} failed`);
       } catch (err) {
         this.logger.error('FCM send error', err instanceof Error ? err.message : String(err));
       }
     }
+
+    // Mark sentAt AFTER all batches complete so the notification isn't reported as
+    // "sent" while pushes are still in flight.
+    await this.prisma.notification.update({ where: { id }, data: { sentAt: new Date() } });
     return notification;
   }
 
@@ -255,15 +277,14 @@ export class NotificationsService {
       select: { id: true },
     });
 
-    await Promise.all(
-      notifications.map(n =>
-        this.prisma.notificationRead.upsert({
-          where: { userId_notificationId: { userId, notificationId: n.id } },
-          create: { userId, notificationId: n.id },
-          update: { readAt: new Date() },
-        }),
-      ),
-    );
+    // Use createMany with skipDuplicates (single round-trip) instead of unbounded
+    // parallel upserts which can saturate the connection pool for users with many
+    // notifications.
+    const now = new Date();
+    await this.prisma.notificationRead.createMany({
+      data: notifications.map(n => ({ userId, notificationId: n.id, readAt: now })),
+      skipDuplicates: true,
+    });
 
     return { message: `${notifications.length} notifications marked as read` };
   }

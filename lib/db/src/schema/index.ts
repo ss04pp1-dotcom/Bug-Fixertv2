@@ -112,7 +112,10 @@ export const sessions = pgTable('sessions', {
   createdAt:    timestamp('created_at').defaultNow().notNull(),
   updatedAt:    timestamp('updated_at').defaultNow().notNull(),
   expiresAt:    timestamp('expires_at').notNull(),
-}, (t) => [index('sessions_user_id_idx').on(t.userId)]);
+}, (t) => [
+  index('sessions_user_id_idx').on(t.userId),
+  index('sessions_expires_at_idx').on(t.expiresAt),
+]);
 
 export const otps = pgTable('otps', {
   id:         uuid('id').primaryKey().defaultRandom(),
@@ -123,7 +126,11 @@ export const otps = pgTable('otps', {
   expiresAt:  timestamp('expires_at').notNull(),
   usedAt:     timestamp('used_at'),
   createdAt:  timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [
+  index('otps_identifier_idx').on(t.identifier),
+  index('otps_user_id_idx').on(t.userId),
+  index('otps_expires_at_idx').on(t.expiresAt),
+]);
 
 export const categories = pgTable('categories', {
   id:          uuid('id').primaryKey().defaultRandom(),
@@ -580,7 +587,10 @@ export const adEvents = pgTable('ad_events', {
   userId:     uuid('user_id'),
   metadata:   json('metadata'),
   createdAt:  timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [
+  index('ad_events_created_at_idx').on(t.createdAt),
+  index('ad_events_placement_created_at_idx').on(t.placement, t.createdAt),
+]);
 
 export const adRevenue = pgTable('ad_revenue', {
   id:          uuid('id').primaryKey().defaultRandom(),
@@ -658,11 +668,22 @@ export const favorites = pgTable('favorites', {
   movieId:   uuid('movie_id').references(() => movies.id, { onDelete: 'cascade' }),
   seriesId:  uuid('series_id').references(() => series.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (t) => [index('favorites_user_id_idx').on(t.userId)]);
+}, (t) => [
+  index('favorites_user_id_idx').on(t.userId),
+  // Each (user, content-type) pair must be unique. Drizzle treats NULL as
+  // distinct, so partial uniqueness is automatic — e.g. a user can have many
+  // favorites where channelId IS NULL because they favorited movies/series.
+  unique('favorites_user_channel_unique').on(t.userId, t.channelId),
+  unique('favorites_user_movie_unique').on(t.userId, t.movieId),
+  unique('favorites_user_series_unique').on(t.userId, t.seriesId),
+]);
 
 export const watchHistory = pgTable('watch_history', {
   id:        uuid('id').primaryKey().defaultRandom(),
   userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // channelId is nullable because a watch-history row can be for a movie or
+  // series episode rather than a live channel.
+  channelId: uuid('channel_id').references(() => channels.id, { onDelete: 'cascade' }),
   movieId:   uuid('movie_id').references(() => movies.id, { onDelete: 'cascade' }),
   seriesId:  uuid('series_id').references(() => series.id, { onDelete: 'cascade' }),
   episodeId: uuid('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
@@ -671,7 +692,17 @@ export const watchHistory = pgTable('watch_history', {
   completed: boolean('completed').default(false).notNull(),
   watchedAt: timestamp('watched_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (t) => [index('watch_history_user_id_idx').on(t.userId)]);
+}, (t) => [
+  index('watch_history_user_id_idx').on(t.userId),
+  // Continue-watching lookup: a (user, content) row should be unique so that
+  // re-watching updates the existing row instead of creating a duplicate.
+  // The schema does not carry generic contentType/contentId columns, so the
+  // index below covers the (user, channel) pair. For movies/series/episodes
+  // the application layer must upsert by the relevant FK.
+  index('watch_history_user_channel_idx').on(t.userId, t.channelId),
+  index('watch_history_user_movie_idx').on(t.userId, t.movieId),
+  index('watch_history_user_series_idx').on(t.userId, t.seriesId),
+]);
 
 export const searchHistory = pgTable('search_history', {
   id:        uuid('id').primaryKey().defaultRandom(),

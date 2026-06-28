@@ -59,7 +59,9 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, {});
-    return { user: this.sanitizeUser(user), ...tokens };
+    // refreshToken is intentionally included so the controller can set it as an httpOnly cookie.
+    // The controller is responsible for stripping it from the JSON response body before returning.
+    return { user: this.sanitizeUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
 
   async login(dto: LoginDto, ipAddress?: string, userAgent?: string) {
@@ -93,7 +95,8 @@ export class AuthService {
       },
     });
 
-    return { user: this.sanitizeUser(user), ...tokens };
+    // Refresh token is delivered via httpOnly cookie by the controller — never return it in the JSON body.
+    return { user: this.sanitizeUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
 
   async refresh(userId: string, sessionId: string) {
@@ -109,7 +112,8 @@ export class AuthService {
       data: { refreshToken: tokens.refreshToken, expiresAt },
     });
 
-    return tokens;
+    // Controller sets the refresh token as an httpOnly cookie; only return accessToken + user to the client.
+    return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, user: this.sanitizeUser(user) };
   }
 
   async logout(sessionId: string) {
@@ -144,6 +148,15 @@ export class AuthService {
     const otp = crypto.randomInt(100000, 1000000).toString();
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // A-030: invalidate all previously-issued, still-unused OTPs for this identifier
+    // BEFORE creating the new one. Without this, an attacker who requested 5 OTPs has
+    // 5 valid codes they can try — defeating the `recentFailures >= 5` brute-force guard
+    // in verifyOtp() which only counts unused OTPs whose code != the submitted code.
+    await this.prisma.otp.updateMany({
+      where: { identifier: dto.identifier, usedAt: null },
+      data: { usedAt: new Date() },
+    });
 
     await this.prisma.otp.create({
       data: {
@@ -227,9 +240,15 @@ export class AuthService {
     if (!user) throw new NotFoundException('User not found');
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
-    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
-    await this.prisma.otp.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
-    await this.prisma.session.updateMany({ where: { userId: user.id }, data: { isActive: false } });
+    // Wrap password update + OTP mark-used + session deactivation in a single transaction so
+    // a crash between any of these steps can't leave the system in an inconsistent state
+    // (e.g. password changed but sessions still active, or OTP never marked as used and
+    // therefore reusable for a second reset).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+      await tx.otp.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+      await tx.session.updateMany({ where: { userId: user.id }, data: { isActive: false } });
+    });
 
     return { message: 'Password reset successfully' };
   }
@@ -264,8 +283,12 @@ export class AuthService {
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Current password is incorrect');
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
-    await this.prisma.session.updateMany({ where: { userId }, data: { isActive: false } });
+    // Wrap the password update + session deactivation in a transaction so a crash between
+    // them can't leave sessions active after the password changed (or vice versa).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await tx.session.updateMany({ where: { userId }, data: { isActive: false } });
+    });
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
@@ -279,6 +302,14 @@ export class AuthService {
         where: { email: data.email, deletedAt: null, id: { not: userId } },
       });
       if (existing) throw new ConflictException('Email is already in use by another account');
+    }
+
+    // Check phone uniqueness — same reasoning as the email check above.
+    if (data.phone && data.phone !== user.phone) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: { phone: data.phone, deletedAt: null, id: { not: userId } },
+      });
+      if (existingPhone) throw new ConflictException('Phone number already in use');
     }
 
     const updated = await this.prisma.user.update({
@@ -318,12 +349,38 @@ export class AuthService {
       ? await this.prisma.user.findFirst({ where: { email: resolvedEmail, deletedAt: null } })
       : null;
 
-    // 2. Create user if not found
+    // 2. Create user if not found — race-condition-safe: two concurrent socialLogin
+    // calls with the same OAuth token could both pass the findFirst check and both try to
+    // create the user. We catch P2002 (unique constraint on email) and re-fetch instead.
+    // We also set a random passwordHash so the OAuth user can NEVER log in via password
+    // (they must always go through the OAuth flow).
     if (!user) {
       const name = dto.name ?? resolvedEmail?.split('@')[0] ?? 'User';
-      user = await this.prisma.user.create({
-        data: { name, email: resolvedEmail ?? null, language: 'en' },
-      });
+      const randomPasswordHash = crypto.randomBytes(32).toString('hex');
+      try {
+        user = await this.prisma.user.create({
+          data: { name, email: resolvedEmail ?? null, language: 'en', passwordHash: randomPasswordHash },
+        });
+      } catch (e) {
+        // PrismaClientKnownRequestError with code 'P2002' means a unique constraint fired —
+        // another concurrent request already created the user. Re-fetch and continue.
+        if (
+          typeof e === 'object' && e !== null &&
+          'code' in e && (e as { code: string }).code === 'P2002'
+        ) {
+          if (!resolvedEmail) {
+            // Should not happen — P2002 on what then? Re-throw.
+            throw e;
+          }
+          user = await this.prisma.user.findFirst({ where: { email: resolvedEmail, deletedAt: null } });
+          if (!user) {
+            // User was created then immediately soft-deleted by a concurrent request — abort.
+            throw new ConflictException('Account is in an inconsistent state, please try again');
+          }
+        } else {
+          throw e;
+        }
+      }
     }
 
     if (!user.isActive) throw new UnauthorizedException('Account is disabled');
@@ -341,7 +398,8 @@ export class AuthService {
       },
     });
 
-    return { user: this.sanitizeUser(user), ...tokens };
+    // Refresh token is delivered via httpOnly cookie by the controller — never return it in the JSON body.
+    return { user: this.sanitizeUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
 
   /**

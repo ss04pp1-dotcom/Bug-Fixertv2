@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,8 @@ export default function ForgotPasswordScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  // M-032: hold the navigation timeout so we can clear it on unmount.
+  const navTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Animated glow
   const glowOpacity = useSharedValue(0.25);
@@ -52,6 +54,13 @@ export default function ForgotPasswordScreen() {
     opacity: glowOpacity.value,
   }));
 
+  // M-032: clear any pending navigation timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (navTimer.current) clearTimeout(navTimer.current);
+    };
+  }, []);
+
   const handleBack = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
@@ -69,11 +78,14 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
+      // M-009: backend expects `identifier`. The downstream OTP / reset-password
+      // screens keep using `contact` as the nav param name; we normalize at the
+      // API boundary so the navigation contract stays stable.
       await apiClient.post('/auth/forgot-password', {
         identifier: emailOrPhone.trim(),
       });
       setSuccess(true);
-      setTimeout(() => {
+      navTimer.current = setTimeout(() => {
         router.replace({
           pathname: '/(auth)/otp-verification' as any,
           params: { contact: emailOrPhone.trim(), mode: 'reset' },

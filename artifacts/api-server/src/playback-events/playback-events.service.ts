@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReportPlaybackDto } from './dto/report-playback.dto';
 
@@ -6,8 +6,24 @@ import { ReportPlaybackDto } from './dto/report-playback.dto';
 export class PlaybackEventsService {
   constructor(private prisma: PrismaService) {}
 
-  async report(dto: ReportPlaybackDto) {
-    return this.prisma.playbackEvent.create({ data: dto as any });
+  async report(dto: ReportPlaybackDto, userId: string) {
+    // Validate that the channel exists before inserting the event — prevents
+    // junk rows from authenticated-but-malicious clients and from replay attacks.
+    const channel = await this.prisma.channel.findFirst({
+      where: { id: dto.channelId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+
+    return this.prisma.playbackEvent.create({
+      data: {
+        channelId: dto.channelId,
+        userId, // Always pulled from req.user — never trusted from the client body
+        success: dto.success,
+        duration: dto.duration,
+        appVersion: dto.appVersion,
+      } as any,
+    });
   }
 
   async getChannelStats(channelId: string) {

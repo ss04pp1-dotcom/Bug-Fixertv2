@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  useWindowDimensions,
   ScrollView,
   Image,
   RefreshControl,
@@ -18,8 +19,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMovies, useSeriesList, useCategories } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
-
-const { width: W } = Dimensions.get('window');
 
 const C = {
   bg: '#0A0A0F',
@@ -40,11 +39,17 @@ const DEFAULT_CATS = [
 const CONTENT_TABS = ['Movies', 'Series'];
 
 export default function BrowseScreen() {
+  const { width: W } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [activeCat, setActiveCat] = useState('All');
   const [activeTab, setActiveTab] = useState('Movies');
   const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
+
+  // M-015: accumulate items across pages so pagination doesn't replace the list.
+  // Reset whenever the filter/search context changes.
+  const [allItems, setAllItems] = useState<any[]>([]);
+  const lastPageRef = useRef(0);
 
   // We can merge cats from API with defaults, or just use defaults to ensure we have the requested ones
   const { data: catsData } = useCategories();
@@ -83,6 +88,27 @@ export default function BrowseScreen() {
       type: activeTab === 'Movies' ? 'movie' : 'series',
     }));
   }, [moviesData, seriesData, activeTab]);
+
+  // M-015: when the page/filter context changes, reset accumulation; otherwise append.
+  useEffect(() => {
+    const isContextReset = activeCat !== undefined && page === 1;
+    if (isContextReset) {
+      // fresh query (page 1, or filter changed) → replace accumulated list
+      setAllItems(items);
+      lastPageRef.current = page;
+      return;
+    }
+    if (page !== lastPageRef.current && items.length > 0) {
+      // append-only: avoid duplicating IDs that already exist.
+      setAllItems((prev) => {
+        const seen = new Set(prev.map((it) => it.id));
+        const merged = [...prev, ...items.filter((it) => !seen.has(it.id))];
+        return merged;
+      });
+      lastPageRef.current = page;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, page, activeTab, activeCat]);
 
   const isLoading = activeTab === 'Movies' ? moviesLoading : seriesLoading;
 
@@ -205,9 +231,9 @@ export default function BrowseScreen() {
       </View>
 
       {/* Content Grid */}
-      {isLoading && items.length === 0 ? (
+      {isLoading && allItems.length === 0 ? (
         renderSkeleton()
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <View style={s.emptyBox}>
           <Ionicons name={activeTab === 'Movies' ? 'film-outline' : 'tv-outline'} size={48} color={C.textSec} />
           <Text style={s.emptyTitle}>No {activeTab} Found</Text>
@@ -218,7 +244,7 @@ export default function BrowseScreen() {
       ) : (
         <FlatList
           key={cols}
-          data={items}
+          data={allItems}
           numColumns={cols}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -234,13 +260,13 @@ export default function BrowseScreen() {
             />
           }
           onEndReached={() => {
-            if (!isLoading && items.length >= 30) {
+            if (!isLoading && allItems.length >= 30) {
               setPage(p => p + 1);
             }
           }}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
-            isLoading && items.length > 0 ? (
+            isLoading && allItems.length > 0 ? (
               <ActivityIndicator size="small" color={C.primary} style={{ marginVertical: 20 }} />
             ) : null
           }

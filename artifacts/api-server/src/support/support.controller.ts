@@ -25,7 +25,7 @@ export class SupportController {
   @Get(':id') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Get ticket (admin)' })
   findOne(@Param('id') id: string) { return this.supportService.findOne(id); }
 
-  @Post() @Roles('user', 'premium', 'moderator', 'admin', 'super_admin') @ApiOperation({ summary: 'Create ticket' })
+  @Post() @Roles('user', 'moderator', 'admin', 'super_admin') @ApiOperation({ summary: 'Create ticket' })
   create(
     @CurrentUser() user: { email: string },
     @Body() dto: { subject: string; description?: string; priority?: string },

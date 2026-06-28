@@ -6,7 +6,15 @@ let socket: Socket | null = null;
 
 export const SocketService = {
   connect: async (): Promise<Socket> => {
+    // M-019: reuse the existing socket instance when possible to avoid duplicate
+    // connections and listener leaks on repeated connect() calls.
     if (socket?.connected) return socket;
+    if (socket) {
+      // Existing instance is alive but disconnected — just reconnect it so we
+      // don't stack up multiple sockets.
+      socket.connect();
+      return socket;
+    }
     const token = await tokenStorage.getAccessToken();
     // FIX: namespace '/ws' যোগ করতে হবে — server uses @WebSocketGateway({ namespace: '/ws' })
     socket = io(`${Config.WS_URL}/ws`, {
@@ -25,8 +33,11 @@ export const SocketService = {
   },
 
   disconnect: () => {
-    socket?.disconnect();
-    socket = null;
+    if (socket) {
+      socket.removeAllListeners();
+      socket.disconnect();
+      socket = null;
+    }
   },
 
   getSocket: () => socket,

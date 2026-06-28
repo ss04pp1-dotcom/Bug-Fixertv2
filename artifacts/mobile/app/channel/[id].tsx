@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLiveChannels, useToggleFavorite } from '@/lib/api-hooks';
+import { useChannel, useToggleFavorite, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 
 const C = {
@@ -27,14 +27,24 @@ const C = {
 
 const getImageUrl = (path?: string) => path ? Config.imageUrl(path) : 'https://images.unsplash.com/photo-1616530940355-351fabd9524b?w=400&h=400&fit=crop';
 
+// M-003: backend sometimes returns channel.category as an object ({name, ...}) —
+// never render that as a Text child.
+const getCategoryName = (cat: any): string => {
+  if (!cat) return 'Live TV';
+  if (typeof cat === 'string') return cat;
+  return cat.name || cat.title || 'Live TV';
+};
+
 export default function ChannelDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   
-  const { data: channelsData, isLoading } = useLiveChannels();
+  const { data: channel, isLoading } = useChannel(id as string);
+  const { data: favorites } = useFavorites();
   const toggleFav = useToggleFavorite();
-  
-  const channel = (channelsData || []).find((c: any) => c.id === id);
+
+  // M-027: derive favorite state from server data instead of always sending 'add'.
+  const isFav = useMemo(() => (favorites || []).some((f: any) => f.id === id), [favorites, id]);
 
   const handleWatchLive = () => {
     if (!channel) return;
@@ -51,7 +61,7 @@ export default function ChannelDetailScreen() {
 
   const handleToggleFav = () => {
     if (!channel) return;
-    toggleFav.mutate({ type: 'channel', id: channel.id, action: 'add' });
+    toggleFav.mutate({ type: 'channel', id: channel.id, action: isFav ? 'remove' : 'add' });
   };
 
   if (isLoading) {
@@ -83,7 +93,7 @@ export default function ChannelDetailScreen() {
               <Ionicons name="chevron-back" size={24} color={C.text} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleToggleFav} style={s.iconBtn}>
-              <Ionicons name="heart-outline" size={24} color={C.text} />
+              <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={24} color={isFav ? '#FF3B30' : C.text} />
             </TouchableOpacity>
           </View>
           
@@ -104,7 +114,7 @@ export default function ChannelDetailScreen() {
 
         <View style={s.contentArea}>
           <Text style={s.channelName}>{channel.name}</Text>
-          <Text style={s.channelCategory}>{channel.category} • Bangladesh</Text>
+          <Text style={s.channelCategory}>{getCategoryName(channel.category)} • Bangladesh</Text>
           <Text style={s.description}>{channel.description || 'Watch live broadcasting 24/7.'}</Text>
           
           {/* Program Guide */}

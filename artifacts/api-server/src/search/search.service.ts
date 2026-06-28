@@ -26,8 +26,15 @@ export class SearchService {
     ]);
 
     if (userId) {
-      await this.prisma.searchHistory.create({ data: { userId, query: q } })
-        .catch((e: Error) => this.logger.warn(`Search history write failed for user ${userId}: ${e.message}`));
+      // A-060: upsert instead of always-create so repeat searches for the same query
+      // bump `createdAt` (most-recent-first ordering) instead of spawning duplicate
+      // rows that pollute the user's search history. Requires @@unique([userId, query])
+      // on SearchHistory (added in schema).
+      await this.prisma.searchHistory.upsert({
+        where: { userId_query: { userId, query: q } },
+        create: { userId, query: q },
+        update: { createdAt: new Date() },
+      }).catch((e: Error) => this.logger.warn(`Search history upsert failed for user ${userId}: ${e.message}`));
     }
 
     return { channels, movies, series, query: q };

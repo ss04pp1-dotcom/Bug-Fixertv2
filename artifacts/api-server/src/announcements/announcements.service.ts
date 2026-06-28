@@ -92,13 +92,15 @@ export class AnnouncementsService {
 
   async getActive() {
     const now = new Date();
+    // A-058: cap at 20 + add createdAt tiebreaker (see banners.service.ts findActive for rationale).
     return this.prisma.announcement.findMany({
       where: {
         isActive: true,
         OR: [{ startsAt: null }, { startsAt: { lte: now } }],
         AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] }],
       },
-      orderBy: [{ priority: 'desc' }],
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      take: 20,
     });
   }
 

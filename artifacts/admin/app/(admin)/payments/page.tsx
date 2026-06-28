@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Search, ChevronLeft, ChevronRight, ChevronDown, Menu, RefreshCw, Eye } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
+import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
+import { toast } from "sonner";
 
 const STATUS_STYLE: Record<string, string> = {
   completed: "bg-green-500/15 text-green-400",
@@ -65,14 +66,25 @@ export default function Payments() {
   const meta     = data?.meta;
 
   const handleVerify = async (id: string) => {
-    await mutate("post", `/v1/payments/${id}/verify`);
-    refetch();
+    // D-024 / D-043 fix: confirm before completing a payment
+    if (!confirm("Verify this payment? This will mark it as completed and grant access.")) return;
+    // NOTE: useApiCallState already manages `mutLoading` internally — no manual setter needed.
+    try {
+      await mutate("post", `/v1/payments/${id}/verify`);
+      refetch();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to verify payment");
+    }
   };
 
   const handleRefund = async (id: string) => {
     if (!confirm("Are you sure you want to refund this payment?")) return;
-    await mutate("post", `/v1/payments/${id}/refund`, { reason: "Admin initiated refund" });
-    refetch();
+    try {
+      await mutate("post", `/v1/payments/${id}/refund`, { reason: "Admin initiated refund" });
+      refetch();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to refund payment");
+    }
   };
 
   return (

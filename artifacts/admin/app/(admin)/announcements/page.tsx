@@ -57,14 +57,12 @@ export default function Announcements() {
   };
 
   const openEdit = (a: Announcement) => {
+    // D-038 fix: previously this used setTimeout(0) to set ref.values after
+    // the modal mounted. Inputs are now driven by `defaultValue` + a `key`
+    // on the modal content, so React remounts and the values populate without
+    // any imperative ref assignment.
     setEditItem(a);
     setModal(true);
-    setTimeout(() => {
-      if (titleRef.current)   titleRef.current.value   = a.title;
-      if (contentRef.current) contentRef.current.value = a.message;
-      if (typeRef.current)    typeRef.current.value    = a.type;
-      if (targetRef.current)  targetRef.current.value  = a.targetAll ? "all" : "specific";
-    }, 0);
   };
 
   const closeModal = () => {
@@ -206,7 +204,10 @@ export default function Announcements() {
       {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md">
+          {/* D-038 fix: `key` changes when editItem changes, so React remounts
+              the form and `defaultValue` picks up the new item — no setTimeout
+              or imperative ref.value assignment needed. */}
+          <div key={editItem?.id ?? "new"} className="bg-card border border-border rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <Megaphone size={14} className="text-primary" />
@@ -217,16 +218,16 @@ export default function Announcements() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
-                <input ref={titleRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Announcement title" />
+                <input ref={titleRef} defaultValue={editItem?.title ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Announcement title" />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Content *</label>
-                <textarea ref={contentRef} rows={3} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" placeholder="Announcement content…" />
+                <textarea ref={contentRef} rows={3} defaultValue={editItem?.message ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" placeholder="Announcement content…" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Type</label>
-                  <select ref={typeRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
+                  <select ref={typeRef} defaultValue={editItem?.type ?? "feature"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
                     <option value="feature">Feature</option>
                     <option value="maintenance">Maintenance</option>
                     <option value="promo">Promo</option>
@@ -236,7 +237,7 @@ export default function Announcements() {
                 </div>
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Target</label>
-                  <select ref={targetRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
+                  <select ref={targetRef} defaultValue={editItem?.targetAll ? "all" : "specific"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
                     <option value="all">All Users</option>
                     <option value="premium">Premium</option>
                     <option value="free">Free Users</option>

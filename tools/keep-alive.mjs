@@ -1,9 +1,14 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/v1', '') ||
-                process.env.NEXT_PUBLIC_API_URL ||
-                'https://bug-fixertv2.onrender.com';
+// Caller should set the base URL with no path. If a /v1 suffix is present
+// (e.g. EXPO_PUBLIC_API_URL), strip only a trailing /v1 — never any other /v1.
+const API_URL = (process.env.KEEP_ALIVE_URL
+  || process.env.API_URL
+  || process.env.EXPO_PUBLIC_API_URL
+  || process.env.NEXT_PUBLIC_API_URL
+  || 'https://bug-fixertv2.onrender.com'
+).replace(/\/v1$/, '');
 
 const PING_URL    = `${API_URL}/health`;
-const SETTING_URL = `${API_URL}/api/v1/settings/public`;
+const SETTING_URL = `${API_URL}/v1/settings/public`;
 const INTERVAL    = 8 * 60 * 1000;  // 8 min — well under Render's 15-min sleep
 const TIMEOUT     = 45_000;          // 45s — Render cold start can take 30s+
 

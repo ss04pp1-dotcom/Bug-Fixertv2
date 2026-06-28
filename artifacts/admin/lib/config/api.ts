@@ -14,8 +14,16 @@
 function resolveBaseUrl(): string {
   const raw = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
   if (raw) return raw;
-  if (typeof window === 'undefined') return 'https://bug-fixertv2.onrender.com';
-  return window.location.origin;
+  // D-040 fix: don't silently fall back to window.location.origin — that points
+  // at the static asset host (Cloudflare Pages), not the API, so every request
+  // 404s and the user sees a blank dashboard. Fail loudly in production so the
+  // operator notices; in dev, default to localhost where the API usually runs.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'NEXT_PUBLIC_API_URL is required in production. Set it in your Cloudflare Pages environment variables.',
+    );
+  }
+  return 'http://localhost:3000';
 }
 
 function resolveWsUrl(): string {

@@ -172,6 +172,8 @@ function MatchCard({ item }: { item: MatchItem }) {
 export default function MatchesScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('live');
 
+  // M-035: status kept lowercase; if the backend is case-sensitive this would need
+  // toUpperCase() — confirm with backend before changing.
   const { data: matchesData, isLoading, isError, refetch } = useMatches({ status: activeTab, page: 1 });
   const { data: liveOnlyData } = useLiveMatches();
 
@@ -192,11 +194,10 @@ export default function MatchesScreen() {
   const filtered = allMatches.filter((m) => m.type === activeTab);
 
   const liveCount = useMemo(() => {
-    if (matchesData?.meta?.total && activeTab === 'live') return matchesData.meta.total as number;
     const liveItems = Array.isArray(liveOnlyData) ? liveOnlyData : liveOnlyData?.data ?? [];
     if (liveItems.length > 0) return liveItems.length;
-    return allMatches.filter(m => m.type === 'live').length;
-  }, [matchesData, allMatches, activeTab, liveOnlyData]);
+    return allMatches.filter(m => m.type === 'live' || m.status === 'live').length;
+  }, [allMatches, liveOnlyData]);
 
   if (isLoading) {
     return (
@@ -246,7 +247,7 @@ export default function MatchesScreen() {
         {tabs.map((tab) => (
           <TabPill
             key={tab.key}
-            tab={{ ...tab, count: tab.key === 'live' ? liveCount || undefined : undefined }}
+            tab={{ ...tab, count: tab.key === 'live' ? (liveCount ?? 0) : undefined }}
             active={activeTab === tab.key}
             onPress={() => setActiveTab(tab.key)}
           />

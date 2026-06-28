@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GitHubSyncService } from '../github-sync/github-sync.service';
 import { CreateGitHubSourceDto, UpdateGitHubSourceDto } from './dto/create-github-source.dto';
 
 @Injectable()
 export class GitHubSourcesService {
+  private readonly logger = new Logger(GitHubSourcesService.name);
+
   constructor(
     private prisma: PrismaService,
     private syncService: GitHubSyncService,
@@ -53,7 +55,10 @@ export class GitHubSourcesService {
     });
 
     if (source.enabled) {
-      this.syncService.syncSource(source.id).catch(() => {});
+      // A-064: don't silently swallow sync errors — log them so admin can see what went wrong.
+      this.syncService.syncSource(source.id).catch((err: Error) =>
+        this.logger.error(`Sync failed for source ${source.id} (${source.name}): ${err.message}`, err.stack),
+      );
     }
 
     return source;
@@ -88,7 +93,10 @@ export class GitHubSourcesService {
       });
     }
 
-    this.syncService.syncSource(id).catch(() => {});
+    // A-064: don't silently swallow sync errors — log them so admin can see what went wrong.
+    this.syncService.syncSource(id).catch((err: Error) =>
+      this.logger.error(`Sync failed for source ${id}: ${err.message}`, err.stack),
+    );
     return { message: force ? 'Force sync started (ETag cleared)' : 'Sync started' };
   }
 
@@ -112,7 +120,9 @@ export class GitHubSourcesService {
         results.push({ id: src.id, name: src.name, status: 'already_syncing' });
         continue;
       }
-      this.syncService.syncSource(src.id).catch(() => {});
+      this.syncService.syncSource(src.id).catch((err: Error) =>
+        this.logger.error(`Sync failed for source ${src.id} (${src.name}): ${err.message}`, err.stack),
+      );
       results.push({ id: src.id, name: src.name, status: force ? 'force_sync_started' : 'sync_started' });
     }
 

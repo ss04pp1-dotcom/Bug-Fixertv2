@@ -51,7 +51,7 @@ export default function DownloadsScreen() {
         info: d.fileSize || d.size || '',
         quality: d.quality || '1080p',
         status: d.status || 'completed',
-        progress: d.progress ?? 1,
+        progress: d.progress ?? 0,
         type: d.contentType || d.type || 'movie',
         g: GRADIENTS[i % GRADIENTS.length],
       }))

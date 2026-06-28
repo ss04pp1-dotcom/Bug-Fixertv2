@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, ForbiddenException } 
 import * as bcrypt from 'bcryptjs';
 import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,7 +13,10 @@ const ROLE_LEVEL: Record<string, number> = {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   async findAll(query: PaginationDto) {
     const { skip, limit = 20, page = 1, search, sortBy, sortOrder = 'desc', isActive } = query;
@@ -24,9 +28,8 @@ export class UsersService {
         { phone: { contains: search, mode: 'insensitive' } },
       ];
     }
-    if (isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
+    if (isActive === 'true') where.isActive = true;
+    else if (isActive === 'false') where.isActive = false;
 
     const allowedSortFields: Record<string, boolean> = {
       createdAt: true, name: true, email: true, updatedAt: true,
@@ -95,7 +98,17 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto, callerRole?: string) {
-    await this.findOne(id);
+    const target = await this.findOne(id);
+    // A-031: callers cannot modify users whose current role level is >= their own.
+    // Without this check, a regular `admin` could escalate themselves to `super_admin`
+    // by editing a moderator → admin and then de-escalating — or worse, a moderator
+    // could edit an admin and lock the admin out. We use the same ROLE_LEVEL map used
+    // for the role-assignment check below.
+    const callerLevel = ROLE_LEVEL[callerRole ?? 'user'] ?? 1;
+    const currentTargetLevel = ROLE_LEVEL[target.role] ?? 1;
+    if (callerRole !== 'super_admin' && currentTargetLevel >= callerLevel) {
+      throw new ForbiddenException('Cannot modify user with equal or higher privileges');
+    }
     if (dto.email) {
       const emailConflict = await this.prisma.user.findFirst({
         where: { email: dto.email, id: { not: id }, deletedAt: null },
@@ -123,15 +136,29 @@ export class UsersService {
       data: { ...dtoRest, ...roleUpdate } as Prisma.UserUpdateInput,
     });
     const { passwordHash: _hash, ...userRest } = user;
+    await this.auditService.log({
+      action: 'user.update',
+      resource: 'user',
+      resourceId: id,
+      newValues: dtoRest as unknown as Prisma.InputJsonValue,
+      level: 'info',
+    }).catch(() => undefined);
     return userRest;
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const target = await this.findOne(id);
     await this.prisma.user.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
     });
+    await this.auditService.log({
+      action: 'user.delete',
+      resource: 'user',
+      resourceId: id,
+      oldValues: { email: target.email, role: target.role } as unknown as Prisma.InputJsonValue,
+      level: 'warning',
+    }).catch(() => undefined);
     return { message: 'User deleted successfully' };
   }
 

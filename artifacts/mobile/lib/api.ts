@@ -85,6 +85,13 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // M-031: Do NOT auto-retry non-idempotent methods (POST/PATCH/DELETE) after 401 —
+      // a refresh between original send and retry could create duplicate resources.
+      const method = (originalRequest.method || 'get').toUpperCase();
+      const isSafeToRetry = ['GET', 'HEAD', 'OPTIONS', 'PUT'].includes(method);
+      if (!isSafeToRetry) {
+        return Promise.reject(error);
+      }
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -102,7 +109,11 @@ apiClient.interceptors.response.use(
         const refreshToken = await tokenStorage.getRefreshToken();
         if (!refreshToken) throw new Error('No refresh token');
         const { data } = await axios.post(`${Config.API_BASE}/auth/refresh`, { refreshToken });
-        const { accessToken, refreshToken: newRefresh } = data.data;
+        // M-001: Some refresh responses omit a new refreshToken — don't overwrite
+        // the stored one with undefined. Fall back to the existing refresh token.
+        const { accessToken } = data.data;
+        const newRefresh = data.data.refreshToken || (await tokenStorage.getRefreshToken());
+        if (!newRefresh) throw new Error('No refresh token available');
         await tokenStorage.setTokens(accessToken, newRefresh);
         processQueue(null, accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;

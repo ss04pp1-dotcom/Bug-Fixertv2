@@ -69,13 +69,10 @@ export class HealthController {
   @Get('health')
   @ApiOperation({ summary: 'Health overview' })
   async health() {
-    const db = await this.checkDatabase();
-    return {
-      status: db.status === 'ok' ? 'ok' : 'degraded',
-      timestamp: new Date().toISOString(),
-      ...this.systemInfo(),
-      database: db,
-    };
+    // PUBLIC: do not leak heap/uptime/version/environment info to anonymous callers —
+    // those details are an attacker recon vector (helps fingerprint exact build & restart
+    // patterns). The full system report stays behind /health/full (admin only).
+    return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
   @Get('health/database')

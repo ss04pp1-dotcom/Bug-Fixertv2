@@ -1,5 +1,8 @@
 name = "mylivetv"
-compatibility_date = "2026-06-17"
+# D-044 fix: compatibility_date was set to a future date (2026-06-17) which
+# Cloudflare rejects at deploy time. Use a recent past date — the runtime
+# behaviour is unchanged for this static-asset-only project.
+compatibility_date = "2024-12-01"
 
 [assets]
 directory = "./out"

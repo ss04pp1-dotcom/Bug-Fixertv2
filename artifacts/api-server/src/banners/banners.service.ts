@@ -66,13 +66,18 @@ export class BannersService {
 
   async findActive() {
     const now = new Date();
+    // A-058: cap at 20 results + sort by [priority desc, createdAt desc] so the
+    // public /banners/active endpoint doesn't return hundreds of rows when an
+    // admin forgets to deactivate old banners. Previously this had no take limit
+    // and only sorted by priority (ties broken non-deterministically).
     return this.prisma.banner.findMany({
       where: {
         isActive: true,
         OR: [{ startsAt: null }, { startsAt: { lte: now } }],
         AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] }],
       },
-      orderBy: [{ priority: 'desc' }],
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      take: 20,
     });
   }
 

@@ -1,7 +1,19 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+/**
+ * Live Channel Player Screen
+ *
+ * This screen NO LONGER mounts a video player.
+ * The player is the SINGLETON GlobalVideoPlayer mounted at _layout.tsx.
+ * This screen just:
+ *   1. Fetches the channel's stream URL from the API
+ *   2. Calls useGlobalPlayer.open({...}) to load it into the singleton
+ *   3. Shows related channels + info below
+ *
+ * Back button → player enters MINI mode (no reload, no rebuffer).
+ */
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ScrollView, StatusBar, Image, FlatList, useWindowDimensions, BackHandler,
+  ScrollView, StatusBar, Image, FlatList, useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,15 +21,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
-import PremiumVideoPlayer, { type StreamSource } from '@/components/PremiumVideoPlayer';
-import { usePlayerStore } from '@/lib/player-store';
+import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', live: '#EF4444', text: '#fff', dim: '#9CA3AF',
 };
-
-const PLAYBACK_SUCCESS_DELAY_MS = 15_000;
 
 export default function LivePlayerScreen() {
   const {
@@ -26,9 +35,8 @@ export default function LivePlayerScreen() {
     streamUrl: passedUrl,
     logo: passedLogo,
     cat: passedCat,
-    fromMini,
   } = useLocalSearchParams<{
-    id: string; title?: string; streamUrl?: string; logo?: string; cat?: string; fromMini?: string;
+    id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
   }>();
 
   const insets = useSafeAreaInsets();
@@ -40,149 +48,68 @@ export default function LivePlayerScreen() {
   const category     = passedCat  || 'Live TV';
 
   // ── Stream sources ─────────────────────────────────────────────────────────
-  const [sources, setSources]         = useState<StreamSource[]>([]);
+  const [sources, setSources]         = useState<PlayerSource[]>([]);
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
-  const openMiniPlayer = usePlayerStore((s) => s.open);
-  const closeMiniPlayer = usePlayerStore((s) => s.close);
-
-  // Close mini player when opening full player screen
-  useEffect(() => { closeMiniPlayer(); }, [id]);
-
-  // ── Minimize to mini player instead of navigating away ────────────────────
-  const minimizeToMini = useCallback(() => {
-    if (sources.length > 0) {
-      openMiniPlayer({
-        title: contentTitle,
-        logo: logoUrl,
-        contentId: id,
-        contentType: 'channel',
-        sources: sources.map((s) => ({ url: s.url, headers: s.headers, label: s.label })),
-        isLive: true,
-      });
-    }
-    router.replace('/(main)/live-tv');
-  }, [sources, contentTitle, logoUrl, id, openMiniPlayer]);
-
-  // ── Hardware back button → minimize to mini player ─────────────────────────
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      minimizeToMini();
-      return true;
-    });
-    return () => sub.remove();
-  }, [minimizeToMini]);
-
-  // ── Playback reporting ─────────────────────────────────────────────────────
-  const playbackTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reportedRef        = useRef(false);
-  const playbackStartRef   = useRef<number>(0);
-
-  const clearPlaybackTimer = () => {
-    if (playbackTimerRef.current) {
-      clearTimeout(playbackTimerRef.current);
-      playbackTimerRef.current = null;
-    }
-  };
-
-  const reportPlayback = useCallback(async (success: boolean, durationSecs?: number) => {
-    if (!id) return;
-    try {
-      await apiClient.post('/playback-events/report', {
-        channelId: id,
-        success,
-        duration: durationSecs,
-      });
-    } catch { /* non-fatal */ }
-  }, [id]);
-
-  const onPlaybackStart = useCallback(() => {
-    clearPlaybackTimer();
-    reportedRef.current = false;
-    playbackStartRef.current = Date.now();
-    playbackTimerRef.current = setTimeout(() => {
-      if (!reportedRef.current) {
-        reportedRef.current = true;
-        reportPlayback(true, Math.round((Date.now() - playbackStartRef.current) / 1000));
-      }
-    }, PLAYBACK_SUCCESS_DELAY_MS);
-  }, [reportPlayback]);
-
-  const onPlaybackError = useCallback(() => {
-    clearPlaybackTimer();
-    if (!reportedRef.current) {
-      reportedRef.current = true;
-      reportPlayback(false);
-    }
-  }, [reportPlayback]);
-
-  useEffect(() => () => clearPlaybackTimer(), []);
+  const openPlayer = useGlobalPlayer((s) => s.open);
 
   // ── Current channel metadata (for related-channel ranking) ────────────────
   const [currentCatId, setCurrentCatId]     = useState<string | null>(null);
   const [currentCatName, setCurrentCatName] = useState<string | null>(null);
   const [currentLang, setCurrentLang]       = useState<string | null>(null);
 
-  // ── Related channels — large pool, smart-sorted ────────────────────────────
+  // ── Related channels ────────────────────────────────────────────────────────
   const { data: relatedRaw } = useLiveChannels({ limit: 200, isActive: true });
 
   const related = useMemo(() => {
     if (!relatedRaw || !Array.isArray(relatedRaw)) return [];
-
     const pool = (relatedRaw as any[]).filter((ch: any) => ch.id !== id);
-
     const scored = pool.map((ch: any) => {
       const chCatId   = ch.categoryId || ch.category?.id || null;
       const chCatName = ch.category?.name || ch.category || '';
       const chLang    = (ch.language || '').toLowerCase();
-
       let score = 0;
-      if (currentCatId   && chCatId   && chCatId   === currentCatId)           score += 3;
+      if (currentCatId && chCatId && chCatId === currentCatId) score += 3;
       else if (currentCatName && chCatName && chCatName.toLowerCase() === currentCatName.toLowerCase()) score += 3;
-      if (currentLang    && chLang    && chLang    === currentLang.toLowerCase()) score += 2;
+      if (currentLang && chLang && chLang === currentLang.toLowerCase()) score += 2;
       if (ch.logoUrl || ch.logo) score += 1;
-
       return {
-        _score:    score,
-        _sameCat:  score >= 3,
-        id:        ch.id || '',
-        name:      ch.name || '',
-        logo:      ch.logoUrl || ch.logo || '',
-        cat:       ch.category?.name || ch.category || ch.language || 'Live TV',
-        language:  ch.language || '',
+        _score: score, _sameCat: score >= 3,
+        id: ch.id || '', name: ch.name || '',
+        logo: ch.logoUrl || ch.logo || '',
+        cat: ch.category?.name || ch.category || ch.language || 'Live TV',
+        language: ch.language || '',
         streamUrl: ch.primaryStreamUrl || ch.streamUrl || '',
       };
     });
-
     scored.sort((a, b) => {
       if (b._score !== a._score) return b._score - a._score;
       return a.name.localeCompare(b.name);
     });
-
     return scored.slice(0, 30);
   }, [relatedRaw, id, currentCatId, currentCatName, currentLang]);
 
   // ── Build sources from channel response ───────────────────────────────────
-  const buildSources = useCallback((ch: any, overrideFirstUrl?: string): StreamSource[] => {
-    const srcs: StreamSource[] = [];
-
+  const buildSources = useCallback((ch: any, overrideFirstUrl?: string): PlayerSource[] => {
+    const srcs: PlayerSource[] = [];
     if (Array.isArray(ch?.servers) && ch.servers.length > 0) {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
+        const headers: Record<string, string> = {};
+        // Only set headers the server explicitly requires — do NOT add User-Agent.
+        if (srv.cookie)    headers['Cookie']     = srv.cookie;
+        if (srv.userAgent) headers['User-Agent'] = srv.userAgent;
+        if (srv.referer)   headers['Referer']    = srv.referer;
+        if (srv.origin)    headers['Origin']     = srv.origin;
         srcs.push({
           url: srv.link,
           label: cookieExpired ? `Server ${i + 1} ⚠️` : `Server ${i + 1}`,
           quality: i === 0 ? 'HD' : 'SD',
           cookieExpired,
           cookieExpiresAt: srv.cookieExpiresAt ?? null,
-          headers: {
-            ...(srv.cookie    ? { Cookie: srv.cookie }          : {}),
-            ...(srv.userAgent ? { 'User-Agent': srv.userAgent } : {}),
-            ...(srv.referer   ? { Referer: srv.referer }        : {}),
-            ...(srv.origin    ? { Origin: srv.origin }          : {}),
-          },
+          ...(Object.keys(headers).length ? { headers } : {}),
         });
       });
     } else {
@@ -192,23 +119,16 @@ export default function LivePlayerScreen() {
       if (ch?.thirdBackupUrl && ch.thirdBackupUrl !== ch.primaryStreamUrl)
         srcs.push({ url: ch.thirdBackupUrl, label: 'Server 3', quality: 'SD' });
     }
-
     const hasServerSources = Array.isArray(ch?.servers) && ch.servers.length > 0;
     if (overrideFirstUrl && !hasServerSources && !srcs.find(s => s.url === overrideFirstUrl)) {
       srcs.unshift({ url: overrideFirstUrl, label: 'Server 1', quality: 'HD' });
     }
-
     return srcs;
   }, []);
 
   // ── Load stream URL ────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
-    setFetchLoad(true);
-    setFetchError(false);
-    setSources([]);
-    clearPlaybackTimer();
-    reportedRef.current = false;
-
+    setFetchLoad(true); setFetchError(false); setSources([]);
     try {
       const res = await apiClient.get(`/channels/${id}`);
       const ch  = res.data?.data || res.data;
@@ -227,9 +147,22 @@ export default function LivePlayerScreen() {
     } finally {
       setFetchLoad(false);
     }
-  }, [id, passedUrl, buildSources]);
+  }, [id, passedUrl, buildSources, passedCat]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
+
+  // ── Open the singleton player once sources are ready ───────────────────────
+  useEffect(() => {
+    if (sources.length === 0) return;
+    openPlayer({
+      title: contentTitle,
+      logo: logoUrl,
+      contentId: id,
+      contentType: 'channel',
+      sources,
+      isLive: true,
+    });
+  }, [sources, contentTitle, logoUrl, id, openPlayer]);
 
   // ── Switch channel ─────────────────────────────────────────────────────────
   const switchChannel = useCallback((ch: typeof related[0]) => {
@@ -244,27 +177,41 @@ export default function LivePlayerScreen() {
     });
   }, []);
 
+  // ── Loading / error state for the metadata area ────────────────────────────
+  if (fetchLoading && sources.length === 0) {
+    return (
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
+        <Ionicons name="tv-outline" size={48} color={C.primary} />
+        <Text style={{ color: C.dim, marginTop: 12 }}>Loading channel…</Text>
+      </View>
+    );
+  }
+
+  if (fetchError && sources.length === 0) {
+    return (
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
+        <Ionicons name="alert-circle-outline" size={48} color={C.live} />
+        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 12 }}>Channel Unavailable</Text>
+        <Text style={{ color: C.dim, fontSize: 13, textAlign: 'center', marginTop: 4 }}>
+          Could not load this channel. Try again later.
+        </Text>
+        <TouchableOpacity onPress={loadStream} style={{ marginTop: 16, backgroundColor: C.primary, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 22 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Render metadata below the (singleton) player ───────────────────────────
   return (
     <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* ── Premium Player ──────────────────────────────────────────────── */}
-      <PremiumVideoPlayer
-        sources={sources}
-        title={contentTitle}
-        isLive
-        isLoading={fetchLoading}
-        hasError={fetchError}
-        onBack={minimizeToMini}
-        onRetry={loadStream}
-        onRefreshStream={loadStream}
-        contentId={id}
-        contentType="channel"
-        onPlaybackStart={onPlaybackStart}
-        onPlaybackError={onPlaybackError}
-      />
+      {/* Spacer for the video area — singleton overlay covers it visually */}
+      <View style={{ height: Math.round(W * 9 / 16), backgroundColor: '#000' }} />
 
-      {/* ── Below player (portrait) ─────────────────────────────────────── */}
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         {/* Channel header */}
         <View style={s.channelHeader}>
@@ -385,60 +332,33 @@ const CARD_W = Math.floor((SW - 14 * 2 - 10) / 2);
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-
-  channelHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 12, gap: 12,
-  },
-  channelLogo:  {
-    width: 52, height: 52, borderRadius: 10, overflow: 'hidden',
-    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
-  },
+  channelHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
+  channelLogo:  { width: 52, height: 52, borderRadius: 10, overflow: 'hidden', backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' },
   channelInfo:  { flex: 1 },
   channelName:  { color: '#fff', fontSize: 16, fontWeight: '700' },
   refreshBtn:   { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-
   livePillSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   liveDotSmall:  { width: 6, height: 6, borderRadius: 3, backgroundColor: C.live },
   liveTxtSmall:  { color: C.dim, fontSize: 12 },
-
   tabBar:    { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 14 },
   tabItem:   { paddingVertical: 10, marginRight: 20, position: 'relative' },
   tabTxt:    { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
   tabTxtActive: { color: '#fff' },
   tabLine:   { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: C.primary, borderRadius: 1 },
-
   grid:         { paddingHorizontal: 14, paddingVertical: 14, paddingBottom: 100 },
   columnWrapper: { gap: 10, marginBottom: 10 },
   chCard: { width: CARD_W },
-  chThumb: {
-    width: '100%', height: 90, borderRadius: 10,
-    backgroundColor: C.card, overflow: 'hidden',
-    marginBottom: 6, position: 'relative',
-  },
-  chLiveBadge: {
-    position: 'absolute', bottom: 6, left: 6,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(239,68,68,0.88)', borderRadius: 4,
-    paddingHorizontal: 6, paddingVertical: 2,
-  },
+  chThumb: { width: '100%', height: 90, borderRadius: 10, backgroundColor: C.card, overflow: 'hidden', marginBottom: 6, position: 'relative' },
+  chLiveBadge: { position: 'absolute', bottom: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(239,68,68,0.88)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   chLiveTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
   chName:    { color: '#fff', fontSize: 13, fontWeight: '600' },
   chCat:     { color: C.dim, fontSize: 11, marginTop: 2 },
-
   relatedHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
   relatedHeaderTxt: { color: C.dim, fontSize: 12 },
-
-  chSameCatBadge: {
-    position: 'absolute', top: 6, right: 6,
-    backgroundColor: C.primary, borderRadius: 10,
-    paddingHorizontal: 5, paddingVertical: 2,
-  },
+  chSameCatBadge: { position: 'absolute', top: 6, right: 6, backgroundColor: C.primary, borderRadius: 10, paddingHorizontal: 5, paddingVertical: 2 },
   chSameCatTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
-
   emptyBox: { flex: 1, alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt: { color: C.dim, fontSize: 14 },
-
   infoPad:  { padding: 14, gap: 2 },
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   infoLabel: { color: C.dim, fontSize: 13, width: 80 },

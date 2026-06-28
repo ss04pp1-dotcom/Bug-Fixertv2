@@ -121,10 +121,9 @@ export default function Movies() {
     setSub(true);
     setMutationError(null);
     try {
-      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      // D-033 fix: don't send a client-generated slug — server derives it from title.
       await call("post", "/v1/movies", {
         title,
-        slug,
         duration: durationRef.current?.value ? Number(durationRef.current.value) : undefined,
         year: yearRef.current?.value ? Number(yearRef.current.value) : undefined,
         streamUrl: videoRef.current?.value || undefined,

@@ -148,12 +148,23 @@ export default function Channels() {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} selected channel(s)? This cannot be undone.`)) return;
     setBulkDeleting(true);
+    // D-010 fix: process in chunks of 5 so we don't fan out hundreds of
+    // simultaneous DELETEs and overload the API or trip rate limits.
+    const ids = [...selectedIds];
+    const failed: string[] = [];
     try {
-      await Promise.all([...selectedIds].map(id => apiClient.delete(`/v1/channels/${id}`)));
+      while (ids.length > 0) {
+        const chunk = ids.splice(0, 5);
+        await Promise.all(chunk.map(async (id) => {
+          try { await apiClient.delete(`/v1/channels/${id}`); }
+          catch { failed.push(id); }
+        }));
+      }
+      if (failed.length > 0) {
+        alert(`Failed to delete ${failed.length} channel(s). They may have already been removed.`);
+      }
       setSelectedIds(new Set());
       refetch();
-    } catch {
-      alert("Some channels could not be deleted. Please try again.");
     } finally {
       setBulkDeleting(false);
     }
@@ -191,10 +202,11 @@ export default function Channels() {
     setSub(true);
     setMutationError(null);
     try {
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      // D-033 fix: don't generate a slug client-side — the server derives it
+      // from the name and guarantees uniqueness. Sending our own slug can
+      // cause collisions and bypass server validation.
       await call("post", "/v1/channels", {
         name,
-        slug,
         logo: newLogo || undefined,
         categoryId: categoryRef.current?.value || undefined,
         streamType: streamRef.current?.value || "HLS",

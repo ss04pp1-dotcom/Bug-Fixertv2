@@ -7,7 +7,8 @@ import {
   Search, Loader2, ChevronLeft, ChevronRight, Zap,
   ShieldAlert, Radio, BarChart3, Shield,
 } from "lucide-react";
-import { useApiQuery, useApiCallState, useInvalidate } from "@/lib/use-api";
+import { useApiQuery, useApiCallState, useInvalidate, getApiErrorMessage } from "@/lib/use-api";
+import { toast } from "sonner";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -184,14 +185,19 @@ function FailedChannelsTable() {
       await recheckCall("post", `/v1/m3u-import/health-check/recheck/${channelId}`);
       invalidate(["failed-channels"]);
       setTimeout(() => refetch(), 5000);
-    } catch {}
+    } catch (e) {
+      // D-049 fix: surface the failure instead of swallowing it silently.
+      toast.error(getApiErrorMessage(e) || "Failed to recheck channel");
+    }
   };
 
   const setOverride = async (channelId: string, override: HealthOverride) => {
     try {
       await overrideCall("put", `/v1/channels/${channelId}/health-override`, { override });
       refetch();
-    } catch {}
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to set health override");
+    }
   };
 
   return (
@@ -418,7 +424,10 @@ export default function ChannelHealthPage() {
       await call("post", "/v1/m3u-import/health-check/recheck-all", { offlineOnly });
       invalidate(["channel-health-stats"]);
       setTimeout(() => refetch(), 3000);
-    } catch {}
+    } catch (e) {
+      // D-049 fix: surface the failure instead of swallowing it silently.
+      toast.error(getApiErrorMessage(e) || "Failed to trigger recheck");
+    }
   };
 
   return (

@@ -4,7 +4,10 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build && cd artifacts/api-server && npx prisma db push
+    # Build only compiles code — do NOT run `prisma db push` here (it mutates the DB).
+    # Migrations should be run via a pre-deploy hook using `prisma migrate deploy`
+    # with the DIRECT_URL env var set to the direct (port 5432) connection string.
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
     startCommand: node artifacts/api-server/dist/main.js
     healthCheckPath: /healthz
     envVars:
@@ -29,9 +32,10 @@ services:
       - key: JWT_REFRESH_EXPIRY
         value: 30d
 
-      # ── CORS — admin domain + Replit preview wildcards ───────────────────
+      # ── CORS — admin domain only (no wildcards) ─────────────────────────
+      # Replit preview URLs should be added explicitly if needed, never as a wildcard.
       - key: CORS_ORIGIN
-        value: https://livetvv.pages.dev,https://livetv-cit.pages.dev,https://*.expo.sisko.replit.dev,https://*.pike.replit.dev,https://*.replit.dev
+        value: https://livetvv.pages.dev,https://livetv-cit.pages.dev
 
       # ── App URLs ──────────────────────────────────────────────────────────
       - key: APP_URL

@@ -27,6 +27,7 @@ export const useBanners = () => useQuery({ queryKey: ['banners'], queryFn: () =>
 export const useContinueWatching = () => useQuery({ queryKey: ['continue-watching'], queryFn: () => apiClient.get('/watch-history/continue-watching').then(unwrapList) });
 export const useTrending = () => useQuery({ queryKey: ['trending'], queryFn: () => apiClient.get('/movies/trending').then(unwrapList) });
 export const useLiveChannels = (params?: object) => useQuery({ queryKey: ['channels', params], queryFn: () => apiClient.get('/channels', { params: { limit: 200, ...params as any } }).then(unwrapList) });
+export const useChannel = (id: string) => useQuery({ queryKey: ['channel', id], queryFn: () => apiClient.get(`/channels/${id}`).then(unwrap), enabled: !!id });
 
 // Categories
 export const useCategories = () => useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories').then(unwrapList) });
@@ -87,11 +88,13 @@ export const useMarkAllNotificationsRead = () => {
 export const useAnnouncements = () => useQuery({ queryKey: ['announcements'], queryFn: () => apiClient.get('/announcements/active').then(unwrapList) });
 
 // Settings
-export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/settings/public').then(unwrap) });
+// M-024: Use the user's own preference endpoint instead of the admin `/settings` route.
+// NOTE: backend may not yet expose `/auth/profile/preferences` — fall back gracefully in UI.
+export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/auth/profile/preferences').then(unwrap) });
 export const useUpdateSetting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { key: string; value: unknown }) => apiClient.post('/settings', data),
+    mutationFn: (data: { key: string; value: unknown }) => apiClient.put('/auth/profile/preferences', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 };
@@ -176,8 +179,17 @@ export const useMatchAlerts = () => useQuery({
 export const useToggleMatchAlert = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sports', 'my-alerts'] }),
+    // M-007: support both add (POST) and remove (DELETE) actions
+    mutationFn: ({ matchId, action }: { matchId: string; action: 'add' | 'remove' }) =>
+      action === 'remove'
+        ? apiClient.delete(`/sports/matches/${matchId}/alert`)
+        : apiClient.post(`/sports/matches/${matchId}/alert`),
+    // M-048: invalidate both the alerts list and the individual match query
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['sports', 'my-alerts'] });
+      qc.invalidateQueries({ queryKey: ['sports', 'match'] });
+      qc.invalidateQueries({ queryKey: ['sports', 'match', variables.matchId] });
+    },
   });
 };
 

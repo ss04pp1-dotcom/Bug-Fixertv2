@@ -20,6 +20,8 @@ export default function OtaUpdateBanner() {
   const [error, setError] = useState('');
   const progressAnim = useSharedValue(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // M-021: track the reload timeout so it can be cleared on unmount.
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkingRef = useRef(false);
 
   const checkForUpdate = useCallback(async () => {
@@ -48,6 +50,14 @@ export default function OtaUpdateBanner() {
   useEffect(() => {
     checkForUpdate();
   }, [checkForUpdate]);
+
+  // M-021: clear any pending timers when the banner unmounts.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
@@ -83,7 +93,7 @@ export default function OtaUpdateBanner() {
       setProgress(100);
       progressAnim.value = withTiming(1, { duration: 300 });
       setState('done');
-      setTimeout(() => Updates.reloadAsync(), 1200);
+      reloadTimerRef.current = setTimeout(() => Updates.reloadAsync(), 1200);
     } catch (e: any) {
       if (timerRef.current) clearInterval(timerRef.current);
       if (__DEV__) console.warn('[OTA] applyUpdate error:', e?.message ?? e);

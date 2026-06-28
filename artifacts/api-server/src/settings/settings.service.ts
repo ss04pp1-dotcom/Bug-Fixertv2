@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional, Inject } from '@nestjs/common';
 import { isEmail } from 'class-validator';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class SettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() @Inject(AuditService) private auditService?: AuditService,
+  ) {}
 
   async getAll(publicOnly = false) {
     const where = publicOnly ? { isPublic: true } : {};
@@ -19,11 +23,23 @@ export class SettingsService {
   }
 
   async set(key: string, value: Prisma.InputJsonValue, description?: string, isPublic?: boolean) {
-    return this.prisma.setting.upsert({
+    const result = await this.prisma.setting.upsert({
       where: { key },
       create: { key, value, description, isPublic: isPublic ?? false },
       update: { value, ...(description !== undefined && { description }), ...(isPublic !== undefined && { isPublic }) },
     });
+    // A-061: audit settings mutations — config changes (maintenance mode toggle,
+    // storage creds, SMTP creds, etc.) are security-sensitive admin actions.
+    if (this.auditService) {
+      this.auditService.log({
+        action: 'setting.set',
+        resource: 'setting',
+        resourceId: key,
+        newValues: value as Prisma.InputJsonValue,
+        level: 'info',
+      }).catch(() => undefined);
+    }
+    return result;
   }
 
   async delete(key: string) {
@@ -75,10 +91,20 @@ export class SettingsService {
     });
     try {
       await client.send(new ListBucketsCommand({}));
-    } catch {
-      // R2 may not support ListBuckets — treat as success if no auth error
+    } catch (e: any) {
+      // A-043: distinguish credential/auth errors (real config problems) from
+      // NotImplemented-style errors. R2 doesn't support ListBuckets, but the
+      // credentials may still be valid — reporting failure there would mislead
+      // the admin into thinking their config is broken.
+      const name = e?.name ?? e?.constructor?.name ?? '';
+      if (name === 'AccessDenied' || name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch') {
+        return { success: false, error: `Storage auth failed: ${e?.message ?? name}` };
+      }
+      // For NotImplemented / NotFound / networking errors that aren't auth-related,
+      // treat as success-with-warning so the admin can proceed to actually use storage.
+      return { success: true, warning: `ListBuckets not supported by provider (${name || 'unknown error'}), but credentials may still be valid` };
     }
-    return { message: `Storage connection verified for bucket: ${bucket}` };
+    return { success: true, message: `Storage connection verified for bucket: ${bucket}` };
   }
 
   async testEmail(to: string) {

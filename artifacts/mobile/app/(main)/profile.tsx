@@ -76,7 +76,9 @@ export default function ProfileScreen() {
   const planName = subData?.plan?.name || user?.plan || 'Free';
   const isPremium = planName?.toLowerCase() !== 'free';
 
-  const initials = displayName.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2);
+  const initials = displayName
+    ? displayName.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
 
   const handleLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [

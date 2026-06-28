@@ -26,35 +26,34 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register new user' })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.register(dto);
+    // Set refresh token as httpOnly cookie and strip it from the JSON response body.
+    this.setRefreshCookieAndStrip(res, result);
+    return result;
   }
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   @ApiOperation({ summary: 'Login with email or phone' })
-  login(@Body() dto: LoginDto, @Req() req: Request) {
+  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const ip = req.ip || req.socket?.remoteAddress;
     const ua = req.headers['user-agent'];
-    return this.authService.login(dto, ip, ua);
+    const result = await this.authService.login(dto, ip, ua);
+    this.setRefreshCookieAndStrip(res, result);
+    return result;
   }
 
   @Public()
   @UseGuards(AuthGuard('jwt-refresh'))
   @Post('refresh')
   @ApiOperation({ summary: 'Refresh access token' })
-  async refresh(@CurrentUser() user: AuthenticatedUser, @Res({ passthrough: true }) res: Response) {
-    const tokens = await this.authService.refresh(user.id, user.sessionId!);
-    const isProd = process.env.NODE_ENV === 'production';
-    res.cookie('streampro_refresh_token', tokens.refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-    return { accessToken: tokens.accessToken };
+  async refresh(@CurrentUser() user: AuthenticatedUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.refresh(user.id, user.sessionId!);
+    // Refresh token stays in the cookie; only accessToken + user are returned to the client.
+    this.setRefreshCookieAndStrip(res, result);
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -77,8 +76,10 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('social')
   @ApiOperation({ summary: 'Social login — find or create user from OAuth provider token' })
-  socialLogin(@Body() dto: SocialLoginDto) {
-    return this.authService.socialLogin(dto);
+  async socialLogin(@Body() dto: SocialLoginDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.socialLogin(dto);
+    this.setRefreshCookieAndStrip(res, result);
+    return result;
   }
 
   @Public()
@@ -149,5 +150,26 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(userId, dto.currentPassword, dto.newPassword);
+  }
+
+  /**
+   * Move the refresh token from the service's return envelope into an httpOnly cookie
+   * and remove it from the JSON response body. The mobile/web client reads `accessToken`
+   * from `data.data.accessToken` and the refresh token is sent automatically by the
+   * browser/cookie jar on subsequent /auth/refresh calls.
+   */
+  private setRefreshCookieAndStrip(res: Response, result: { accessToken: string; refreshToken?: string }): void {
+    const isProd = process.env.NODE_ENV === 'production';
+    if (result.refreshToken) {
+      res.cookie('streampro_refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      });
+      // Critical: never expose the refresh token in the response body.
+      delete result.refreshToken;
+    }
   }
 }

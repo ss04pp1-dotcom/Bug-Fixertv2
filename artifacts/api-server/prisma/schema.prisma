@@ -230,6 +230,10 @@ model Otp {
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // A-072: speed up the forgotPassword/verifyOtp lookups which filter by
+  // (identifier, expiresAt) and the brute-force counter that counts unused
+  // unexpired OTPs per identifier.
+  @@index([identifier, expiresAt])
   @@map("otps")
 }
 
@@ -821,6 +825,11 @@ model AdEvent {
 
   provider AdProvider? @relation(fields: [providerId], references: [id])
 
+  // A-072: ad-events table grows fast (one row per impression/click) — index
+  // createdAt for time-range scans used by the analytics dashboards, and
+  // (eventType, createdAt) for the per-event-type breakdowns.
+  @@index([createdAt])
+  @@index([eventType, createdAt])
   @@map("ad_events")
 }
 
@@ -921,6 +930,17 @@ model Favorite {
   movie   Movie?   @relation(fields: [movieId], references: [id], onDelete: Cascade)
   series  Series?  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
+  // A-023 / A-072: per-content-type uniques prevent duplicate favorites of the
+  // same channel / movie / series for one user. The composite unique below still
+  // exists as a belt-and-suspenders guard but, because NULL != NULL in Postgres
+  // unique constraints, it does NOT prevent duplicates when only one of the
+  // three content FKs is set — these per-column uniques do. (Multiple rows
+  // with channelId=NULL are still allowed, which is exactly what we want for
+  // movie/series favorites.)
+  @@unique([userId, channelId])
+  @@unique([userId, movieId])
+  @@unique([userId, seriesId])
+  @@unique([userId, channelId, movieId, seriesId])
   @@index([userId])
   @@map("favorites")
 }
@@ -942,6 +962,10 @@ model WatchHistory {
   series  Series?  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 
+  // A-072: enforce one-history-row-per-(user,episode) so the `upsert` in
+  // WatchHistoryService doesn't have to fall back to findFirst+create (which
+  // has a TOCTOU race). Also keeps the table smaller for episodic re-watches.
+  @@unique([userId, episodeId])
   @@index([userId])
   @@map("watch_history")
 }
@@ -954,7 +978,12 @@ model SearchHistory {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // A-060 / A-072: composite unique so globalSearch can upsert (bump createdAt on
+  // repeat searches) instead of always creating duplicate rows. Index on createdAt
+  // for trending-searches time-windowed queries.
+  @@unique([userId, query])
   @@index([userId])
+  @@index([createdAt])
   @@map("search_history")
 }
 

@@ -5,6 +5,11 @@ import { ChannelsService } from './channels.service';
 import { GeoBlockService } from '../geo-block/geo-block.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { BulkImportChannelsDto, ParsePlaylistDto } from './dto/bulk-import-channel.dto';
+import { UpdateOverridesDto } from './dto/update-overrides.dto';
+import { AddServerDto } from './dto/add-server.dto';
+import { UpdateServerDto } from './dto/update-server.dto';
+import { ReorderServersDto } from './dto/reorder-servers.dto';
+import { Throttle } from '@nestjs/throttler';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -107,10 +112,18 @@ export class ChannelsController {
 
   @Public()
   @Get(':id')
-  @ApiOperation({ summary: 'Get channel by ID or slug' })
+  @ApiOperation({ summary: 'Get channel by ID or slug (public — credentials stripped)' })
   async findOne(@Param('id') id: string, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.channelsService.findOne(id);
+  }
+
+  @Get(':id/details')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor', 'moderator')
+  @ApiOperation({ summary: 'Get channel by ID or slug with full server credentials (admin only)' })
+  async findOneAdmin(@Param('id') id: string) {
+    return this.channelsService.findOneAdmin(id);
   }
 
   @Public()
@@ -123,6 +136,7 @@ export class ChannelsController {
 
   @Public()
   @Post(':id/view')
+  @Throttle({ default: { limit: 1, ttl: 300000 } })
   @ApiOperation({ summary: 'Increment view count' })
   incrementView(@Param('id') id: string) { return this.channelsService.incrementViewCount(id); }
 
@@ -163,7 +177,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Set admin overrides for a GitHub-synced channel' })
-  updateOverrides(@Param('id') id: string, @Body() dto: any) {
+  updateOverrides(@Param('id') id: string, @Body() dto: UpdateOverridesDto) {
     return this.channelsService.updateOverrides(id, dto);
   }
 
@@ -189,7 +203,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Add an admin-managed server to a channel' })
-  addServer(@Param('id') id: string, @Body() dto: any) {
+  addServer(@Param('id') id: string, @Body() dto: AddServerDto) {
     return this.channelsService.addServer(id, dto);
   }
 
@@ -197,7 +211,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Bulk-reorder servers (set priorities)' })
-  reorderServers(@Param('id') id: string, @Body() body: { servers: { id: string; priority: number }[] }) {
+  reorderServers(@Param('id') id: string, @Body() body: ReorderServersDto) {
     return this.channelsService.reorderServers(id, body.servers);
   }
 
@@ -208,7 +222,7 @@ export class ChannelsController {
   updateServer(
     @Param('id') id: string,
     @Param('serverId') serverId: string,
-    @Body() dto: any,
+    @Body() dto: UpdateServerDto,
   ) {
     return this.channelsService.updateServer(id, serverId, dto);
   }

@@ -65,7 +65,12 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
       client.data.role    = payload.role as string;
       client.data.authed  = true;
     } else {
-      client.data.authed = false;
+      // Reject the connection immediately — without a valid JWT the client cannot subscribe
+      // to any event and keeping the socket open just wastes resources and creates an
+      // opportunity for resource-exhaustion attacks.
+      this.logger.warn(`Rejecting WebSocket connection ${client.id}: invalid or missing JWT`);
+      client.disconnect(true);
+      return;
     }
     client.data.ipAddress = (
       client.handshake.headers['x-forwarded-for'] ?? client.handshake.address ?? 'unknown'
@@ -161,6 +166,7 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('join_channel')
   handleJoinChannel(@ConnectedSocket() client: Socket, @MessageBody() data: { channelId: string }) {
+    if (!client.data.authed) return { error: 'Unauthorized' };
     void client.join(`channel:${data.channelId}`);
     const room = this.server.sockets.adapter.rooms.get(`channel:${data.channelId}`);
     this.server.to(`channel:${data.channelId}`).emit('viewer_count', {
@@ -171,6 +177,7 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('leave_channel')
   handleLeaveChannel(@ConnectedSocket() client: Socket, @MessageBody() data: { channelId: string }) {
+    if (!client.data.authed) return { error: 'Unauthorized' };
     void client.leave(`channel:${data.channelId}`);
     const room = this.server.sockets.adapter.rooms.get(`channel:${data.channelId}`);
     this.server.to(`channel:${data.channelId}`).emit('viewer_count', {
@@ -180,7 +187,10 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   @SubscribeMessage('ping')
-  handlePing() { return { event: 'pong', timestamp: new Date().toISOString() }; }
+  handlePing(@ConnectedSocket() client: Socket) {
+    if (!client.data.authed) return { error: 'Unauthorized' };
+    return { event: 'pong', timestamp: new Date().toISOString() };
+  }
 
   // ── Broadcast helpers ──────────────────────────────────────────────────────
 
@@ -198,7 +208,14 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private broadcastStats(): void {
     this.server.to(ADMIN_ROOM).emit('presence:stats', this.presence.getStats());
-    this.server.emit('online_count', { count: this.presence.getOnlineCount() });
+    // Only emit online_count to authenticated sockets — broadcasting it to every
+    // connected socket (including any unauthed/anonymous sockets if the gateway is
+    // ever mounted publicly) leaks presence scale to untrusted clients.
+    for (const socket of this.server.sockets.sockets.values()) {
+      if (socket.data?.authed) {
+        socket.emit('online_count', { count: this.presence.getOnlineCount() });
+      }
+    }
   }
 
   // ── Used by other services ─────────────────────────────────────────────────

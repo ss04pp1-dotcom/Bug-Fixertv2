@@ -1,25 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpsertWatchHistoryDto } from './dto/upsert-watch-history.dto';
 
-export class UpsertWatchHistoryDto {
-  movieId?: string;
-  seriesId?: string;
-  episodeId?: string;
-  position?: number;
-  duration?: number;
-  completed?: boolean;
-}
+export { UpsertWatchHistoryDto };
 
 @Injectable()
 export class WatchHistoryService {
   constructor(private prisma: PrismaService) {}
 
   async getHistory(userId: string, limit = 20) {
+    // Clamp limit so a malicious client can't ask for the entire history table.
+    const safeLimit = Math.min(Number(limit) || 20, 100);
     return this.prisma.watchHistory.findMany({
       where: { userId },
       orderBy: { watchedAt: 'desc' },
-      take: limit,
+      take: safeLimit,
       include: {
         movie: { select: { id: true, title: true, poster: true, slug: true, duration: true } },
         series: { select: { id: true, title: true, poster: true, slug: true } },

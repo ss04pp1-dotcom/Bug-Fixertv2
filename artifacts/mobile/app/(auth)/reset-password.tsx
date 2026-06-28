@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,6 +55,10 @@ const STRENGTH_COLORS = ['#EF4444', '#F97316', '#F5C518', '#10B981'];
 
 export default function ResetPasswordScreen() {
   const insets = useSafeAreaInsets();
+  // M-009: read the user contact and verified OTP code forwarded from the OTP screen.
+  const params = useLocalSearchParams();
+  const contact = (params.contact as string) || '';
+  const code = (params.code as string) || '';
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -100,7 +104,11 @@ export default function ResetPasswordScreen() {
 
     setIsLoading(true);
     try {
+      // M-009: include identifier + otpCode so the backend can correlate this reset
+      // with the previously verified code (instead of relying on a session).
       await apiClient.post('/auth/reset-password', {
+        identifier: contact,
+        otpCode: code,
         newPassword,
         confirmPassword,
       });
@@ -121,7 +129,7 @@ export default function ResetPasswordScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [newPassword, confirmPassword, validations]);
+  }, [newPassword, confirmPassword, validations, contact, code]);
 
   const isButtonDisabled = isLoading || !validations.hasLength || !validations.hasComplex || !validations.passwordsMatch;
 

@@ -70,13 +70,11 @@ export default function Notifications() {
   };
 
   const openEdit = (n: Notification) => {
+    // D-038 fix: previously this used setTimeout(50) to set ref.values after
+    // the modal mounted. We now drive the inputs with `defaultValue` and a
+    // `key` on the modal that changes per edit target, so no setTimeout needed.
     setEditNotif(n);
     setModal(true);
-    setTimeout(() => {
-      if (titleRef.current) titleRef.current.value = n.title;
-      if (bodyRef.current)  bodyRef.current.value  = n.body;
-      if (targetRef.current) targetRef.current.value = n.targetAll ? "all" : "premium";
-    }, 50);
   };
 
   const closeModal = () => {
@@ -181,22 +179,25 @@ export default function Notifications() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md">
+          {/* D-038 fix: `key` changes when editNotif changes, so React remounts
+              the form and `defaultValue` picks up the new item — no setTimeout
+              or imperative ref.value assignment needed. */}
+          <div key={editNotif?.id ?? "new"} className="bg-card border border-border rounded-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-sm font-bold text-white">{editNotif ? "Edit Notification" : "Send Notification"}</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
-                <input ref={titleRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Notification title" />
+                <input ref={titleRef} defaultValue={editNotif?.title ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Notification title" />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Message *</label>
-                <textarea ref={bodyRef} rows={3} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" placeholder="Notification message…" />
+                <textarea ref={bodyRef} rows={3} defaultValue={editNotif?.body ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" placeholder="Notification message…" />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Target Audience</label>
-                <select ref={targetRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
+                <select ref={targetRef} defaultValue={editNotif?.targetAll ? "all" : "premium"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
                   <option value="all">All Users</option>
                   <option value="premium">Premium Users</option>
                   <option value="free">Free Users</option>

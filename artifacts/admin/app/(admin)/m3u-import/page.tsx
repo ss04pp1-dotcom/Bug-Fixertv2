@@ -238,21 +238,30 @@ function ProgressCard({ jobId }: { jobId: string }) {
   const [showFailed, setShowFailed] = useState(false);
   const [failedList, setFailedList] = useState<FailedChannel[]>([]);
   const [loadingFailed, setLoadingFailed] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
   const { call: cancelCall } = useApiCallState();
 
   useEffect(() => {
     if (!jobId) return;
+    setPollError(null);
     const poll = setInterval(async () => {
       try {
         const res = await apiClient.get(`/v1/m3u-import/jobs/${jobId}/progress`);
         const data = extractData<JobProgress>(res);
         setProgress(data);
+        setPollError(null);
         // Stop polling if terminal state
         if (["completed", "failed", "cancelled"].includes(data.status)) {
           clearInterval(poll);
         }
-      } catch {}
+      } catch (e) {
+        // D-019 fix: surface the error and stop the poller instead of swallowing
+        setPollError("Failed to fetch progress");
+        if (pollRef.current) clearInterval(pollRef.current);
+      }
     }, 1500);
+    pollRef.current = poll;
     return () => clearInterval(poll);
   }, [jobId]);
 
@@ -275,15 +284,27 @@ function ProgressCard({ jobId }: { jobId: string }) {
 
   if (!progress) {
     return (
-      <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-3">
-        <Loader2 size={18} className="text-primary animate-spin" />
-        <span className="text-sm text-[#8B92A5]">Loading progress...</span>
+      <div className="bg-card border border-border rounded-xl p-6 flex flex-col items-start gap-3">
+        <div className="flex items-center gap-3">
+          <Loader2 size={18} className="text-primary animate-spin" />
+          <span className="text-sm text-[#8B92A5]">Loading progress...</span>
+        </div>
+        {pollError && (
+          <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <AlertCircle size={14} /> {pollError}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+      {pollError && (
+        <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          <AlertCircle size={14} /> {pollError}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {isRunning ? (

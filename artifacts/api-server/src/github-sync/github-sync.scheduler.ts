@@ -47,7 +47,7 @@ export class GitHubSyncScheduler implements OnApplicationBootstrap {
     }
   }
 
-  @Cron('* * * * *', { name: 'github-sync-tick' })
+  @Cron('*/5 * * * *', { name: 'github-sync-tick' })
   async tick(): Promise<void> {
     // Startup deduplication must complete before any sync runs.
     if (!this.syncService.isDedupReady()) {

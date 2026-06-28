@@ -44,6 +44,7 @@ import { M3uImportModule } from './m3u-import/m3u-import.module';
 import { PlaybackEventsModule } from './playback-events/playback-events.module';
 import { GitHubSourcesModule } from './github-sources/github-sources.module';
 import { GitHubSyncModule } from './github-sync/github-sync.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 
 @Module({
@@ -97,6 +98,12 @@ import configuration from './config/configuration';
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Register JwtAuthGuard globally so EVERY endpoint requires authentication by default.
+    // The guard already checks IS_PUBLIC_KEY metadata and short-circuits for @Public() routes,
+    // so existing public endpoints (login, register, /healthz, etc.) keep working unchanged.
+    // RolesGuard is intentionally NOT registered globally — it's only applied per-controller
+    // where @Roles() is actually used, to avoid surprising 403s on routes that don't declare roles.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 export class AppModule implements NestModule {

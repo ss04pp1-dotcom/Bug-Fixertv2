@@ -97,9 +97,9 @@ const UserService = {
 
   getNotifications: () => apiClient.get('/notifications/user'),
   markRead: (id: string) => apiClient.patch(`/notifications/user/${id}/read`),
-  markAllRead: () => apiClient.patch('/notifications/user/read-all'),
+  markAllRead: () => apiClient.post('/notifications/user/read-all'),
 
-  getAnnouncements: () => apiClient.get('/announcements'),
+  getAnnouncements: () => apiClient.get('/announcements/active'),
 
   getParentalControl: () => apiClient.get('/parental-control'),
   updateParentalControl: (data: unknown) => apiClient.put('/parental-control', data),
@@ -127,7 +127,8 @@ const SportService = {
   getMatch: (id: string) => apiClient.get(`/sports/${id}`),
   getMatchCommentary: (id: string) => apiClient.get(`/sports/${id}/commentary`),
   setAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
-  removeAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
+  // M-007: removeAlert must be DELETE, not POST — otherwise toggling off creates duplicates.
+  removeAlert: (matchId: string) => apiClient.delete(`/sports/matches/${matchId}/alert`),
 };
 
 const ReviewService = {

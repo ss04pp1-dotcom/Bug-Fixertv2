@@ -16,9 +16,12 @@ export class SportsService {
   async findAllSports(query: { limit?: number; search?: string }) {
     const where: Prisma.SportWhereInput = {};
     if (query.search) where.name = { contains: query.search, mode: 'insensitive' };
+    // A-056: clamp limit to 500 — there are ~200 recognized sport types globally,
+    // but a misconfigured client could ask for millions.
+    const safeLimit = Math.min(Number(query.limit) || 200, 500);
     const data = await this.prisma.sport.findMany({
       where,
-      take: query.limit || 200,
+      take: safeLimit,
       orderBy: { name: 'asc' },
     });
     return { data };

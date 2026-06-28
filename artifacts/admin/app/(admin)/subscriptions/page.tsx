@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Plus, Edit, Trash2, ChevronLeft, ChevronRight, Crown, Zap, Star, Infinity,
   Tag, RefreshCw, DollarSign, Users, TrendingUp, Check, X, Search,
   Download, Gift,
 } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
+import { useApi, useApiCallState, getApiErrorMessage } from "@/lib/use-api";
+import { toast } from "sonner";
 
 type SubTab = "plans" | "subscriptions" | "coupons" | "transactions" | "renewals";
 
@@ -80,7 +81,14 @@ export default function Subscriptions() {
   const [editCoupon, setEditCoupon]           = useState<Coupon | null>(null);
   const [viewSub, setViewSub]                 = useState<Subscription | null>(null);
   const [searchQ, setSearchQ]       = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [subsPage, setSubsPage]     = useState(1);
+
+  // D-012 fix: debounce search so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQ), 300);
+    return () => clearTimeout(t);
+  }, [searchQ]);
 
   const planNameRef     = useRef<HTMLInputElement>(null);
   const planPriceRef    = useRef<HTMLInputElement>(null);
@@ -97,7 +105,7 @@ export default function Subscriptions() {
   const couponTypeRef    = useRef<HTMLSelectElement>(null);
 
   const { data: plansData, isLoading: plansLoading, refetch: refetchPlans } = useApi<ListResponse<Plan>>("/v1/subscriptions/plans?limit=20");
-  const { data: subsData,  isLoading: subsLoading,  refetch: refetchSubs  } = useApi<ListResponse<Subscription>>(`/v1/subscriptions?page=${subsPage}&limit=20&search=${encodeURIComponent(searchQ)}`);
+  const { data: subsData,  isLoading: subsLoading,  refetch: refetchSubs  } = useApi<ListResponse<Subscription>>(`/v1/subscriptions?page=${subsPage}&limit=20&search=${encodeURIComponent(debouncedSearch)}`);
   const { data: couponsData, isLoading: couponsLoading, refetch: refetchCoupons } = useApi<ListResponse<Coupon>>("/v1/subscriptions/coupons?limit=50");
   const { data: paymentsData, isLoading: paymentsLoading } = useApi<ListResponse<Payment>>("/v1/payments?limit=20");
 
@@ -131,26 +139,27 @@ export default function Subscriptions() {
       trialDays: planTrialRef.current?.value ? Number(planTrialRef.current.value) : 0,
       features: planFeaturesRef.current?.value?.split("\n").filter(Boolean) ?? [],
     };
-    if (editPlan) {
-      await mutate("put", `/v1/subscriptions/plans/${editPlan.id}`, body);
-    } else {
-      await mutate("post", "/v1/subscriptions/plans", body);
+    // D-018 fix: keep modal open on failure so user doesn't lose their input
+    try {
+      if (editPlan) {
+        await mutate("put", `/v1/subscriptions/plans/${editPlan.id}`, body);
+      } else {
+        await mutate("post", "/v1/subscriptions/plans", body);
+      }
+      setShowPlanModal(false);
+      setEditPlan(null);
+      refetchPlans();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to save plan");
     }
-    setShowPlanModal(false);
-    setEditPlan(null);
-    refetchPlans();
   };
 
   const handleEditPlan = (p: Plan) => {
+    // D-038 fix: removed setTimeout(50) imperative ref.value assignment.
+    // The modal now uses `defaultValue` bound to `editPlan` plus a `key` prop
+    // that changes per edit target, so React remounts and populates correctly.
     setEditPlan(p);
     setShowPlanModal(true);
-    setTimeout(() => {
-      if (planNameRef.current) planNameRef.current.value = p.name;
-      if (planPriceRef.current) planPriceRef.current.value = String(p.price);
-      if (planDaysRef.current) planDaysRef.current.value = String(p.durationDays);
-      if (planTrialRef.current) planTrialRef.current.value = String(p.trialDays ?? 0);
-      if (planFeaturesRef.current) planFeaturesRef.current.value = (p.features ?? []).join("\n");
-    }, 50);
   };
 
   const exportSubsCSV = () => {
@@ -166,26 +175,33 @@ export default function Subscriptions() {
     const headers = "User,Plan,Status,Price,Renewed,Expires";
     const data = rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([headers + "\n" + data], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "subscriptions.csv"; a.click();
+    // D-027/28/29 fix: revoke the object URL so we don't leak blob refs each click
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = "subscriptions.csv";
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   const handleDeletePlan = async (id: string) => {
     if (!confirm("Delete this plan?")) return;
-    await mutate("delete", `/v1/subscriptions/plans/${id}`);
-    refetchPlans();
+    try {
+      await mutate("delete", `/v1/subscriptions/plans/${id}`);
+      refetchPlans();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to delete plan");
+    }
   };
 
   const handleEditCoupon = (c: Coupon) => {
+    // D-038 fix: removed setTimeout(50) imperative ref.value assignment —
+    // the modal now uses `defaultValue` bound to `editCoupon` plus a `key`
+    // prop that changes per edit target, so React remounts and populates.
     setEditCoupon(c);
     setShowCouponModal(true);
-    setTimeout(() => {
-      if (couponCodeRef.current)   couponCodeRef.current.value   = c.code;
-      if (couponTypeRef.current)   couponTypeRef.current.value   = c.discountType;
-      if (couponValueRef.current)  couponValueRef.current.value  = String(c.discountValue);
-      if (couponMinRef.current)    couponMinRef.current.value    = String(c.minPurchase ?? 0);
-      if (couponMaxRef.current)    couponMaxRef.current.value    = c.maxUses != null ? String(c.maxUses) : "";
-      if (couponExpiryRef.current) couponExpiryRef.current.value = c.expiresAt ? c.expiresAt.slice(0, 10) : "";
-    }, 50);
   };
 
   const handleSaveCoupon = async () => {
@@ -199,19 +215,28 @@ export default function Subscriptions() {
       maxUses: couponMaxRef.current?.value ? Number(couponMaxRef.current.value) : undefined,
       expiresAt: couponExpiryRef.current?.value || undefined,
     };
-    if (editCoupon) {
-      await mutate("put", `/v1/subscriptions/coupons/${editCoupon.id}`, body);
-    } else {
-      await mutate("post", "/v1/subscriptions/coupons", body);
+    // D-018 fix: keep modal open on failure so user doesn't lose input
+    try {
+      if (editCoupon) {
+        await mutate("put", `/v1/subscriptions/coupons/${editCoupon.id}`, body);
+      } else {
+        await mutate("post", "/v1/subscriptions/coupons", body);
+      }
+      setShowCouponModal(false);
+      setEditCoupon(null);
+      refetchCoupons();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to save coupon");
     }
-    setShowCouponModal(false);
-    setEditCoupon(null);
-    refetchCoupons();
   };
 
   const handleToggleCoupon = async (id: string, isActive: boolean) => {
-    await mutate("put", `/v1/subscriptions/coupons/${id}`, { isActive: !isActive });
-    refetchCoupons();
+    try {
+      await mutate("put", `/v1/subscriptions/coupons/${id}`, { isActive: !isActive });
+      refetchCoupons();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || "Failed to toggle coupon");
+    }
   };
 
   return (
@@ -367,7 +392,7 @@ export default function Subscriptions() {
             <div className="flex items-center gap-3">
               <div className="flex-1 flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2.5">
                 <Search size={14} className="text-[#8B92A5]" />
-                <input value={searchQ} onChange={e => { setSearchQ(e.target.value); setSubsPage(1); }} placeholder="Search by email or plan…" className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1" />
+                <input value={searchQ} onChange={e => { setSearchQ(e.target.value); }} placeholder="Search by email or plan…" className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1" />
               </div>
               <button onClick={() => refetchSubs()} disabled={subsLoading} className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50">
                 <RefreshCw size={13} className={subsLoading ? "animate-spin" : ""} />
@@ -389,7 +414,7 @@ export default function Subscriptions() {
                   </thead>
                   <tbody>
                     {subs.length === 0 ? (
-                      <tr><td colSpan={8} className="text-center py-12 text-sm text-[#8B92A5]">No subscriptions found</td></tr>
+                      <tr><td colSpan={7} className="text-center py-12 text-sm text-[#8B92A5]">No subscriptions found</td></tr>
                     ) : subs.map(s => (
                       <tr key={s.id} className="border-b border-border/50 last:border-0 hover:bg-white/[0.02]">
                         <td className="px-4 py-3 text-xs text-white max-w-[140px] truncate">{s.user?.email ?? s.user?.name ?? "—"}</td>
@@ -450,7 +475,7 @@ export default function Subscriptions() {
                   </thead>
                   <tbody>
                     {coupons.length === 0 ? (
-                      <tr><td colSpan={8} className="text-center py-12 text-sm text-[#8B92A5]">No coupons found</td></tr>
+                      <tr><td colSpan={7} className="text-center py-12 text-sm text-[#8B92A5]">No coupons found</td></tr>
                     ) : coupons.map(c => (
                       <tr key={c.id} className="border-b border-border/50 last:border-0 hover:bg-white/[0.02]">
                         <td className="px-4 py-3">
@@ -538,68 +563,18 @@ export default function Subscriptions() {
           </>
         )}
 
-        {/* RENEWALS */}
+        {/* RENEWALS — D-035 fix: previous Auto Renewal tab rendered hardcoded
+            fake "upcoming renewals" and "renewal stats" alongside dead toggles
+            with no backing API. Removed the misleading fake data; show a
+            placeholder until the auto-renewal API lands. */}
         {tab === "renewals" && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <RefreshCw size={16} className="text-primary" />
-                <h3 className="text-sm font-semibold text-white">Auto Renewal Settings</h3>
-              </div>
-              {[
-                { label: "Enable Auto Renewal",   input: false },
-                { label: "Grace Period (days)",   input: true, val: "3" },
-                { label: "Retry Failed Renewals", input: false },
-                { label: "Notify Before Expiry",  input: true, val: "7" },
-              ].map(item => (
-                <div key={item.label} className="py-3 border-b border-border last:border-0 flex items-center justify-between">
-                  <span className="text-xs text-white">{item.label}</span>
-                  {item.input
-                    ? <input defaultValue={item.val} className="w-14 bg-background border border-border rounded px-2 py-1 text-xs text-white text-center outline-none focus:border-primary" />
-                    : <div className="w-10 h-5 bg-primary rounded-full relative cursor-pointer"><div className="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full" /></div>
-                  }
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-3">Upcoming Renewals</h3>
-              <div className="space-y-3">
-                {[
-                  { user: "john.doe@gmail.com",  plan: "Yearly",    date: "Dec 31, 2026", amount: "$79.99" },
-                  { user: "maria.i@gmail.com",   plan: "Monthly",   date: "Jul 1, 2026",  amount: "$9.99"  },
-                  { user: "sara.k@gmail.com",    plan: "Monthly",   date: "Jul 8, 2026",  amount: "$9.99"  },
-                  { user: "tanvir.a@gmail.com",  plan: "Quarterly", date: "Sep 14, 2026", amount: "$24.99" },
-                ].map(r => (
-                  <div key={r.user} className="flex items-center gap-3 p-2.5 bg-background/50 rounded-lg">
-                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold text-white">
-                      {r.user[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-white truncate">{r.user}</div>
-                      <div className="text-[10px] text-[#8B92A5]">{r.plan} · {r.date}</div>
-                    </div>
-                    <span className="text-xs font-semibold text-white">{r.amount}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-3">Renewal Stats</h3>
-              {[
-                { label: "Renewal Rate",     value: "94.2%", color: "text-green-400"  },
-                { label: "Failed Renewals",  value: "58",    color: "text-red-400"    },
-                { label: "Recovered",        value: "41",    color: "text-blue-400"   },
-                { label: "Expiring 30 Days", value: "312",   color: "text-yellow-400" },
-                { label: "Grace Period",     value: "3 days",color: "text-[#8B92A5]"  },
-              ].map(s => (
-                <div key={s.label} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
-                  <span className="text-xs text-[#8B92A5]">{s.label}</span>
-                  <span className={cn("text-sm font-bold", s.color)}>{s.value}</span>
-                </div>
-              ))}
-            </div>
+          <div className="bg-card border border-border rounded-xl p-10 flex flex-col items-center justify-center text-center">
+            <RefreshCw size={32} className="text-[#8B92A5] mb-3" />
+            <h3 className="text-sm font-semibold text-white mb-1">Auto Renewal — Coming Soon</h3>
+            <p className="text-xs text-[#8B92A5] max-w-sm">
+              Auto-renewal configuration, upcoming renewal listings, and renewal
+              stats will appear here once the renewal worker is wired up.
+            </p>
           </div>
         )}
       </div>
@@ -607,29 +582,32 @@ export default function Subscriptions() {
       {/* Add / Edit Plan Modal */}
       {showPlanModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-sm">
+          {/* D-038 fix: `key` changes when editPlan changes, so React remounts
+              the form and `defaultValue` picks up the new item — no setTimeout
+              or imperative ref.value assignment needed. */}
+          <div key={editPlan?.id ?? "new"} className="bg-card border border-border rounded-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="text-sm font-bold text-white">{editPlan ? "Edit Plan" : "Add Subscription Plan"}</h2>
               <button onClick={() => { setShowPlanModal(false); setEditPlan(null); }} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-3 max-h-[70vh] overflow-y-auto">
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Plan Name</label>
-                <input ref={planNameRef} type="text" placeholder="e.g. Monthly" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={planNameRef} type="text" defaultValue={editPlan?.name ?? ""} placeholder="e.g. Monthly" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Price (USD)</label>
-                <input ref={planPriceRef} type="number" placeholder="9.99" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={planPriceRef} type="number" defaultValue={editPlan?.price ?? ""} placeholder="9.99" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Duration</label>
                 <input ref={planDurationRef} type="text" placeholder="monthly / yearly / lifetime" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Duration Days</label>
-                <input ref={planDaysRef} type="number" placeholder="30" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={planDaysRef} type="number" defaultValue={editPlan?.durationDays ?? ""} placeholder="30" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Free Trial Days</label>
-                <input ref={planTrialRef} type="number" placeholder="0" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={planTrialRef} type="number" defaultValue={editPlan?.trialDays ?? 0} placeholder="0" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Features (one per line)</label>
-                <textarea ref={planFeaturesRef} rows={4} placeholder={"HD Streaming\n500+ Channels\n2 Devices"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" />
+                <textarea ref={planFeaturesRef} rows={4} defaultValue={(editPlan?.features ?? []).join("\n")} placeholder={"HD Streaming\n500+ Channels\n2 Devices"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5] resize-none" />
               </div>
             </div>
             <div className="flex gap-3 px-6 pb-6">
@@ -667,7 +645,17 @@ export default function Subscriptions() {
             </div>
             <div className="flex gap-3 px-6 pb-6">
               <button onClick={() => setViewSub(null)} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Close</button>
-              <button onClick={async () => { if (!confirm("Cancel this subscription?")) return; await mutate("put", `/v1/subscriptions/${viewSub.id}`, { status: "cancelled" }); setViewSub(null); refetchSubs(); }} disabled={mutating || viewSub.status === "cancelled"} className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold hover:opacity-90 disabled:opacity-40">
+              <button onClick={async () => {
+                if (!confirm("Cancel this subscription?")) return;
+                // D-018 fix: keep modal open on failure
+                try {
+                  await mutate("put", `/v1/subscriptions/${viewSub.id}`, { status: "cancelled" });
+                  setViewSub(null);
+                  refetchSubs();
+                } catch (e) {
+                  toast.error(getApiErrorMessage(e) || "Failed to cancel subscription");
+                }
+              }} disabled={mutating || viewSub.status === "cancelled"} className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold hover:opacity-90 disabled:opacity-40">
                 Cancel Sub
               </button>
             </div>
@@ -678,38 +666,41 @@ export default function Subscriptions() {
       {/* Add Coupon Modal */}
       {showCouponModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-sm">
+          {/* D-038 fix: `key` changes when editCoupon changes, so React remounts
+              the form and `defaultValue` picks up the new item — no setTimeout
+              or imperative ref.value assignment needed. */}
+          <div key={editCoupon?.id ?? "new"} className="bg-card border border-border rounded-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-sm font-bold text-white">Create Coupon</h2>
+              <h2 className="text-sm font-bold text-white">{editCoupon ? "Edit Coupon" : "Create Coupon"}</h2>
               <button onClick={() => setShowCouponModal(false)} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-3">
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Coupon Code</label>
-                <input ref={couponCodeRef} type="text" placeholder="SAVE20" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={couponCodeRef} type="text" defaultValue={editCoupon?.code ?? ""} placeholder="SAVE20" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Discount Type</label>
-                <select ref={couponTypeRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
+                <select ref={couponTypeRef} defaultValue={editCoupon?.discountType ?? "percentage"} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
                   <option value="percentage">Percentage (%)</option>
                   <option value="fixed">Fixed Amount ($)</option>
                 </select>
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Discount Value</label>
-                <input ref={couponValueRef} type="number" placeholder="20" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={couponValueRef} type="number" defaultValue={editCoupon?.discountValue ?? ""} placeholder="20" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Minimum Purchase ($)</label>
-                <input ref={couponMinRef} type="number" placeholder="0" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={couponMinRef} type="number" defaultValue={editCoupon?.minPurchase ?? 0} placeholder="0" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Max Uses</label>
-                <input ref={couponMaxRef} type="number" placeholder="100" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={couponMaxRef} type="number" defaultValue={editCoupon?.maxUses ?? ""} placeholder="100" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
               <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Expiry Date</label>
-                <input ref={couponExpiryRef} type="date" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input ref={couponExpiryRef} type="date" defaultValue={editCoupon?.expiresAt ? editCoupon.expiresAt.slice(0, 10) : ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
             </div>
             <div className="flex gap-3 px-6 pb-6">
               <button onClick={() => setShowCouponModal(false)} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleSaveCoupon} disabled={mutating} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60">
-                {mutating ? "Saving…" : "Create Coupon"}
+                {mutating ? "Saving…" : editCoupon ? "Save Coupon" : "Create Coupon"}
               </button>
             </div>
           </div>

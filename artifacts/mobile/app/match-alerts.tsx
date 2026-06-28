@@ -32,8 +32,16 @@ const sportColors: Record<string, string> = {
 function PulsingDot() {
   const opacity = React.useRef(new Animated.Value(1)).current;
   React.useEffect(() => {
-    Animated.loop(Animated.sequence([Animated.timing(opacity, { toValue: 0.4, duration: 800, useNativeDriver: true }), Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true })])).start();
-  }, []);
+    // M-028: capture the loop handle and stop it on unmount to avoid leaks.
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
   return <Animated.View style={[styles.liveDot, { opacity }]} />;
 }
 
@@ -72,8 +80,19 @@ export default function MatchAlertsScreen() {
   }, [alertsData, localEnabled]);
 
   const toggleAlert = (alertId: string) => {
-    setLocalEnabled((prev) => ({ ...prev, [alertId]: !prev[alertId] }));
-    toggleAlertMutation.mutate(alertId);
+    // M-028: optimistic toggle with rollback on failure. Uses the action param
+    // introduced in M-007 so removal actually hits DELETE on the server.
+    const current = alerts.find((a) => a.id === alertId)?.enabled ?? false;
+    const next = !current;
+    setLocalEnabled((prevMap) => ({ ...prevMap, [alertId]: next }));
+    toggleAlertMutation.mutate(
+      { matchId: alertId, action: next ? 'add' : 'remove' },
+      {
+        onError: () => {
+          setLocalEnabled((prevMap) => ({ ...prevMap, [alertId]: !next }));
+        },
+      },
+    );
   };
 
   const renderItem = ({ item }: { item: Alert }) => (

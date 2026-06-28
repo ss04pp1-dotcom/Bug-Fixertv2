@@ -222,7 +222,8 @@ export default function SeriesDetailsScreen() {
               const firstEp = episodes[0];
               if (firstEp) router.push({
                 pathname: `/player/${id}` as any,
-                params: { type: 'series', title: series?.title || '', season: '1' },
+                // M-010: pass the active season (1-indexed) and E1 explicitly.
+                params: { type: 'series', title: series?.title || '', season: String(activeSeason + 1), episode: '1' },
               });
             }}>
               <LinearGradient
@@ -310,7 +311,8 @@ export default function SeriesDetailsScreen() {
                     activeOpacity={0.8}
                     onPress={() => router.push({
                       pathname: `/player/${id}` as any,
-                      params: { type: 'series', title: series?.title || '', season: String(episode.number) },
+                      // M-010: pass the season (not the episode number) as `season`, and the episode number as `episode`.
+                      params: { type: 'series', title: series?.title || '', season: String(activeSeason + 1), episode: String(episode.number) },
                     })}
                   >
                     <View style={styles.episodeThumbnailLarge}>

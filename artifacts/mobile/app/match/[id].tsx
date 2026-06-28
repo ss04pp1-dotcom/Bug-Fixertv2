@@ -192,7 +192,15 @@ export default function MatchDetailScreen() {
           <View style={styles.heroStatsRow}>
             <StatBox label="Sport" value={match?.sport ? match.sport.charAt(0).toUpperCase() + match.sport.slice(1) : 'N/A'} />
             <View style={styles.heroStatsDivider} />
-            <StatBox label="Status" value={match?.status?.charAt(0).toUpperCase() + (match?.status || '').slice(1) || 'N/A'} />
+            {/* M-011: avoid rendering the literal string 'undefined' when status is missing. */}
+            <StatBox
+              label="Status"
+              value={
+                match?.status
+                  ? match.status.charAt(0).toUpperCase() + match.status.slice(1)
+                  : 'N/A'
+              }
+            />
             <View style={styles.heroStatsDivider} />
             <StatBox label={typeof match?.tournament === 'string' ? 'Tournament' : 'Match'} value={typeof match?.tournament === 'string' ? match.tournament : match?.tournament?.name || 'N/A'} />
           </View>

@@ -6,6 +6,7 @@ import { CreateChannelDto } from './dto/create-channel.dto';
 import { BulkImportChannelsDto } from './dto/bulk-import-channel.dto';
 import { M3uImportService } from '../m3u-import/m3u-import.service';
 import { normalizeName, GitHubSyncService } from '../github-sync/github-sync.service';
+import { cookieExpiryInfo } from '../m3u-import/stream-validation.service';
 
 @Injectable()
 export class ChannelsService {
@@ -22,8 +23,8 @@ export class ChannelsService {
     const where: Prisma.ChannelWhereInput = { deletedAt: null };
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.isPremium !== undefined) where.isPremium = query.isPremium;
-    if (query.isFeatured !== undefined) where.isFeatured = query.isFeatured;
+    if (query.isPremium !== undefined) where.isPremium = query.isPremium === 'true';
+    if (query.isFeatured !== undefined) where.isFeatured = query.isFeatured === 'true';
 
     const [data, total] = await Promise.all([
       this.prisma.channel.findMany({
@@ -49,16 +50,70 @@ export class ChannelsService {
         servers: {
           where: { deletedAt: null, enabled: true },
           orderBy: { priority: 'asc' },
-          include: {
+          // PUBLIC PATH: omit credential-bearing fields (cookie, userAgent, referer, origin)
+          // so anonymous viewers cannot harvest upstream auth headers.
+          select: {
+            id: true,
+            channelId: true,
+            link: true,
+            priority: true,
+            enabled: true,
+            sourceType: true,
+            healthCheckEnabled: true,
+            healthStatus: true,
+            lastCheckedAt: true,
+            lastSuccessAt: true,
+            lastFailureAt: true,
+            failureReason: true,
+            createdBySync: true,
+            githubSourceId: true,
             githubSource: { select: { id: true, name: true } },
+            createdAt: true,
+            updatedAt: true,
           },
         },
       },
     });
     if (!channel) throw new NotFoundException('Channel not found');
 
-    // Annotate each server with a computed cookieExpired flag
-    const { cookieExpiryInfo } = await import('../m3u-import/stream-validation.service');
+    // Public path: do NOT compute cookie expiry because we no longer select the cookie value.
+    // (cookieExpired defaults to false; the player doesn't need this signal on the public path.)
+    const servers = channel.servers.map((srv: any) => ({
+      ...srv,
+      cookieExpired: false,
+      cookieExpiresAt: null,
+    }));
+
+    return { ...channel, servers };
+  }
+
+  /**
+   * Admin-only variant of findOne() that returns the full server rows including
+   * credential fields (cookie, userAgent, referer, origin). Used by the
+   * GET /channels/:id/details admin endpoint so admins can edit headers without
+   * leaking them to anonymous viewers on the public GET /channels/:id endpoint.
+   */
+  async findOneAdmin(id: string) {
+    const channel = await this.prisma.channel.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      include: {
+        category: true,
+        epgPrograms: {
+          where: { endTime: { gte: new Date() } },
+          orderBy: { startTime: 'asc' },
+          take: 10,
+        },
+        servers: {
+          where: { deletedAt: null },
+          orderBy: { priority: 'asc' },
+          include: {
+            githubSource: { select: { id: true, name: true, lastSyncAt: true, lastSyncStatus: true, lastSyncMessage: true } },
+          },
+        },
+      },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+
     const servers = channel.servers.map((srv: any) => {
       if (!srv.cookie) return { ...srv, cookieExpired: false, cookieExpiresAt: null };
       const info = cookieExpiryInfo(srv.cookie);

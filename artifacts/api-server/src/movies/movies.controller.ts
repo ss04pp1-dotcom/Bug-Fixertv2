@@ -10,6 +10,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../common/interfaces';
 
 @ApiTags('Movies')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,9 +59,9 @@ export class MoviesController {
   }
 
   @Get(':id/stream') @ApiBearerAuth() @ApiOperation({ summary: 'Get stream URL for a movie' })
-  async getStreamUrl(@Param('id') id: string, @Req() req: Request) {
+  async getStreamUrl(@Param('id') id: string, @Req() req: Request, @CurrentUser() user: AuthenticatedUser) {
     await this.enforceGeoBlock(req);
-    return this.moviesService.getStreamUrl(id);
+    return this.moviesService.getStreamUrl(id, user);
   }
 
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin', 'editor') @ApiOperation({ summary: 'Create movie' })

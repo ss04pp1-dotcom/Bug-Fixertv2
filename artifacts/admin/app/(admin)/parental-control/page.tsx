@@ -99,7 +99,8 @@ export default function ParentalControlPage() {
         ["parental_restricted_categories", JSON.stringify(restrictedCategories)],
       ];
       const results = await Promise.allSettled(
-        pairs.map(([key, value]) => call("put", "/v1/settings", { key, value }))
+        // D-014 fix: standardize on POST (matches settings/page.tsx)
+        pairs.map(([key, value]) => call("post", "/v1/settings", { key, value }))
       );
       const failed = results.filter((r) => r.status === "rejected");
       if (failed.length > 0) {

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,43 +10,23 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useFeatureFlagsContext } from '@/app/_layout';
-import { tokenStorage } from '@/lib/api';
-import { useAuthStore } from '@/lib/auth-store';
+import { setUnauthenticatedHandler } from '@/lib/api';
 
 export default function MainTabLayout() {
   const insets = useSafeAreaInsets();
   const flags = useFeatureFlagsContext();
   const sportsEnabled = flags['sports_enabled'] !== false;
   const liveTvEnabled = flags['live_tv_enabled'] !== false;
-  const checkAuth = useAuthStore((s) => s.checkAuth);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const [authChecked, setAuthChecked] = useState(false);
 
+  // M-037: the splash screen already validates auth and gates entry into the
+  // main tab group. Calling checkAuth() again here caused a duplicate
+  // network round-trip on every cold start. We only register the runtime
+  // 401 handler so that token expiry mid-session still redirects to login.
   useEffect(() => {
-    (async () => {
-      const token = await tokenStorage.getAccessToken();
-      if (!token) {
-        router.replace('/(auth)/login');
-        return;
-      }
-      await checkAuth();
-      setAuthChecked(true);
-    })();
+    setUnauthenticatedHandler(() => {
+      try { router.replace('/(auth)/login'); } catch {}
+    });
   }, []);
-
-  useEffect(() => {
-    if (authChecked && !isAuthenticated) {
-      router.replace('/(auth)/login');
-    }
-  }, [authChecked, isAuthenticated]);
-
-  if (!authChecked) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0A0A0F', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
-      </View>
-    );
-  }
 
   return (
     <Tabs

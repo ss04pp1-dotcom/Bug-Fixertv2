@@ -15,11 +15,10 @@ export class PlaybackEventsController {
   constructor(private readonly service: PlaybackEventsService) {}
 
   @Post('report')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Report a playback event (requires auth)' })
+  @ApiOperation({ summary: 'Report a playback event (success or failure)' })
   report(@Body() dto: ReportPlaybackDto, @CurrentUser('id') userId: string) {
-    return this.service.report({ ...dto, userId });
+    return this.service.report(dto, userId);
   }
 
   @Get('stats/:channelId')

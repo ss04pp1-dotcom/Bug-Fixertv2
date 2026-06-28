@@ -1,5 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getToken, setToken, clearToken, getRefreshToken, setRefreshToken } from './auth';
+import { getToken, clearToken } from './auth';
 import { API_CONFIG } from './config/api';
 
 export interface ApiResponse<T = unknown> {
@@ -26,82 +26,42 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 );
 
-let isRefreshing = false;
-let pendingQueue: Array<{
-  resolve: (value: string) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
-
-function drainQueue(token: string | null, error: unknown = null): void {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (token) resolve(token);
-    else reject(error);
-  });
-  pendingQueue = [];
-}
-
+// ───────────────────────────────────────────────────────────────────────────
+// D-002 / D-007 fix: refresh-token logic removed entirely.
+// This app is statically exported (no server runtime for httpOnly refresh
+// cookies), so silently refreshing an expired access token would require
+// storing a long-lived refresh token in sessionStorage — an XSS-escalation
+// risk. Instead, on 401 we clear the token and redirect to /login.
+// Users must re-authenticate when the access token expires.
+// ───────────────────────────────────────────────────────────────────────────
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>): AxiosResponse<ApiResponse<unknown>> => {
     return response;
   },
-  async (error: AxiosError<ApiResponse<unknown>>) => {
-    const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
-
-      if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
-          pendingQueue.push({ resolve, reject });
-        }).then((token) => {
-          if (original.headers) original.headers['Authorization'] = `Bearer ${token}`;
-          return apiClient(original);
-        });
-      }
-
-      isRefreshing = true;
-
-      try {
-        const refreshToken = getRefreshToken();
-
-        if (!refreshToken) {
-          throw new Error('No refresh token — please log in again');
-        }
-
-        const { data } = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
-          `${API_CONFIG.BASE_URL}/v1/auth/refresh`,
-          { refreshToken },
-          { withCredentials: true },
-        );
-
-        const newToken = data.data.accessToken;
-        setToken(newToken);
-
-        if (data.data.refreshToken) {
-          setRefreshToken(data.data.refreshToken);
-        }
-
-        drainQueue(newToken);
-        if (original.headers) original.headers['Authorization'] = `Bearer ${newToken}`;
-        return apiClient(original);
-      } catch (refreshError) {
-        drainQueue(null, refreshError);
-        clearToken();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      clearToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
       }
     }
-
     return Promise.reject(error);
   },
 );
 
-export function extractData<T>(response: any): T {
-  return response?.data?.data ?? response?.data ?? response;
+// D-045 fix: typed `response` parameter (was `any`). The runtime behaviour is
+// unchanged — we still fall back through `data.data → data → response` because
+// some legacy call sites pass already-unwrapped payloads, but the type now
+// mirrors the canonical AxiosResponse<ApiResponse<T>> shape.
+export function extractData<T>(
+  response: { data?: { data?: T } | T } | T,
+): T {
+  const r = response as { data?: { data?: T } | T };
+  const inner = r?.data;
+  if (inner && typeof inner === 'object' && 'data' in inner) {
+    return (inner as { data: T }).data;
+  }
+  return (inner as T | undefined) ?? (response as T);
 }
 
 export function getApiErrorMessage(error: unknown): string {
