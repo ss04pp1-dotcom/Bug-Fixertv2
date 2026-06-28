@@ -2,87 +2,79 @@
  * withMedia3Gradle — Expo config plugin
  *
  * Pins Media3 (androidx.media3) to a stable release and enables the HLS,
- * DASH, SmoothStreaming, and RTSP extensions that IPTV streams need.
- * Also adds ProGuard rules so Media3 classes survive release builds.
+ * DASH, SmoothStreaming, RTSP and OkHttp-datasource extensions that IPTV
+ * streams need.  Also configures Gradle properties for performance.
+ *
+ * Fix history:
+ *  - Removed rootProject.ext approach: ext{} inside buildscript{} is
+ *    invisible to :app's dependencies block (different scope).
+ *  - Removed broken regex that used [^}]* (non-multiline) and the
+ *    fallback /^(dependencies\s*\{)([\s\S]*?)(\})\s*$/m whose lazy .*?
+ *    + multiline $ matched the first } inside the block, landing deps
+ *    outside the dependencies{} closure entirely.
+ *  - Now injects immediately AFTER "dependencies {" — the one anchor
+ *    guaranteed to exist and be unambiguous.
  */
 const {
-  withProjectBuildGradle,
   withAppBuildGradle,
   withGradleProperties,
 } = require('@expo/config-plugins');
 
 const MEDIA3_VERSION = '1.5.1';
 
-// ── 1. Pin Media3 version in the root project build.gradle ──────────────────
-function withMedia3RootGradle(config) {
-  return withProjectBuildGradle(config, (cfg) => {
-    const contents = cfg.modResults.contents;
-
-    // Already patched?
-    if (contents.includes('media3_version')) return cfg;
-
-    // Insert after the first `allprojects {` block's `repositories {` section
-    // by appending to the ext block or creating one.
-    const extBlock = `
-    // ── Media3 (ExoPlayer) version pin ──────────────────────────────────────
-    ext {
-        media3_version = "${MEDIA3_VERSION}"
-    }
-`;
-
-    // Append before the last closing brace of the buildscript block
-    cfg.modResults.contents = contents.replace(
-      /buildscript\s*\{/,
-      `buildscript {\n${extBlock}`
-    );
-
-    return cfg;
-  });
-}
-
-// ── 2. Add Media3 dependencies in app/build.gradle ──────────────────────────
+// ── 1. Add Media3 dependencies in app/build.gradle ──────────────────────────
 function withMedia3AppGradle(config) {
   return withAppBuildGradle(config, (cfg) => {
     const contents = cfg.modResults.contents;
 
-    // Already patched?
+    // Idempotency guard — already patched in a previous prebuild
     if (contents.includes('media3-exoplayer-hls')) return cfg;
 
-    const media3Deps = `
-    // ── Google Media3 (ExoPlayer) — pinned to ${MEDIA3_VERSION} ──────────────
-    // HLS (M3U8) streams — most IPTV sources
-    implementation "androidx.media3:media3-exoplayer-hls:\${rootProject.ext.media3_version}"
-    // DASH (MPD) streams — some VOD providers
-    implementation "androidx.media3:media3-exoplayer-dash:\${rootProject.ext.media3_version}"
-    // SmoothStreaming — legacy MS streams
-    implementation "androidx.media3:media3-exoplayer-smoothstreaming:\${rootProject.ext.media3_version}"
-    // RTSP — some IPTV servers stream over RTSP
-    implementation "androidx.media3:media3-exoplayer-rtsp:\${rootProject.ext.media3_version}"
-    // MediaSession — background playback notification controls
-    implementation "androidx.media3:media3-session:\${rootProject.ext.media3_version}"
-    // OkHttp data source — respects Cookie / User-Agent headers
-    implementation "androidx.media3:media3-datasource-okhttp:\${rootProject.ext.media3_version}"
-`;
+    // Inject immediately after the opening "dependencies {" line.
+    // This is the only unambiguous anchor in app/build.gradle.
+    // We do NOT try to find the closing brace — multi-line regex on
+    // Groovy gradle files is too fragile (nested closures, comments, etc.)
+    const media3Deps = [
+      '',
+      `    // ── Google Media3 (ExoPlayer) pinned to ${MEDIA3_VERSION} ──`,
+      `    // HLS (M3U8) — most IPTV / live streams`,
+      `    implementation "androidx.media3:media3-exoplayer-hls:${MEDIA3_VERSION}"`,
+      `    // DASH (MPD) — VOD providers`,
+      `    implementation "androidx.media3:media3-exoplayer-dash:${MEDIA3_VERSION}"`,
+      `    // SmoothStreaming — legacy MS/Azure streams`,
+      `    implementation "androidx.media3:media3-exoplayer-smoothstreaming:${MEDIA3_VERSION}"`,
+      `    // RTSP — some IPTV servers`,
+      `    implementation "androidx.media3:media3-exoplayer-rtsp:${MEDIA3_VERSION}"`,
+      `    // MediaSession — background playback & notification controls`,
+      `    implementation "androidx.media3:media3-session:${MEDIA3_VERSION}"`,
+      `    // OkHttp data source — respects Cookie / User-Agent / Referer headers`,
+      `    implementation "androidx.media3:media3-datasource-okhttp:${MEDIA3_VERSION}"`,
+      '',
+    ].join('\n');
 
-    // Inject before the closing brace of the dependencies block
-    cfg.modResults.contents = contents.replace(
-      /(\n\s*\/\/ react-native-video|\ndependencies\s*\{[^}]*\})/,
-      (match) => media3Deps + match
+    // Replace the first occurrence of "dependencies {" with
+    // "dependencies {\n<deps>".  The \n at end of media3Deps means the
+    // original content that followed the "{" stays on its own line.
+    const patched = contents.replace(
+      /^(dependencies\s*\{)/m,
+      `$1${media3Deps}`
     );
 
-    // Fallback: append before last closing brace of dependencies { ... }
-    if (!cfg.modResults.contents.includes('media3-exoplayer-hls')) {
-      cfg.modResults.contents = cfg.modResults.contents.replace(
-        /^(dependencies\s*\{)([\s\S]*?)(\})\s*$/m,
-        (_, open, body, close) => `${open}${body}${media3Deps}${close}`
+    if (!patched.includes('media3-exoplayer-hls')) {
+      // Should never happen, but surface it clearly instead of silently
+      // producing a broken build.gradle.
+      throw new Error(
+        '[withMedia3Gradle] Could not find "dependencies {" block in ' +
+        'app/build.gradle. Media3 dependencies were NOT injected.'
       );
     }
 
+    cfg.modResults.contents = patched;
     return cfg;
   });
 }
 
-// ── 3. Gradle properties for Media3 performance ─────────────────────────────
+// ── 2. Gradle properties for Media3 performance ─────────────────────────────
 function withMedia3GradleProperties(config) {
   return withGradleProperties(config, (cfg) => {
     const props = cfg.modResults;
@@ -96,13 +88,13 @@ function withMedia3GradleProperties(config) {
       }
     };
 
-    // Increase JVM heap for Media3 codec operations
+    // Increase JVM heap for Media3 codec operations during build
     ensureProp('org.gradle.jvmargs', '-Xmx4096m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8');
-    // Enable Gradle daemon for faster incremental builds
+    // Gradle daemon — faster incremental builds
     ensureProp('org.gradle.daemon', 'true');
-    // Parallel build — speeds up multi-module Media3 resolution
+    // Parallel module resolution — important for multi-module Media3
     ensureProp('org.gradle.parallel', 'true');
-    // Gradle caching
+    // Build cache
     ensureProp('org.gradle.caching', 'true');
     // AndroidX — required for Media3
     ensureProp('android.useAndroidX', 'true');
@@ -112,9 +104,8 @@ function withMedia3GradleProperties(config) {
   });
 }
 
-// ── Compose all three patches ────────────────────────────────────────────────
+// ── Compose patches ──────────────────────────────────────────────────────────
 module.exports = function withMedia3Gradle(config) {
-  config = withMedia3RootGradle(config);
   config = withMedia3AppGradle(config);
   config = withMedia3GradleProperties(config);
   return config;
