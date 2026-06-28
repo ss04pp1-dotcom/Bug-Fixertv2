@@ -105,6 +105,7 @@ export default function Advertisements() {
   const [providerSaving, setProviderSaving] = useState(false);
   const [providerSaved, setProviderSaved] = useState(false);
   const [editPlacement, setEditPlacement] = useState<AdPlacement | null>(null);
+  const [placementError, setPlacementError] = useState<string | null>(null);
   const [seedLoading, setSeedLoading] = useState(false);
   const [analyticsSeedLoading, setAnalyticsSeedLoading] = useState(false);
   const [analyticsSeedResult, setAnalyticsSeedResult] = useState<string | null>(null);
@@ -118,7 +119,7 @@ export default function Advertisements() {
   const { data: providersData, isLoading: providersLoading, refetch: refetchProviders } =
     useApi<AdProvider[]>("/v1/advertisements/providers");
   const { data: placementsData, isLoading: placementsLoading, refetch: refetchPlacements } =
-    useApi<{ data: AdPlacement[] }>("/v1/advertisements/placements");
+    useApi<AdPlacement[] | { data: AdPlacement[] }>("/v1/advertisements/placements");
   const { data: analytics, isLoading: analyticsLoading, refetch: refetchAnalytics } =
     useApi<AdAnalytics>("/v1/advertisements/analytics");
   const { data: settingsData, refetch: refetchSettings } =
@@ -126,7 +127,7 @@ export default function Advertisements() {
   const { call, loading: mutating } = useApiCallState();
 
   const providers  = (Array.isArray(providersData) ? providersData : (providersData as unknown as { data?: AdProvider[] })?.data) ?? [];
-  const placements = placementsData?.data ?? [];
+  const placements = (Array.isArray(placementsData) ? placementsData : (placementsData as unknown as { data?: AdPlacement[] })?.data) ?? [];
   const summary    = analytics?.summary;
   const byPlacement = analytics?.byPlacement ?? [];
 
@@ -220,6 +221,7 @@ export default function Advertisements() {
   };
   const openEditPlacement = (p: AdPlacement) => {
     setEditPlacement(p);
+    setPlacementError(null);
     setShowModal(true);
     setTimeout(() => {
       if (placementNameRef.current)   placementNameRef.current.value   = p.name;
@@ -231,7 +233,8 @@ export default function Advertisements() {
 
   const handleSavePlacement = async () => {
     const name = placementNameRef.current?.value?.trim();
-    if (!name) return;
+    if (!name) { setPlacementError("Name is required"); return; }
+    setPlacementError(null);
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const body = {
       name, slug,
@@ -239,14 +242,20 @@ export default function Advertisements() {
       screen: placementScreenRef.current?.value || "home",
       frequency: placementFreqRef.current?.value ? Number(placementFreqRef.current.value) : undefined,
     };
-    if (editPlacement) {
-      await call("put", `/v1/advertisements/placements/${editPlacement.id}`, body);
-    } else {
-      await call("post", "/v1/advertisements/placements", body);
+    try {
+      if (editPlacement) {
+        await call("put", `/v1/advertisements/placements/${editPlacement.id}`, body);
+      } else {
+        await call("post", "/v1/advertisements/placements", body);
+      }
+      setShowModal(false);
+      setEditPlacement(null);
+      setPlacementError(null);
+      refetchPlacements();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to save placement";
+      setPlacementError(Array.isArray(msg) ? msg.join(", ") : String(msg));
     }
-    setShowModal(false);
-    setEditPlacement(null);
-    refetchPlacements();
   };
   const handleSaveFrequency = async () => {
     await call("put", "/v1/advertisements/settings", freqForm);
@@ -281,7 +290,7 @@ export default function Advertisements() {
         </div>
         <div className="flex items-center gap-2">
           {tab === "placements" && (
-            <button onClick={() => { setEditPlacement(null); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90">
+            <button onClick={() => { setEditPlacement(null); setPlacementError(null); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90">
               <Plus size={13} /> Add Placement
             </button>
           )}
@@ -934,6 +943,12 @@ export default function Advertisements() {
                 <input ref={placementFreqRef} type="number" min={1} placeholder="e.g. 3"
                   className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
               </div>
+              {placementError && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                  <X size={12} className="mt-0.5 shrink-0" />
+                  {placementError}
+                </div>
+              )}
               <button onClick={handleSavePlacement} disabled={mutating}
                 className="w-full py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                 {mutating ? (editPlacement ? "Saving…" : "Adding…") : (editPlacement ? "Save Changes" : "Add Placement")}
