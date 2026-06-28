@@ -53,6 +53,18 @@
       "expo-secure-store",
       "expo-web-browser",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "minSdkVersion": 24,
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      [
         "react-native-video",
         {
           "enableNotificationControls": true,
@@ -61,7 +73,8 @@
         }
       ],
       "expo-screen-orientation",
-      "./plugins/withPipSupport"
+      "./plugins/withPipSupport",
+      "./plugins/withMedia3Gradle"
     ],
     "updates": {
       "enabled": true,

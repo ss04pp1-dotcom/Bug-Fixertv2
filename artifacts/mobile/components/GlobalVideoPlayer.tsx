@@ -57,22 +57,29 @@ const MINI_H = 124;        // 16:9
 const MINI_TITLE_H = 36;
 const MINI_MARGIN = 12;
 
-// ─── Buffer configs ───────────────────────────────────────────────────────────
-// FIX: old BUFFER_LIVE was 5s/20s — way too small. ExoPlayer drained the
-// buffer, dropped to a lower rendition, consumed less MB, and eventually
-// threw IO_NETWORK_CONNECTION_TIMEOUT → "Network problem".
-// New values match what TiviMate / OTT Navigator use for IPTV.
+// ─── Buffer configs (Media3 / ExoPlayer) ─────────────────────────────────────
+// Media3 bufferConfig reference:
+//   https://rnvideo.dev/docs/other/bufferconfig
+//
+// LIVE — 15s min / 50s max matches TiviMate / OTT Navigator defaults.
+// backBufferDurationMs: allow rewinding ~30 s into the live edge.
+// cacheSizeMB: 0 → disabled for live (byte cache pointless for live streams).
 const BUFFER_LIVE = {
-  minBufferMs: 15_000,                    // 15s minimum
-  maxBufferMs: 50_000,                    // 50s maximum
+  minBufferMs: 15_000,
+  maxBufferMs: 50_000,
   bufferForPlaybackMs: 2_500,
   bufferForPlaybackAfterRebufferMs: 5_000,
+  backBufferDurationMs: 30_000,           // rewind up to 30 s in live DVR
+  cacheSizeMB: 0,                         // no disk cache for live
 };
+// VOD — bigger buffers + 200 MB disk cache for smooth seeking.
 const BUFFER_VOD = {
   minBufferMs: 20_000,
   maxBufferMs: 60_000,
   bufferForPlaybackMs: 2_500,
   bufferForPlaybackAfterRebufferMs: 5_000,
+  backBufferDurationMs: 60_000,           // 60 s back buffer for VOD seek
+  cacheSizeMB: 200,                       // disk-cache chunks for seek performance
 };
 
 // ─── Stream type detection ────────────────────────────────────────────────────
@@ -195,6 +202,8 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         ref={videoRef}
         source={source}
         style={StyleSheet.absoluteFill}
+
+        // ── Playback ─────────────────────────────────────────────────────────
         paused={paused}
         rate={rate}
         volume={volume}
@@ -204,13 +213,41 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         ignoreSilentSwitch="ignore"
         playInBackground={true}
         playWhenInactive={true}
-        pictureInPicture={pip}
-        useTextureView={true}      // CRITICAL: prevents reload on PiP & layout change
+
+        // ── Media3 / ExoPlayer core ──────────────────────────────────────────
+        // useTextureView CRITICAL: TextureView (vs SurfaceView) allows the
+        // native surface to survive PiP transitions and layout changes without
+        // re-creating the ExoPlayer instance → no rebuffer on PiP or resize.
+        useTextureView={true}
         hideShutterView={true}
+
+        // Media3 buffer configuration (Live vs VOD differ significantly).
         bufferConfig={isLive ? BUFFER_LIVE : BUFFER_VOD}
+
+        // maxBitRate=0 → Media3 adaptive bitrate selection is unlimited;
+        // ExoPlayer picks the highest quality the bandwidth supports.
+        maxBitRate={0}
+
+        // minLoadRetryCount: how many times Media3 retries a failed segment
+        // before surfacing an error. IPTV servers often hiccup — 5 retries
+        // prevents false "Network problem" errors on temporary packet loss.
+        minLoadRetryCount={5}
+
+        // reportBandwidth: Media3 fires this with the measured download speed.
+        // Useful for debugging adaptive stream quality issues in production.
+        reportBandwidth={(bandwidth: number) => {
+          // Uncomment for debugging: console.log(`[Media3] bandwidth ${(bandwidth / 1e6).toFixed(2)} Mbps`);
+        }}
+
+        // ── PiP ──────────────────────────────────────────────────────────────
+        pictureInPicture={pip}
+
+        // ── Track selection (Media3 TrackSelector) ───────────────────────────
         selectedVideoTrack={selectedVideoTrack}
         selectedAudioTrack={selectedAudioTrack}
         selectedTextTrack={selectedTextTrack}
+
+        // ── Callbacks ────────────────────────────────────────────────────────
         onLoadStart={onLoadStart}
         onLoad={onLoad}
         onReadyForDisplay={onReadyForDisplay}
@@ -218,6 +255,10 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         onBuffer={(d: any) => onBuffer(d?.isBuffering ?? false)}
         onError={onError}
         onEnd={onEnd}
+        onBandwidthUpdate={(d: any) => {
+          // Media3 onBandwidthUpdate fires alongside reportBandwidth.
+          // No-op here; hook into if you need adaptive quality UI.
+        }}
         onPictureInPictureStatusChanged={(d: any) => onPipChange(d?.isActive ?? false)}
       />
     );
