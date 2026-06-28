@@ -25,6 +25,7 @@ import {
   useUpcomingMatches,
 } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
+import { AdBanner } from '@/components/AdBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
 
@@ -357,6 +358,9 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+
+        {/* Home Ad Banner */}
+        <AdBanner placement="home_banner" style={{ marginTop: 8 }} />
 
         {/* Live Matches */}
         <SectionHeader title="Live Now Match" dot onSeeAll={() => router.push('/(main)/search')} />

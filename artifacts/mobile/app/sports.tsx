@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLiveMatches, useUpcomingMatches, useMyTeams } from '@/lib/api-hooks';
+import { AdBanner } from '@/components/AdBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -346,6 +347,9 @@ export default function SportsScreen() {
             </View>
           }
         />
+
+        {/* ── Ad Banner (live_banner placement) ────── */}
+        <AdBanner placement="live_banner" />
 
         {/* ── My Teams ─────────────────────────────── */}
         <Text style={styles.sectionTitle}>My Teams</Text>
