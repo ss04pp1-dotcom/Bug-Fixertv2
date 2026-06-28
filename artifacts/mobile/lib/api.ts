@@ -71,7 +71,7 @@ const processQueue = (error: unknown, token: string | null = null) => {
 const apiClient: AxiosInstance = axios.create({
   baseURL: Config.API_BASE,
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', 'X-Client': 'mobile' },
 });
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
@@ -108,7 +108,7 @@ apiClient.interceptors.response.use(
       try {
         const refreshToken = await tokenStorage.getRefreshToken();
         if (!refreshToken) throw new Error('No refresh token');
-        const { data } = await axios.post(`${Config.API_BASE}/auth/refresh`, { refreshToken });
+        const { data } = await axios.post(`${Config.API_BASE}/auth/refresh`, { refreshToken }, { headers: { 'X-Client': 'mobile' } });
         // M-001: Some refresh responses omit a new refreshToken — don't overwrite
         // the stored one with undefined. Fall back to the existing refresh token.
         const { accessToken } = data.data;

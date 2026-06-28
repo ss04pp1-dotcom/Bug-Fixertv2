@@ -26,10 +26,9 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register new user' })
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+  async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
-    // Set refresh token as httpOnly cookie and strip it from the JSON response body.
-    this.setRefreshCookieAndStrip(res, result);
+    this.setRefreshCookieAndStrip(res, result, req);
     return result;
   }
 
@@ -41,7 +40,7 @@ export class AuthController {
     const ip = req.ip || req.socket?.remoteAddress;
     const ua = req.headers['user-agent'];
     const result = await this.authService.login(dto, ip, ua);
-    this.setRefreshCookieAndStrip(res, result);
+    this.setRefreshCookieAndStrip(res, result, req);
     return result;
   }
 
@@ -51,8 +50,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@CurrentUser() user: AuthenticatedUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.refresh(user.id, user.sessionId!);
-    // Refresh token stays in the cookie; only accessToken + user are returned to the client.
-    this.setRefreshCookieAndStrip(res, result);
+    this.setRefreshCookieAndStrip(res, result, req);
     return result;
   }
 
@@ -76,9 +74,9 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('social')
   @ApiOperation({ summary: 'Social login — find or create user from OAuth provider token' })
-  async socialLogin(@Body() dto: SocialLoginDto, @Res({ passthrough: true }) res: Response) {
+  async socialLogin(@Body() dto: SocialLoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.socialLogin(dto);
-    this.setRefreshCookieAndStrip(res, result);
+    this.setRefreshCookieAndStrip(res, result, req);
     return result;
   }
 
@@ -153,12 +151,12 @@ export class AuthController {
   }
 
   /**
-   * Move the refresh token from the service's return envelope into an httpOnly cookie
-   * and remove it from the JSON response body. The mobile/web client reads `accessToken`
-   * from `data.data.accessToken` and the refresh token is sent automatically by the
-   * browser/cookie jar on subsequent /auth/refresh calls.
+   * Move the refresh token from the service's return envelope into an httpOnly cookie.
+   * For mobile clients (X-Client: mobile header), also keep it in the response body
+   * because React Native's HTTP client does not persist cookies between requests.
+   * For web/admin clients the token is stripped from the body after setting the cookie.
    */
-  private setRefreshCookieAndStrip(res: Response, result: { accessToken: string; refreshToken?: string }): void {
+  private setRefreshCookieAndStrip(res: Response, result: { accessToken: string; refreshToken?: string }, req?: Request): void {
     const isProd = process.env.NODE_ENV === 'production';
     if (result.refreshToken) {
       res.cookie('streampro_refresh_token', result.refreshToken, {
@@ -168,8 +166,12 @@ export class AuthController {
         path: '/',
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
-      // Critical: never expose the refresh token in the response body.
-      delete result.refreshToken;
+      // Mobile clients cannot use cookies — keep refreshToken in the body.
+      // Web/admin clients get it stripped (cookie-only) for XSS safety.
+      const isMobile = req?.headers?.['x-client'] === 'mobile';
+      if (!isMobile) {
+        delete result.refreshToken;
+      }
     }
   }
 }
