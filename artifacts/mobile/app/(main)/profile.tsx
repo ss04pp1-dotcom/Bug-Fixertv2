@@ -76,8 +76,10 @@ export default function ProfileScreen() {
   const planName = subData?.plan?.name || user?.plan || 'Free';
   const isPremium = planName?.toLowerCase() !== 'free';
 
+  // M-047: filter empty segments so a double-space in the name doesn't produce
+  // undefined characters; fall back to 'U' when displayName is empty.
   const initials = displayName
-    ? displayName.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2)
+    ? displayName.split(' ').filter((p: string) => p.length > 0).map((p: string) => p[0]).join('').toUpperCase().slice(0, 2) || 'U'
     : 'U';
 
   const handleLogout = useCallback(() => {

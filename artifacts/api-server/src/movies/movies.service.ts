@@ -15,7 +15,8 @@ export class MoviesService {
     if (search) where.title = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.genre) where.category = { name: { contains: query.genre, mode: 'insensitive' } };
-    if (query.isPremium !== undefined) where.isPremium = query.isPremium === 'true';
+    // HTTP query params arrive as strings even when typed as boolean; cast first.
+    if (query.isPremium !== undefined) where.isPremium = String(query.isPremium) === 'true';
 
     const [data, total] = await Promise.all([
       this.prisma.movie.findMany({

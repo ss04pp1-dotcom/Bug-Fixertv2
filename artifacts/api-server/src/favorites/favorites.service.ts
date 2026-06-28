@@ -1,5 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-import { Prisma, PrismaClientKnownRequestError } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+// PrismaClientKnownRequestError lives in the runtime package in Prisma 5+
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

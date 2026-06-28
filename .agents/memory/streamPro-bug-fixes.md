@@ -57,6 +57,44 @@ description: All bugs found and fixed across the StreamPro monorepo (API, admin,
 
 **Key insight:** NestJS `ValidationPipe({ whitelist: true })` silently strips any DTO property that lacks a class-validator decorator. This is especially dangerous for fields typed as `unknown`/`any` where you intentionally skip validation. Always add `@Allow()` to pass-through fields.
 
-**Why admin dropdowns were empty:** Admin sports page calls `GET /v1/sports/teams` and `GET /v1/sports/tournaments` expecting `{ data: [...] }` (to match the `extractData` utility which reads `res.data.data`). The service returned a raw array, so `data` was `undefined` → Select options were empty.
+## Zip merge + remaining bug fixes (session 3)
 
-**Why health_check_mode save failed:** The setting key may not have existed yet (first save = CREATE path). With `value` stripped by whitelist, Prisma tried to INSERT with `value = undefined` which violates the NOT NULL constraint. General settings save appeared to work only because those keys already existed (UPDATE path ignores undefined fields silently).
+~96/218 bugs fixed in the user-uploaded zip; remaining ~122 verified/fixed below.
+
+### Mobile
+| Bug | File | Fix |
+|-----|------|-----|
+| M-012 | splash.tsx | Capture `glowLoop = RNAnimated.loop(...)`, call `glowLoop.stop()` in cleanup alongside `clearTimeout(timer)` |
+| M-047 | profile.tsx | `.filter((p) => p.length > 0)` before mapping to first char — prevents undefined initials from empty name segments |
+
+### API Server TS errors fixed (pre-existing in zip — `tsc --noEmit` 0 errors after)
+| File | Error | Fix |
+|------|-------|-----|
+| favorites.service.ts | `PrismaClientKnownRequestError` not exported from `@prisma/client` | Import from `@prisma/client/runtime/library` |
+| favorites.controller.ts | Inline `{ channelId?, movieId?, seriesId? }` body type (A-054) | New `ModifyFavoriteDto` with `@IsUUID()` validation |
+| channels.service.ts | `isPremium/isFeatured === 'true'` boolean-vs-string | `String(query.isPremium) === 'true'` |
+| channels.service.ts | `healthStatus`, `lastCheckedAt`, `lastSuccessAt`, `lastFailureAt`, `failureReason` not in ChannelServer schema | Removed from select |
+| channels.service.ts | `channel.servers` not typed on findFirst result | Cast channel to `any` |
+| channels/dto/update-overrides.dto.ts | DTO had `cookie/userAgent/referer/origin` but service expects `adminNameOverride/adminLogoOverride/adminCategoryIdOverride` | Rewrote DTO with correct channel admin override fields |
+| github-sync.service.ts | `prisma.githubSource` wrong (model is `GitHubSource`) | Changed to `prisma.gitHubSource` |
+| movies.service.ts | `isPremium === 'true'` boolean-vs-string | `String(query.isPremium) === 'true'` |
+| movies.service.ts | `subscriptionEndsAt` not on `AuthenticatedUser` | Added `subscriptionEndsAt?: Date \| string \| null` to interface |
+| search.service.ts | `userId_query` compound unique not in stale Prisma client | Replaced `upsert` with manual `findFirst + update/create` |
+
+### Admin
+| Bug | Fix |
+|-----|-----|
+| D-051 | Deleted `components/layout/TopHeader.tsx` (deprecated, never imported) |
+| A-062 | Deleted `websocket/ws-jwt.guard.ts` (dead code — gateway handles JWT inline) |
+
+### Libs
+| Bug | Fix |
+|-----|-----|
+| L-018 | `chmod +x scripts/post-merge.sh scripts/start-api-server.sh` |
+
+## Key gotchas discovered
+
+- **ChannelServer schema** does NOT have `healthStatus`, `lastCheckedAt`, `lastSuccessAt`, `lastFailureAt`, `failureReason` — selecting them crashes tsc.
+- **Prisma client must be regenerated** after schema changes. The `@@unique([userId, query])` on SearchHistory was in schema but client was stale → `userId_query` compound accessor missing → workaround with `findFirst + update/create`.
+- **`gitHubSource` not `githubSource`** — Prisma camelCases from model name `GitHubSource`.
+- **API server startup** requires `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` env vars — fails silently if missing (check `.env` or Replit secrets panel).

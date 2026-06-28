@@ -23,8 +23,9 @@ export class ChannelsService {
     const where: Prisma.ChannelWhereInput = { deletedAt: null };
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.isPremium !== undefined) where.isPremium = query.isPremium === 'true';
-    if (query.isFeatured !== undefined) where.isFeatured = query.isFeatured === 'true';
+    // HTTP query params arrive as strings even when typed as boolean; cast first.
+    if (query.isPremium !== undefined) where.isPremium = String(query.isPremium) === 'true';
+    if (query.isFeatured !== undefined) where.isFeatured = String(query.isFeatured) === 'true';
 
     const [data, total] = await Promise.all([
       this.prisma.channel.findMany({
@@ -60,11 +61,6 @@ export class ChannelsService {
             enabled: true,
             sourceType: true,
             healthCheckEnabled: true,
-            healthStatus: true,
-            lastCheckedAt: true,
-            lastSuccessAt: true,
-            lastFailureAt: true,
-            failureReason: true,
             createdBySync: true,
             githubSourceId: true,
             githubSource: { select: { id: true, name: true } },
@@ -78,7 +74,7 @@ export class ChannelsService {
 
     // Public path: do NOT compute cookie expiry because we no longer select the cookie value.
     // (cookieExpired defaults to false; the player doesn't need this signal on the public path.)
-    const servers = channel.servers.map((srv: any) => ({
+    const servers = (channel as any).servers.map((srv: any) => ({
       ...srv,
       cookieExpired: false,
       cookieExpiresAt: null,

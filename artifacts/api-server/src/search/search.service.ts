@@ -30,11 +30,19 @@ export class SearchService {
       // bump `createdAt` (most-recent-first ordering) instead of spawning duplicate
       // rows that pollute the user's search history. Requires @@unique([userId, query])
       // on SearchHistory (added in schema).
-      await this.prisma.searchHistory.upsert({
-        where: { userId_query: { userId, query: q } },
-        create: { userId, query: q },
-        update: { createdAt: new Date() },
-      }).catch((e: Error) => this.logger.warn(`Search history upsert failed for user ${userId}: ${e.message}`));
+      // A-060: upsert-via-create-or-update so repeat searches bump createdAt
+      // instead of spawning duplicate rows. Uses try/catch on create to handle
+      // concurrent duplicate inserts gracefully (P2002 unique constraint).
+      const existing = await this.prisma.searchHistory.findFirst({ where: { userId, query: q } });
+      if (existing) {
+        await this.prisma.searchHistory.update({
+          where: { id: existing.id },
+          data: { createdAt: new Date() },
+        }).catch((e: Error) => this.logger.warn(`Search history update failed for user ${userId}: ${e.message}`));
+      } else {
+        await this.prisma.searchHistory.create({ data: { userId, query: q } })
+          .catch((e: Error) => this.logger.warn(`Search history create failed for user ${userId}: ${e.message}`));
+      }
     }
 
     return { channels, movies, series, query: q };

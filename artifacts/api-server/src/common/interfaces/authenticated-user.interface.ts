@@ -13,6 +13,8 @@ export interface AuthenticatedUser {
   avatar: string | null;
   country: string | null;
   language: string;
+  // movies.service.ts uses subscriptionEndsAt to gate premium stream access
+  subscriptionEndsAt?: Date | string | null;
   sessionId?: string;
   refreshToken?: string;
 }

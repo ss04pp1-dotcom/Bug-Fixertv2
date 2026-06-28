@@ -34,12 +34,15 @@ export default function SplashScreenComponent() {
       }),
     ]).start();
 
-    RNAnimated.loop(
+    // M-012: capture the loop handle so it can be stopped on unmount — prevents the
+    // animation from running after the component is gone (memory leak + React warning).
+    const glowLoop = RNAnimated.loop(
       RNAnimated.sequence([
         RNAnimated.timing(glowOpacity, { toValue: 1, duration: 1000, useNativeDriver: true }),
         RNAnimated.timing(glowOpacity, { toValue: 0.3, duration: 1000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    glowLoop.start();
 
     const timer = setTimeout(async () => {
       try {
@@ -61,7 +64,7 @@ export default function SplashScreenComponent() {
       }
     }, 2000);
 
-    return () => clearTimeout(timer);
+    return () => { glowLoop.stop(); clearTimeout(timer); };
   }, []);
 
   return (

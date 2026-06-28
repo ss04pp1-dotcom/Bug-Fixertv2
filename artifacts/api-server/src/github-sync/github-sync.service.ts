@@ -70,7 +70,7 @@ export class GitHubSyncService implements OnModuleInit {
     // the scheduler refuses to re-sync them (see `if (source.isSyncing)` guard in sync()).
     // This must run BEFORE deduplication so the scheduler sees a clean state on startup.
     try {
-      const cleared = await this.prisma.githubSource.updateMany({
+      const cleared = await this.prisma.gitHubSource.updateMany({
         where: { isSyncing: true },
         data: { isSyncing: false, syncStartedAt: null },
       });

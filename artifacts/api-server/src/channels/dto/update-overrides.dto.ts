@@ -1,24 +1,27 @@
 import { IsString, IsOptional } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
+// Admin-override fields for a GitHub-synced channel.
+// Lets admins rename, re-logo, or re-categorise a channel without
+// touching the underlying GitHub source record.
 export class UpdateOverridesDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Override the channel display name' })
   @IsOptional()
   @IsString()
-  cookie?: string;
+  adminNameOverride?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Override the channel logo URL' })
   @IsOptional()
   @IsString()
-  userAgent?: string;
+  adminLogoOverride?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Override the assigned category ID' })
   @IsOptional()
   @IsString()
-  referer?: string;
+  adminCategoryIdOverride?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Alias for adminCategoryIdOverride (shorthand)' })
   @IsOptional()
   @IsString()
-  origin?: string;
+  categoryId?: string | null;
 }
