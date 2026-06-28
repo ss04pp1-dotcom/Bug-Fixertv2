@@ -1,21 +1,27 @@
 /**
  * withPipSupport — Expo config plugin
  *
- * Configures AndroidManifest.xml for Picture-in-Picture support:
- *   - android:supportsPictureInPicture="true"   (API 24+)
- *   - android:autoEnterPictureInPicture="true"  (API 31+ — Android 12 auto-PiP)
- *   - android:resizeableActivity="true"         (required pre-API 31)
- *   - android:configChanges additions           (prevent activity restart on PiP resize)
- *   - tools:targetApi="31" on MainActivity     (suppress AAPT2 error for API-31
- *                                               attributes when minSdkVersion < 31)
- *   - xmlns:tools namespace on <manifest>       (required for tools:targetApi)
+ * Configures AndroidManifest.xml for Picture-in-Picture support.
  *
- * Why tools:targetApi is required:
- *   AAPT2 validates every attribute against the minSdkVersion of the build.
- *   android:autoEnterPictureInPicture did not exist before API 31, so AAPT
- *   throws "attribute not found" for minSdkVersion=24 builds unless the
- *   element is tagged with tools:targetApi="31", which tells AAPT the
- *   attribute is intentionally used on API 31+ only.
+ * NOTE — android:autoEnterPictureInPicture is intentionally NOT set here.
+ * That attribute requires API 31 and causes AAPT2 to hard-fail on
+ * minSdkVersion=24 builds even with compileSdk=35, because AAPT validates
+ * attributes against minSdkVersion at resource-link time.
+ *
+ * The tools:targetApi="31" workaround relies on xml2js correctly serializing
+ * prefixed attributes through expo's withAndroidManifest, which is not
+ * guaranteed across EAS build environments.
+ *
+ * Functional equivalence is achieved via the AppState 'background' listener
+ * in GlobalVideoPlayer.tsx, which calls setPip(true) programmatically when
+ * the app goes to background — the same result as the OS auto-enter flag,
+ * with no manifest attribute needed.
+ *
+ * Attributes applied:
+ *   android:supportsPictureInPicture="true"   — enables PiP (API 24+)
+ *   android:resizeableActivity="true"          — required pre-API 31
+ *   android:configChanges (additions)          — no restart on PiP resize
+ *   android:launchMode="singleTask"            — keeps activity alive
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
@@ -23,13 +29,7 @@ module.exports = function withPipSupport(config) {
   return withAndroidManifest(config, async (config) => {
     const manifest = config.modResults;
 
-    // ── 1. Ensure xmlns:tools is declared on the root <manifest> element ──────
-    // tools:targetApi requires this namespace; AAPT ignores it at runtime.
-    if (!manifest.manifest.$['xmlns:tools']) {
-      manifest.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
-    }
-
-    // ── 2. Locate MainActivity ────────────────────────────────────────────────
+    // ── Locate MainActivity ───────────────────────────────────────────────────
     const mainActivity = manifest.manifest.application[0].activity.find(
       (act) => act.$['android:name'] === '.MainActivity'
     );
@@ -37,25 +37,20 @@ module.exports = function withPipSupport(config) {
       throw new Error('withPipSupport: MainActivity not found in AndroidManifest');
     }
 
-    // ── 3. PiP feature flags ──────────────────────────────────────────────────
-    // supportsPictureInPicture — available API 24+, safe unconditionally
+    // ── PiP feature flags ─────────────────────────────────────────────────────
+    // supportsPictureInPicture — safe on API 24+, no AAPT restriction
     mainActivity.$['android:supportsPictureInPicture'] = 'true';
 
-    // resizeableActivity — required for pre-API 31 PiP (split-screen / freeform)
+    // resizeableActivity — required for split-screen / freeform windowing
+    // (needed by PiP on pre-API 31 devices)
     mainActivity.$['android:resizeableActivity'] = 'true';
 
-    // autoEnterPictureInPicture — Android 12 (API 31) only.
-    // AAPT2 would reject this attribute for minSdkVersion < 31 without
-    // tools:targetApi below.  At runtime on older devices the attribute is
-    // simply ignored by the OS.
-    mainActivity.$['android:autoEnterPictureInPicture'] = 'true';
+    // DO NOT SET android:autoEnterPictureInPicture here.
+    // It requires API 31 and AAPT rejects it for minSdkVersion=24.
+    // The AppState 'background' listener in GlobalVideoPlayer.tsx handles
+    // this programmatically via setPip(true) on every Android version.
 
-    // ── 4. tools:targetApi — suppress the AAPT2 "attribute not found" error ──
-    // Tells AAPT this activity element intentionally uses API-31 attributes.
-    // Has zero effect at runtime; stripped before the final APK/AAB is built.
-    mainActivity.$['tools:targetApi'] = '31';
-
-    // ── 5. configChanges — prevent activity restart on PiP resize ─────────────
+    // ── configChanges — prevent activity restart on PiP resize ───────────────
     const required = [
       'screenSize',
       'smallestScreenSize',
@@ -72,7 +67,7 @@ module.exports = function withPipSupport(config) {
     });
     mainActivity.$['android:configChanges'] = current.join('|');
 
-    // ── 6. Launch mode — keep activity alive across PiP transitions ───────────
+    // ── Launch mode — keep activity alive across PiP transitions ─────────────
     mainActivity.$['android:launchMode'] =
       mainActivity.$['android:launchMode'] || 'singleTask';
 
