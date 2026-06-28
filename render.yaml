@@ -8,7 +8,12 @@ services:
     # Migrations should be run via a pre-deploy hook using `prisma migrate deploy`
     # with the DIRECT_URL env var set to the direct (port 5432) connection string.
     buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
-    startCommand: node artifacts/api-server/dist/main.js
+    # keep-alive.mjs runs as a background process alongside the API server.
+    # It pings APP_URL/healthz every 8 min via Render's public load balancer,
+    # which counts as incoming traffic — preventing the free-tier sleep timer.
+    # The GitHub sync scheduler (*/5 min) then fires continuously server-side
+    # regardless of whether any browser or admin panel is open.
+    startCommand: node tools/keep-alive.mjs & node artifacts/api-server/dist/main.js
     healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
