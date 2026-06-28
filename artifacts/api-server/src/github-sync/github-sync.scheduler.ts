@@ -55,13 +55,26 @@ export class GitHubSyncScheduler implements OnApplicationBootstrap {
       return;
     }
 
+    // Include sources that are either:
+    //  (a) not currently syncing, OR
+    //  (b) syncing but with a stale lock (started > 10 min ago — process likely crashed).
+    // Without (b), a crashed mid-sync source is permanently skipped until server restart.
+    const staleCutoff = new Date(Date.now() - 10 * 60 * 1000);
     const sources = await this.prisma.gitHubSource.findMany({
-      where: { enabled: true, isSyncing: false },
+      where: {
+        enabled: true,
+        OR: [
+          { isSyncing: false },
+          { isSyncing: true, syncStartedAt: { lt: staleCutoff } },
+        ],
+      },
       select: { id: true, name: true, syncIntervalMinutes: true, lastSyncAt: true },
     });
 
     for (const source of sources) {
-      const intervalMs = source.syncIntervalMinutes * 60 * 1000;
+      // Guard against 0 / null interval values that would create a NaN or tight-loop.
+      const intervalMinutes = Math.max(1, source.syncIntervalMinutes ?? 10);
+      const intervalMs = intervalMinutes * 60 * 1000;
       const lastSync = source.lastSyncAt?.getTime() ?? 0;
       const due = Date.now() - lastSync >= intervalMs;
 
