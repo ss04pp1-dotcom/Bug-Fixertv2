@@ -8,7 +8,8 @@
  *   2. Calls useGlobalPlayer.open({...}) to load it into the singleton
  *   3. Shows related channels + info below
  *
- * Back button → player enters MINI mode (no reload, no rebuffer).
+ * Back button → player enters native PiP (no reload, no rebuffer).
+ * Mini mode has been fully removed — native OS PiP is used everywhere.
  */
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {

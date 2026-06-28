@@ -848,15 +848,18 @@ export default function GlobalVideoPlayer() {
     const sub = AppState.addEventListener('change', (nextState) => {
       const st = useGlobalPlayer.getState();
 
-      if ((nextState === 'background' || nextState === 'inactive') && st.isPlaying && !pipActive) {
-        // App going to background while playing — trigger PiP automatically
+      // ONLY trigger on 'background', NOT 'inactive'.
+      // On iOS, 'inactive' fires when the user swipes down the notification
+      // center or control center — we must NOT start PiP in that case.
+      // On Android, home/recent-apps goes directly to 'background'.
+      if (nextState === 'background' && st.isPlaying && !pipActive) {
         prePipModeRef.current = st.mode as PlayerMode;
         autoPipRef.current = true;
         setPip(true);
       }
 
       if (nextState === 'active' && autoPipRef.current) {
-        // User came back to the app — exit auto-PiP and restore mode
+        // User returned to the app without expanding PiP — exit PiP
         autoPipRef.current = false;
         setPip(false);
       }
@@ -1048,19 +1051,23 @@ export default function GlobalVideoPlayer() {
     }
   }, [mode, lockLandscape, unlockOrientation]);
 
-  // ── Don't render if hidden ───────────────────────────────────────────────
-  if (mode === 'hidden') return null;
+  // ── Safety: redirect stale 'mini' mode → 'top' via useEffect ────────────
+  // enterMini() in the store already redirects to 'top', but as a belt-and-
+  // suspenders guard we also handle it here WITHOUT calling a state setter
+  // during the render phase (which is a React anti-pattern / strict-mode
+  // violation that can trigger double-invocations).
+  useEffect(() => {
+    if (mode === 'mini') {
+      useGlobalPlayer.getState().enterTop();
+    }
+  }, [mode]);
+
+  // ── Don't render if hidden or mini (mini redirects via effect above) ─────
+  if (mode === 'hidden' || mode === 'mini') return null;
 
   // ── Computed ─────────────────────────────────────────────────────────────
   const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
   const isLiveNow  = isLive && duration === 0;
-
-  // Mini mode has been replaced by native PiP — no mini render needed.
-  // If somehow mode === 'mini', redirect to top so the player is visible.
-  if (mode === 'mini') {
-    useGlobalPlayer.getState().enterTop();
-    return null;
-  }
 
   // ═════════════════════════════════════════════════════════════════════════
   // TOP MODE  (video at top of screen, related channels visible below)
