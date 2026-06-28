@@ -66,8 +66,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       isPlaying: true,
     }),
 
-  // Mini mode is replaced by native PiP — enterMini now goes to top mode.
-  enterMini: () => set({ mode: 'top' }),
+  enterMini: () => set({ mode: 'mini' }),
   enterTop: () => set({ mode: 'top' }),
   expand: () => set({ mode: 'fullscreen' }),
   hide: () =>

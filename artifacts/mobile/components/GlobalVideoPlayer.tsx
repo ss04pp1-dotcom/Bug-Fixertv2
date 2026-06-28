@@ -410,7 +410,7 @@ export default function GlobalVideoPlayer() {
   const { width: SW, height: SH } = Dimensions.get('window');
   const {
     mode, sources, srcIdx, title, logo, contentId, contentType, isLive,
-    isPlaying, enterTop, hide, setPlaying, setSrcIdx,
+    isPlaying, enterTop, enterMini, hide, setPlaying, setSrcIdx,
   } = useGlobalPlayer();
 
   // ── Landscape / Orientation ──────────────────────────────────────────────
@@ -888,9 +888,9 @@ export default function GlobalVideoPlayer() {
         return true;
       }
       if (mode === 'top') {
-        // Top mode → trigger native PiP, allow natural back navigation
-        setPip(true);
-        return false;
+        // Top mode → shrink to in-app mini player, let nav go back
+        enterMini();
+        return true;
       }
       return false;
     });
@@ -1059,23 +1059,143 @@ export default function GlobalVideoPlayer() {
     }
   }, [mode, lockLandscape, unlockOrientation]);
 
-  // ── Safety: redirect stale 'mini' mode → 'top' via useEffect ────────────
-  // enterMini() in the store already redirects to 'top', but as a belt-and-
-  // suspenders guard we also handle it here WITHOUT calling a state setter
-  // during the render phase (which is a React anti-pattern / strict-mode
-  // violation that can trigger double-invocations).
+  // ── Mini mode enter/exit animation ──────────────────────────────────────
   useEffect(() => {
     if (mode === 'mini') {
-      useGlobalPlayer.getState().enterTop();
+      posX.value = SNAP_RIGHT;
+      posY.value = SH * 0.55;
+      sx.value   = SNAP_RIGHT;
+      sy.value   = SH * 0.55;
+      miniScale.value = withSpring(1, { damping: 20, stiffness: 260 });
+      miniOpac.value  = withTiming(1, { duration: 200 });
+    } else {
+      miniScale.value = 0;
+      miniOpac.value  = 0;
     }
   }, [mode]);
 
-  // ── Don't render if hidden or mini (mini redirects via effect above) ─────
-  if (mode === 'hidden' || mode === 'mini') return null;
+  if (mode === 'hidden') return null;
 
   // ── Computed ─────────────────────────────────────────────────────────────
   const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
   const isLiveNow  = isLive && duration === 0;
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // MINI MODE — In-app floating draggable player (browse while watching)
+  // Triggered by back press inside the app. NOT native PiP.
+  // Native PiP is only used when the app goes to background (Home/Recent).
+  // ═════════════════════════════════════════════════════════════════════════
+  if (mode === 'mini') {
+    return (
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[g.miniRoot, miniAnimStyle]}>
+
+          {/* ── Video surface ─────────────────────────────────────────────── */}
+          <View style={g.miniVideo}>
+            {nativeSource && (
+              <NativeIPTVPlayer
+                key={`v-${videoKey}`}
+                source={nativeSource}
+                paused={!isPlaying}
+                rate={1}
+                volume={videoVolume}
+                resizeMode="cover"
+                pip={false}
+                isLive={isLive}
+                videoRef={videoRef}
+                selectedVideoTrack={selectedVideoTrack}
+                selectedAudioTrack={selectedAudioTrack}
+                selectedTextTrack={selectedTextTrack}
+                onLoadStart={() => { setBuffering(true); setReady(false); }}
+                onLoad={handleLoad}
+                onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
+                onProgress={(d) => {
+                  currentTimeRef.current = d.currentTime;
+                  if (d.seekableDuration > 0) {
+                    setDuration(d.seekableDuration);
+                    durationRef.current = d.seekableDuration;
+                  }
+                }}
+                onBuffer={setBuffering}
+                onError={handleError}
+                onEnd={() => { setEnded(true); setPlaying(false); }}
+                onVideoTracks={setVideoTracks}
+                onAudioTracks={setAudioTracks}
+                onTextTracks={setTextTracks}
+                onPipChange={(active) => {
+                  setPipActive(active);
+                  setPip(active);
+                  if (!active) enterTop();
+                }}
+              />
+            )}
+
+            {/* LIVE badge */}
+            {isLive && (
+              <View style={g.miniLive} pointerEvents="none">
+                <View style={g.miniLiveDot} />
+                <Text style={g.miniLiveTxt}>LIVE</Text>
+              </View>
+            )}
+
+            {/* Tap area — toggle controls */}
+            <TouchableOpacity
+              activeOpacity={1}
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowCtrl(v => !v)}
+            >
+              {showCtrl && (
+                <View style={g.miniOverlay}>
+                  {/* Close × */}
+                  <TouchableOpacity
+                    style={g.miniClose}
+                    onPress={hide}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </TouchableOpacity>
+
+                  {/* Center: play/pause + expand */}
+                  <View style={g.miniCenter}>
+                    <TouchableOpacity
+                      style={g.miniBtn}
+                      onPress={() => setPlaying(!isPlaying)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={g.miniBtn}
+                      onPress={enterTop}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="expand-outline" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Title bar ─────────────────────────────────────────────────── */}
+          <View style={g.miniTitle}>
+            <Text style={g.miniTitleTxt} numberOfLines={1}>{title}</Text>
+            <TouchableOpacity
+              onPress={() => setPlaying(!isPlaying)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={isPlaying ? 'pause' : 'play'}
+                size={14}
+                color="rgba(255,255,255,0.78)"
+              />
+            </TouchableOpacity>
+          </View>
+
+        </Animated.View>
+      </GestureDetector>
+    );
+  }
 
   // ═════════════════════════════════════════════════════════════════════════
   // TOP MODE  (video at top of screen, related channels visible below)
@@ -1181,7 +1301,7 @@ export default function GlobalVideoPlayer() {
 
             {/* Top bar */}
             <View style={[g.topBar, { paddingTop: 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={() => { setPip(true); }}>
+              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
                 <Ionicons name="arrow-back" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
