@@ -150,11 +150,14 @@ export default function HomeScreen() {
     if (!continueData || !Array.isArray(continueData)) return [];
     return continueData.slice(0, 6).map((c: any, i: number) => ({
       id: c.id || String(i),
-      title: c.title || c.movie?.title || '',
+      title: c.title || c.movie?.title || c.series?.title || '',
       sub: c.remainingTime || '',
       prog: c.progress || 0,
       thumb: c.thumbnailUrl || c.poster || '',
-      contentId: c.contentId || c.movieId || c.id,
+      contentId: c.contentId || c.movieId || c.seriesId || c.id,
+      // M-013: derive type from the foreign-key that is set; default to 'movie'
+      // so the player opens the correct detail screen.
+      contentType: (c.seriesId || c.episodeId || c.series) ? 'series' : 'movie',
     }));
   }, [continueData]);
 
@@ -433,7 +436,7 @@ export default function HomeScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
               {continueItems.map((item) => (
                 <Pressable key={item.id} style={s.continueCard}
-                  onPress={() => router.push(`/player/${item.contentId || item.id}?type=movie&title=${encodeURIComponent(item.title)}`)}>
+                  onPress={() => router.push(`/player/${item.contentId || item.id}?type=${item.contentType || 'movie'}&title=${encodeURIComponent(item.title)}`)}>
                   {item.thumb ? (
                     <Image source={{ uri: Config.imageUrl(item.thumb) }} style={s.continueBg} resizeMode="cover" />
                   ) : (

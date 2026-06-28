@@ -5,8 +5,10 @@
  * StreamPro — Enterprise TV Streaming Platform API
  * OpenAPI spec version: 1.0.0
  */
-import type { HealthStatusStatus } from './healthStatusStatus';
+import type { VerifyOtpBodyType } from './verifyOtpBodyType';
 
-export interface HealthStatus {
-  status: HealthStatusStatus;
-}
+export type VerifyOtpBody = {
+  identifier: string;
+  code: string;
+  type: VerifyOtpBodyType;
+};

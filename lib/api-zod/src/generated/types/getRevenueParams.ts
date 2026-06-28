@@ -5,8 +5,8 @@
  * StreamPro — Enterprise TV Streaming Platform API
  * OpenAPI spec version: 1.0.0
  */
-import type { HealthStatusStatus } from './healthStatusStatus';
+import type { GetRevenuePeriod } from './getRevenuePeriod';
 
-export interface HealthStatus {
-  status: HealthStatusStatus;
-}
+export type GetRevenueParams = {
+period?: GetRevenuePeriod;
+};

@@ -5,8 +5,11 @@
  * StreamPro — Enterprise TV Streaming Platform API
  * OpenAPI spec version: 1.0.0
  */
-import type { HealthStatusStatus } from './healthStatusStatus';
 
-export interface HealthStatus {
-  status: HealthStatusStatus;
+export interface LoginDto {
+  identifier: string;
+  password: string;
+  deviceName?: string;
+  deviceType?: string;
+  platform?: string;
 }

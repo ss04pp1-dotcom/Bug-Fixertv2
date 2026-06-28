@@ -125,7 +125,21 @@ export class StorageController {
   @UseGuards(RolesGuard) @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Delete file from Cloudflare R2' })
   async delete(@Param('key') key: string) {
-    await this.storageService.delete(key);
-    return { message: 'File deleted', key };
+    // A-033: restrict deletions to paths under known upload folders so an
+    // admin cannot delete arbitrary S3 objects by crafting a path like
+    // "../../other-bucket-key" or "config/sensitive-file".
+    const ALLOWED_PREFIXES: UploadFolder[] = [
+      'avatars', 'logos', 'banners', 'posters', 'categories', 'ads', 'uploads',
+    ];
+    const normalised = key.replace(/\\/g, '/').replace(/^\/+/, '');
+    const isAllowed = ALLOWED_PREFIXES.some(prefix => normalised.startsWith(`${prefix}/`));
+    if (!isAllowed) {
+      throw new BadRequestException(
+        `Delete rejected: key must start with one of [${ALLOWED_PREFIXES.join(', ')}]. ` +
+        `Got: "${normalised}"`,
+      );
+    }
+    await this.storageService.delete(normalised);
+    return { message: 'File deleted', key: normalised };
   }
 }

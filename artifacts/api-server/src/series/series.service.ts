@@ -104,6 +104,8 @@ export class SeriesService {
   }
 
   async findRelated(id: string, limit = 10) {
+    // A-057: cap the limit so callers cannot request an unbounded result set.
+    const safeLimit = Math.min(parseInt(String(limit)) || 10, 50);
     const series = await this.findOne(id);
 
     const where: Prisma.SeriesWhereInput = {
@@ -123,10 +125,10 @@ export class SeriesService {
         _count: { select: { seasons: true } },
       },
       orderBy: { viewCount: 'desc' },
-      take: limit,
+      take: safeLimit,
     });
 
-    if (related.length < limit) {
+    if (related.length < safeLimit) {
       const existingIds = [series.id, ...related.map(r => r.id)];
       const fallback = await this.prisma.series.findMany({
         where: { id: { notIn: existingIds }, isActive: true, deletedAt: null },
@@ -135,7 +137,7 @@ export class SeriesService {
           _count: { select: { seasons: true } },
         },
         orderBy: { viewCount: 'desc' },
-        take: limit - related.length,
+        take: safeLimit - related.length,
       });
       return [...related, ...fallback];
     }

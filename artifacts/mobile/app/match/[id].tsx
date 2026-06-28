@@ -147,7 +147,17 @@ export default function MatchDetailScreen() {
             <Ionicons name="chevron-back" size={28} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{headerTitle}</Text>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7} onPress={() => id && toggleAlert.mutate(id)}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            activeOpacity={0.7}
+            onPress={() => id && toggleAlert.mutate({
+              matchId: id as string,
+              // M-048: pass the correct action so the hook issues DELETE for
+              // removal (instead of always POST). The hook already invalidates
+              // ['sports','match',matchId] on success so the icon updates.
+              action: match?.isAlertSet ? 'remove' : 'add',
+            })}
+          >
             <Ionicons name={match?.isAlertSet ? 'notifications' : 'notifications-outline'} size={22} color={match?.isAlertSet ? colors.primary : colors.text} />
           </TouchableOpacity>
         </View>
