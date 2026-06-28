@@ -50,6 +50,16 @@ export class SportsController {
   }
 
   @Roles('super_admin', 'admin')
+  @Put('sports/:id')
+  @ApiOperation({ summary: 'Update a sport type' })
+  updateSportType(
+    @Param('id') id: string,
+    @Body() body: { name?: string; slug?: string; icon?: string },
+  ) {
+    return this.sportsService.updateSport(id, body);
+  }
+
+  @Roles('super_admin', 'admin')
   @Delete('sports/:id')
   @ApiOperation({ summary: 'Delete a sport type' })
   removeSportType(@Param('id') id: string) {

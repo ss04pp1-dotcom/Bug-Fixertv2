@@ -157,6 +157,7 @@ function MatchesTab() {
   const { data: channelsData } = useApi<{ data: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[] }>("/v1/channels?limit=500&isActive=true");
   const { call, loading: actionLoading } = useApiCallState();
 
+  const channels = channelsData?.data ?? [];
   const matches = data?.data ?? [];
   const sports = sportsData?.data ?? [];
   const tournaments = tournamentsData?.data ?? [];
@@ -488,6 +489,23 @@ function MatchesTab() {
           <ModalField label="Venue">
             <input ref={venueRef} className={inputClass} placeholder="Stadium / venue name" />
           </ModalField>
+          <ModalField label="Pick Channel (auto-fills Stream URL)">
+            <div className="relative">
+              <select
+                className={cn(inputClass, "appearance-none cursor-pointer")}
+                onChange={e => {
+                  const ch = channels.find((c: any) => c.id === e.target.value);
+                  if (ch && streamUrlRef.current) {
+                    streamUrlRef.current.value = ch.primaryStreamUrl || ch.streamUrl || "";
+                  }
+                }}
+              >
+                <option value="">— Select channel (optional) —</option>
+                {channels.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+            </div>
+          </ModalField>
           <ModalField label="Stream URL">
             <input ref={streamUrlRef} className={inputClass} placeholder="https://example.com/stream.m3u8" />
           </ModalField>
@@ -572,6 +590,23 @@ function MatchesTab() {
           </ModalField>
           <ModalField label="Venue">
             <input ref={editVenueRef} defaultValue={editItem.venue ?? ""} className={inputClass} />
+          </ModalField>
+          <ModalField label="Pick Channel (auto-fills Stream URL)">
+            <div className="relative">
+              <select
+                className={cn(inputClass, "appearance-none cursor-pointer")}
+                onChange={e => {
+                  const ch = channels.find((c: any) => c.id === e.target.value);
+                  if (ch && editStreamUrlRef.current) {
+                    editStreamUrlRef.current.value = ch.primaryStreamUrl || ch.streamUrl || "";
+                  }
+                }}
+              >
+                <option value="">— Select channel (optional) —</option>
+                {channels.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+            </div>
           </ModalField>
           <ModalField label="Stream URL">
             <input ref={editStreamUrlRef} defaultValue={editItem.streamUrl ?? ""} className={inputClass} />
@@ -1294,6 +1329,213 @@ function TournamentsTab() {
           <ModalFooter
             cancelLabel="Cancel"
             submitLabel={submitting ? "Saving..." : "Update Tournament"}
+            submitting={submitting}
+            onCancel={() => setEditItem(null)}
+            onSubmit={handleUpdate}
+          />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SPORT TYPES TAB
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function SportTypesTab() {
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState<Sport | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  const slugRef = useRef<HTMLInputElement>(null);
+  const iconRef = useRef<HTMLInputElement>(null);
+  const editNameRef = useRef<HTMLInputElement>(null);
+  const editSlugRef = useRef<HTMLInputElement>(null);
+  const editIconRef = useRef<HTMLInputElement>(null);
+
+  const { data, isLoading: loading, error, refetch } = useApi<{ data: Sport[] }>(
+    `/v1/sports/sports?limit=200${search ? `&search=${encodeURIComponent(search)}` : ""}`
+  );
+  const { call, loading: actionLoading } = useApiCallState();
+
+  const sports = data?.data ?? [];
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this sport type? All related data (matches, tournaments, teams) may be affected.")) return;
+    try {
+      await call("delete", `/v1/sports/sports/${id}`);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete sport";
+      alert(typeof msg === "string" ? msg : "Failed to delete sport");
+    }
+  };
+
+  const handleSave = async () => {
+    const name = nameRef.current?.value?.trim();
+    if (!name) { setMutationError("Name is required"); return; }
+    setSubmitting(true);
+    setMutationError(null);
+    try {
+      const slug = slugRef.current?.value?.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      await call("post", "/v1/sports/sports", {
+        name,
+        slug,
+        icon: iconRef.current?.value?.trim() || undefined,
+      });
+      setShowModal(false);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save sport";
+      setMutationError(typeof msg === "string" ? msg : "Failed to save sport");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editItem) return;
+    const name = editNameRef.current?.value?.trim();
+    if (!name) { alert("Name is required"); return; }
+    setSubmitting(true);
+    try {
+      const slug = editSlugRef.current?.value?.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      await call("put", `/v1/sports/sports/${editItem.id}`, {
+        name,
+        slug,
+        icon: editIconRef.current?.value?.trim() || undefined,
+      });
+      setEditItem(null);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update sport";
+      alert(typeof msg === "string" ? msg : "Failed to update sport");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 mb-5 max-w-xs">
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-xs text-[#8B92A5] mb-1">Total Sport Types</p>
+          <p className="text-2xl font-bold text-white">{sports.length}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2.5">
+          <Search size={14} className="text-[#8B92A5] shrink-0" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search sport types..."
+            className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1"
+          />
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+        </button>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90"
+        >
+          <Plus size={13} /> Add Sport Type
+        </button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        {loading && <div className="flex items-center justify-center py-16"><RefreshCw size={20} className="text-primary animate-spin" /></div>}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <p className="text-red-400 text-sm">Failed to load sport types</p>
+            <button onClick={() => refetch()} className="text-xs text-primary underline">Retry</button>
+          </div>
+        )}
+        {!loading && !error && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-[#0d1525]">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide w-10">#</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Name</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Slug</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Icon</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sports.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-12 text-sm text-[#8B92A5]">No sport types yet — add one above</td></tr>
+                ) : sports.map((s, i) => (
+                  <tr key={s.id} className="tbl-row border-b border-border/50 last:border-0">
+                    <td className="px-4 py-3 text-sm text-[#8B92A5]">{i + 1}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-white">{s.name}</td>
+                    <td className="px-4 py-3 text-sm text-[#8B92A5] font-mono">{(s as any).slug ?? "—"}</td>
+                    <td className="px-4 py-3 text-sm text-[#8B92A5]">{(s as any).icon ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditItem(s)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
+                          <Edit size={13} className="text-[#8B92A5]" />
+                        </button>
+                        <button onClick={() => handleDelete(s.id)} disabled={actionLoading} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/10">
+                          <Trash2 size={13} className="text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <Modal title="Add Sport Type" onClose={() => { setShowModal(false); setMutationError(null); }}>
+          <ModalField label="Name *">
+            <input ref={nameRef} className={inputClass} placeholder="e.g. Cricket, Football, Tennis" />
+          </ModalField>
+          <ModalField label="Slug (auto-generated if empty)">
+            <input ref={slugRef} className={inputClass} placeholder="e.g. cricket" />
+          </ModalField>
+          <ModalField label="Icon (emoji or icon name)">
+            <input ref={iconRef} className={inputClass} placeholder="e.g. 🏏 or cricket" />
+          </ModalField>
+          {mutationError && <p className="px-1 pb-1 text-xs text-red-400">{mutationError}</p>}
+          <ModalFooter
+            cancelLabel="Cancel"
+            submitLabel={submitting ? "Saving..." : "Save Sport Type"}
+            submitting={submitting}
+            onCancel={() => { setShowModal(false); setMutationError(null); }}
+            onSubmit={handleSave}
+          />
+        </Modal>
+      )}
+
+      {editItem && (
+        <Modal title="Edit Sport Type" onClose={() => setEditItem(null)}>
+          <ModalField label="Name *">
+            <input ref={editNameRef} defaultValue={editItem.name} className={inputClass} />
+          </ModalField>
+          <ModalField label="Slug">
+            <input ref={editSlugRef} defaultValue={(editItem as any).slug ?? ""} className={inputClass} />
+          </ModalField>
+          <ModalField label="Icon (emoji or icon name)">
+            <input ref={editIconRef} defaultValue={(editItem as any).icon ?? ""} className={inputClass} />
+          </ModalField>
+          <ModalFooter
+            cancelLabel="Cancel"
+            submitLabel={submitting ? "Saving..." : "Update Sport Type"}
             submitting={submitting}
             onCancel={() => setEditItem(null)}
             onSubmit={handleUpdate}

@@ -20,6 +20,10 @@ export class SportsService {
     });
   }
 
+  async updateSport(id: string, data: { name?: string; slug?: string; icon?: string }) {
+    return this.prisma.sport.update({ where: { id }, data });
+  }
+
   async removeSport(id: string) {
     await this.prisma.sport.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
   }
