@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Github, Plus, RefreshCw, Trash2, Edit, ToggleLeft, ToggleRight,
   CheckCircle, XCircle, Clock, Loader2, ExternalLink, ChevronDown, ChevronUp,
@@ -81,8 +81,14 @@ function formatMs(ms: number | null) {
 export default function GitHubSourcesPage() {
   const invalidate = useInvalidate();
   const { data: sources = [], isLoading } = useApiQuery<GitHubSource[]>(KEY, "/v1/github-sources", {
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   });
+
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<GitHubSource | null>(null);
