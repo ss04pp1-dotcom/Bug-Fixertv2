@@ -22,7 +22,7 @@ import React, {
 } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  Platform, AppState, BackHandler, StatusBar, ActivityIndicator,
+  Platform, BackHandler, StatusBar, ActivityIndicator,
   PanResponder, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -841,40 +841,11 @@ export default function GlobalVideoPlayer() {
     },
   }), [vidW, seek, bumpCtrl, hideCtrlNow]); // ← stable deps only
 
-  // ── YouTube-style auto-PiP on app background ────────────────────────────
-  // When the user presses Home or switches apps while a video is playing,
-  // automatically enter native PiP (just like YouTube).
-  // When the user returns to the app, PiP exits and the player goes back to
-  // whichever mode it was in before (top / fullscreen / mini).
-  const autoPipRef = useRef(false); // true when WE triggered PiP (not the user)
-  const prePipModeRef = useRef<PlayerMode>('top'); // mode to restore after auto-PiP
-
-  useEffect(() => {
-    if (IS_WEB || IS_EXPO_GO || Platform.OS === 'web') return;
-    if (mode === 'hidden') return;
-
-    const sub = AppState.addEventListener('change', (nextState) => {
-      const st = useGlobalPlayer.getState();
-
-      // ONLY trigger on 'background', NOT 'inactive'.
-      // On iOS, 'inactive' fires when the user swipes down the notification
-      // center or control center — we must NOT start PiP in that case.
-      // On Android, home/recent-apps goes directly to 'background'.
-      if (nextState === 'background' && st.isPlaying && !pipActive) {
-        prePipModeRef.current = st.mode as PlayerMode;
-        autoPipRef.current = true;
-        setPip(true);
-      }
-
-      if (nextState === 'active' && autoPipRef.current) {
-        // User returned to the app without expanding PiP — exit PiP
-        autoPipRef.current = false;
-        setPip(false);
-      }
-    });
-
-    return () => sub.remove();
-  }, [mode, pipActive]);
+  // ── PiP is MANUAL ONLY — no auto-PiP on home/background ────────────────
+  // Auto-PiP was removed: it triggered unintentionally when the user
+  // swiped the notification bar or switched apps, causing jarring PiP pops.
+  // PiP now only activates when the user explicitly taps the PiP button.
+  const autoPipRef = useRef(false);
 
   // ── Android back button ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1371,20 +1342,24 @@ export default function GlobalVideoPlayer() {
             {/* Center controls */}
             <View style={g.centerPanel} pointerEvents="box-none">
               <View style={g.glassRow}>
-                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-back" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
+                {!isLive && (
+                  <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
+                    <Ionicons name="play-back" size={22} color="#fff" />
+                    <Text style={g.seekLabel}>10s</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
                   {buffering && isReady
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
                   }
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-forward" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
+                {!isLive && (
+                  <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
+                    <Ionicons name="play-forward" size={22} color="#fff" />
+                    <Text style={g.seekLabel}>10s</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -1592,20 +1567,24 @@ export default function GlobalVideoPlayer() {
           {!isLocked && (
             <View style={g.centerPanel} pointerEvents="box-none">
               <View style={g.glassRow}>
-                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-back" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
+                {!isLive && (
+                  <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
+                    <Ionicons name="play-back" size={22} color="#fff" />
+                    <Text style={g.seekLabel}>10s</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
                   {buffering && isReady
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
                   }
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-forward" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
+                {!isLive && (
+                  <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
+                    <Ionicons name="play-forward" size={22} color="#fff" />
+                    <Text style={g.seekLabel}>10s</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}

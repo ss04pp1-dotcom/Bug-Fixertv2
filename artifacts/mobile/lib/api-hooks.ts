@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import apiClient from './api';
@@ -27,6 +27,27 @@ export const useBanners = () => useQuery({ queryKey: ['banners'], queryFn: () =>
 export const useContinueWatching = () => useQuery({ queryKey: ['continue-watching'], queryFn: () => apiClient.get('/watch-history/continue-watching').then(unwrapList) });
 export const useTrending = () => useQuery({ queryKey: ['trending'], queryFn: () => apiClient.get('/movies/trending').then(unwrapList) });
 export const useLiveChannels = (params?: object) => useQuery({ queryKey: ['channels', params], queryFn: () => apiClient.get('/channels', { params: { limit: 200, ...params as any } }).then(unwrapList) });
+
+// Infinite-scroll version — loads 50 channels per page from the server.
+// Pass `search` to do server-side full-text search across ALL channels.
+export const useLiveChannelsInfinite = (params?: { search?: string; limit?: number }) =>
+  useInfiniteQuery({
+    queryKey: ['channels-infinite', params],
+    queryFn: ({ pageParam }) =>
+      apiClient
+        .get('/channels', { params: { page: pageParam, limit: params?.limit ?? 50, ...(params?.search ? { search: params.search } : {}) } })
+        .then((r: any) => {
+          const d = r.data.data;
+          const items: any[] = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+          const meta = d?.meta ?? { page: pageParam, totalPages: 1, total: items.length };
+          return { items, meta };
+        }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: any) => {
+      const { page, totalPages } = lastPage.meta;
+      return page < totalPages ? page + 1 : undefined;
+    },
+  });
 export const useChannel = (id: string) => useQuery({ queryKey: ['channel', id], queryFn: () => apiClient.get(`/channels/${id}`).then(unwrap), enabled: !!id });
 
 // Categories
