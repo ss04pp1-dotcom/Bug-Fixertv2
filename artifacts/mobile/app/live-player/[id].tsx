@@ -253,7 +253,7 @@ export default function LivePlayerScreen() {
 
   // ── Render metadata below the (singleton) player ───────────────────────────
   return (
-    <View style={[s.root, !isLandscape && { paddingTop: insets.top }]}>
+    <View style={s.root}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
       {/* Channel-switch interstitial ad */}
@@ -263,8 +263,9 @@ export default function LivePlayerScreen() {
         onClose={handleAdClose}
       />
 
-      {/* Spacer for the video area — singleton overlay covers it visually */}
-      <View style={{ height: Math.round(W * 9 / 16), backgroundColor: '#000' }} />
+      {/* Spacer for the video area — includes status bar height so it matches
+          the GlobalVideoPlayer surface which starts at top:0 with height = insets.top + topH */}
+      <View style={{ height: isLandscape ? 0 : insets.top + Math.round(W * 9 / 16), backgroundColor: '#000' }} />
 
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         {/* Channel header */}

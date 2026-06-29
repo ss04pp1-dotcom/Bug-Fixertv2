@@ -21,9 +21,9 @@ import React, {
   useRef, useState, useCallback, useEffect, useMemo,
 } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet,
   Platform, BackHandler, StatusBar, ActivityIndicator,
-  PanResponder, Modal,
+  PanResponder, Modal, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -407,7 +407,7 @@ const sw = StyleSheet.create({
 // ════════════════════════════════════════════════════════════════════════════
 export default function GlobalVideoPlayer() {
   const insets = useSafeAreaInsets();
-  const { width: SW, height: SH } = Dimensions.get('window');
+  const { width: SW, height: SH } = useWindowDimensions();
   const {
     mode, sources, srcIdx, title, logo, contentId, contentType, isLive,
     isPlaying, enterTop, enterMini, hide, setPlaying, setSrcIdx,
@@ -1056,11 +1056,11 @@ export default function GlobalVideoPlayer() {
   // When mode changes, only the style updates — NO unmount, NO reload.
   const videoSurfaceBaseStyle: any =
     mode === 'fullscreen'
-      ? { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      ? { position: 'absolute', top: 0, left: 0, width: SW, height: SH,
           backgroundColor: '#000', zIndex: 9999, elevation: 50 }
       : mode === 'top'
-      ? { position: 'absolute', top: insets.top, left: 0, right: 0,
-          height: topH, backgroundColor: '#000', zIndex: 9999, elevation: 50 }
+      ? { position: 'absolute', top: 0, left: 0, right: 0,
+          height: insets.top + topH, backgroundColor: '#000', zIndex: 9999, elevation: 50 }
       : { position: 'absolute', top: 0, left: 0, width: MINI_W, height: MINI_H,
           backgroundColor: '#000', overflow: 'hidden',
           borderTopLeftRadius: 12, borderTopRightRadius: 12,
@@ -1342,24 +1342,20 @@ export default function GlobalVideoPlayer() {
             {/* Center controls */}
             <View style={g.centerPanel} pointerEvents="box-none">
               <View style={g.glassRow}>
-                {!isLive && (
-                  <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                    <Ionicons name="play-back" size={22} color="#fff" />
-                    <Text style={g.seekLabel}>10s</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-back" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
                   {buffering && isReady
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
                   }
                 </TouchableOpacity>
-                {!isLive && (
-                  <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                    <Ionicons name="play-forward" size={22} color="#fff" />
-                    <Text style={g.seekLabel}>10s</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-forward" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1567,24 +1563,20 @@ export default function GlobalVideoPlayer() {
           {!isLocked && (
             <View style={g.centerPanel} pointerEvents="box-none">
               <View style={g.glassRow}>
-                {!isLive && (
-                  <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                    <Ionicons name="play-back" size={22} color="#fff" />
-                    <Text style={g.seekLabel}>10s</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-back" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
                   {buffering && isReady
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
                   }
                 </TouchableOpacity>
-                {!isLive && (
-                  <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                    <Ionicons name="play-forward" size={22} color="#fff" />
-                    <Text style={g.seekLabel}>10s</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
+                  <Ionicons name="play-forward" size={22} color="#fff" />
+                  <Text style={g.seekLabel}>10s</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
