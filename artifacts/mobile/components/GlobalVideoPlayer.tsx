@@ -626,17 +626,50 @@ export default function GlobalVideoPlayer() {
   // ── Current source ───────────────────────────────────────────────────────
   const src = sources[srcIdx];
 
-  // ── Build native source object ───────────────────────────────────────────
-  // FIX: NEVER override User-Agent. ExoPlayer/OkHttp's native UA ("okhttp/4.x")
-  // is what IPTV servers (Toffee, Digijadoo, etc.) treat as a media player and
-  // serve at FULL bitrate. If we send "Mozilla/5.0" they throttle to ~500kbps
-  // → "Network problem" + low MB consumption.
+  // ── Source object passed to react-native-video / ExoPlayer ─────────────────
+  //
+  // KEY RULES:
+  // 1. headers must NEVER be empty — DataSourceUtil.kt caches a singleton
+  //    DataSource.Factory and only rebuilds it when requestHeaders is non-empty.
+  //    An empty map triggers the cache path → old headers leak between streams.
+  // 2. User-Agent MUST be present. Without it DataSourceUtil falls back to
+  //    Util.getUserAgent(ctx, packageName) = "StreamPro/2.4.1 (Linux;Android…)"
+  //    which many IPTV/CDN servers block or rate-limit to ~500 kbps.
+  //    "Lavf/58.29.100" (FFmpeg UA) is universally whitelisted by IPTV panels
+  //    (Xtream, Stalker, Emby, Jellyfin). VLC and TiviMate use the same UA.
+  // 3. Cookie strings from IPTV panels often use '&' as separator
+  //    (e.g. "session=abc&token=xyz") but the HTTP Cookie header requires '; '.
+  //    Normalize here before ExoPlayer/OkHttp sees them.
+  // 4. Pass 'type' hint only for unambiguous extensions (.m3u8, .mpd) so
+  //    ExoPlayer doesn't waste a HEAD request sniffing. For Xtream codes paths
+  //    (/live/, /movie/) let ExoPlayer sniff — same server may serve HLS or TS.
   const nativeSource = useMemo(() => {
     if (!src?.url) return null;
+
+    const raw = src.headers ?? {};
+
+    // Normalize Cookie: '&'-separated → '; '-separated
+    const normalizeCookie = (c: string): string => {
+      if (!c) return c;
+      // If already contains ';' it is already HTTP-format — leave it
+      if (c.includes(';')) return c;
+      // Convert '&'-separated k=v pairs → 'k=v; k2=v2'
+      return c.split('&').join('; ');
+    };
+
+    // Always include UA — use explicit one from source, else Lavf (FFmpeg/VLC)
+    const headers: Record<string, string> = {
+      'User-Agent': raw['User-Agent'] || 'Lavf/58.29.100',
+    };
+    if (raw['Cookie'])  headers['Cookie']  = normalizeCookie(raw['Cookie']);
+    if (raw['Referer']) headers['Referer'] = raw['Referer'];
+    if (raw['Origin'])  headers['Origin']  = raw['Origin'];
+    // Forward any other custom headers the server requires
+    Object.keys(raw).forEach((k) => {
+      if (!headers[k]) headers[k] = raw[k];
+    });
+
     const videoType = getVideoType(src.url, streamFormat);
-    // Only include headers the source explicitly provides (Cookie, Referer, etc.)
-    // Do NOT add a User-Agent unless the source specifically set one.
-    const headers = { ...(src.headers ?? {}) };
     return {
       uri: src.url,
       headers,

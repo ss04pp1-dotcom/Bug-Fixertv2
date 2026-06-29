@@ -64,20 +64,22 @@ function buildStreamSource(
     }
   }
 
-  const headers: Record<string, string> = {};
   const cookie    = data?.cookie    || pipeHeaders['cookie'];
   const userAgent = data?.userAgent || pipeHeaders['user-agent'];
   const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
   const origin    = data?.origin    || pipeHeaders['origin'];
-  // NOTE: We intentionally do NOT set User-Agent by default.
-  // IPTV servers throttle browser UAs. ExoPlayer's native okhttp UA gets full bitrate.
-  // Only set UA if the source explicitly provides one (some servers require a specific UA).
-  if (cookie)    headers['Cookie']     = cookie;
-  if (userAgent) headers['User-Agent'] = userAgent;
-  if (referer)   headers['Referer']    = referer;
-  if (origin)    headers['Origin']     = origin;
 
-  return { label, url, quality, ...(Object.keys(headers).length ? { headers } : {}) };
+  // Always include UA so DataSourceUtil.kt always rebuilds its OkHttpDataSource.Factory
+  // (empty headers map → singleton cache returned → old headers leak between streams).
+  // Lavf/58.29.100 (FFmpeg UA) is whitelisted by all major IPTV panels at full bitrate.
+  const headers: Record<string, string> = {
+    'User-Agent': userAgent || 'Lavf/58.29.100',
+  };
+  if (cookie)   headers['Cookie']  = cookie;
+  if (referer)  headers['Referer'] = referer;
+  if (origin)   headers['Origin']  = origin;
+
+  return { label, url, quality, headers };
 }
 
 export default function PlayerScreen() {

@@ -105,19 +105,24 @@ export default function LivePlayerScreen() {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
-        const headers: Record<string, string> = {};
-        // Only set headers the server explicitly requires — do NOT add User-Agent.
-        if (srv.cookie)    headers['Cookie']     = srv.cookie;
-        if (srv.userAgent) headers['User-Agent'] = srv.userAgent;
-        if (srv.referer)   headers['Referer']    = srv.referer;
-        if (srv.origin)    headers['Origin']     = srv.origin;
+        // Always include headers (non-empty) so DataSourceUtil rebuilds its
+        // OkHttpDataSource.Factory for this stream — avoids header leakage
+        // between channels due to the singleton caching in DataSourceUtil.kt.
+        // Use server-provided UA if available, else Lavf (FFmpeg/VLC UA) which
+        // IPTV panels universally whitelist at full bitrate.
+        const headers: Record<string, string> = {
+          'User-Agent': srv.userAgent || 'Lavf/58.29.100',
+        };
+        if (srv.cookie)  headers['Cookie']  = srv.cookie;
+        if (srv.referer) headers['Referer'] = srv.referer;
+        if (srv.origin)  headers['Origin']  = srv.origin;
         srcs.push({
           url: srv.link,
           label: `Server ${i + 1}`,
           quality: i === 0 ? 'HD' : 'SD',
           cookieExpired,
           cookieExpiresAt: srv.cookieExpiresAt ?? null,
-          ...(Object.keys(headers).length ? { headers } : {}),
+          headers,
         });
       });
     } else {
