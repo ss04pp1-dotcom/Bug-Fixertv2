@@ -1,39 +1,50 @@
 /**
  * withPipNative — Expo config plugin
  *
- * Injects Android 12+ (API 31+) seamless auto-enter PiP into MainActivity
- * using PictureInPictureParams.Builder().setAutoEnterEnabled(true).
+ * Injects Android 12+ (API 31+) seamless auto-enter PiP into MainActivity.
+ * Detects whether MainActivity is Java or Kotlin and injects the correct syntax.
  *
  * Why native instead of manifest attribute:
  *   android:autoEnterPictureInPicture requires API 31 and AAPT2 hard-fails
  *   when minSdkVersion < 31. The native approach calls the API at runtime
  *   with a Build.VERSION.SDK_INT >= 31 guard, so it compiles and runs safely
  *   on all API levels (24+).
- *
- * What this does:
- *   - Overrides onUserLeaveHint() in MainActivity — called when user presses
- *     Home or Recent Apps. Calls enterPictureInPictureMode() with
- *     autoEnterEnabled=true on API 31+, giving the smooth OS-level transition.
- *   - Overrides onPictureInPictureModeChanged() to let the JS layer know
- *     PiP state changed (via react-native-video's own mechanism).
- *
- * The JS-side AppState listener in PremiumVideoPlayer.tsx handles API 24-30
- * by calling setPip(true) programmatically — no change needed there.
  */
 const { withMainActivity } = require('@expo/config-plugins');
 
-const PIP_IMPORTS = [
+// ── Kotlin code ───────────────────────────────────────────────────────────────
+const KT_IMPORTS = [
+  'import android.app.PictureInPictureParams',
+  'import android.os.Build',
+  'import android.util.Rational',
+];
+
+const KT_ON_USER_LEAVE_HINT = `
+  override fun onUserLeaveHint() {
+    super.onUserLeaveHint()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val params = PictureInPictureParams.Builder()
+        .setAutoEnterEnabled(true)
+        .setAspectRatio(Rational(16, 9))
+        .build()
+      setPictureInPictureParams(params)
+      enterPictureInPictureMode(params)
+    }
+  }
+`;
+
+// ── Java code ─────────────────────────────────────────────────────────────────
+const JAVA_IMPORTS = [
   'import android.app.PictureInPictureParams;',
   'import android.os.Build;',
   'import android.util.Rational;',
 ];
 
-const ON_USER_LEAVE_HINT = `
+const JAVA_ON_USER_LEAVE_HINT = `
   @Override
   public void onUserLeaveHint() {
     super.onUserLeaveHint();
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      // API 31+ — seamless auto-enter PiP (smooth swipe-to-home transition)
       PictureInPictureParams params = new PictureInPictureParams.Builder()
           .setAutoEnterEnabled(true)
           .setAspectRatio(new Rational(16, 9))
@@ -47,24 +58,36 @@ const ON_USER_LEAVE_HINT = `
 module.exports = function withPipNative(config) {
   return withMainActivity(config, (cfg) => {
     let src = cfg.modResults.contents;
+    const isKotlin = cfg.modResults.language === 'kt';
 
-    // ── 1. Add imports (skip if already present) ──────────────────────────────
-    PIP_IMPORTS.forEach((imp) => {
-      if (!src.includes(imp)) {
-        // Insert after the last existing import line
-        src = src.replace(
-          /(import\s+[\w.]+;(?:\s*\n)?)(?=\s*(?:\/\/|@|public\s+class))/,
-          `$1${imp}\n`,
-        );
+    const imports = isKotlin ? KT_IMPORTS : JAVA_IMPORTS;
+    const methodBody = isKotlin ? KT_ON_USER_LEAVE_HINT : JAVA_ON_USER_LEAVE_HINT;
+    const guardStr = 'onUserLeaveHint';
+
+    // ── 1. Add imports (idempotent) ───────────────────────────────────────────
+    imports.forEach((imp) => {
+      if (!src.includes(imp.replace(';', ''))) {
+        if (isKotlin) {
+          // Insert after last "import ..." line in Kotlin
+          src = src.replace(
+            /(import\s+[\w.]+(?:\s*\n)?)(?=\s*(?:\/\/|@|class\s))/,
+            `$1${imp}\n`,
+          );
+        } else {
+          // Insert after last "import ...;" line in Java
+          src = src.replace(
+            /(import\s+[\w.]+;(?:\s*\n)?)(?=\s*(?:\/\/|@|public\s+class))/,
+            `$1${imp}\n`,
+          );
+        }
       }
     });
 
-    // ── 2. Inject onUserLeaveHint (skip if already injected) ─────────────────
-    if (!src.includes('onUserLeaveHint')) {
-      // Insert before the closing brace of MainActivity class
+    // ── 2. Inject onUserLeaveHint (idempotent) ────────────────────────────────
+    if (!src.includes(guardStr)) {
       const lastBrace = src.lastIndexOf('}');
       if (lastBrace !== -1) {
-        src = src.slice(0, lastBrace) + ON_USER_LEAVE_HINT + '\n}';
+        src = src.slice(0, lastBrace) + methodBody + '\n}';
       }
     }
 
