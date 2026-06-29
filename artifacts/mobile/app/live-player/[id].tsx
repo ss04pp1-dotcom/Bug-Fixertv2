@@ -105,14 +105,14 @@ export default function LivePlayerScreen() {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
-        // Always non-empty — Icy-MetaData forces DataSourceUtil to rebuild its
-        // OkHttpDataSource.Factory singleton for each channel, preventing header
-        // leakage from a previously-loaded channel. Virtually all HTTP streaming
-        // servers silently ignore Icy-MetaData.
-        // User-Agent: only set when explicitly provided; forcing a UA (even Lavf)
-        // can break channels on panels that whitelist specific UAs or block VLC UAs.
-        const headers: Record<string, string> = { 'Icy-MetaData': '1' };
-        if (srv.userAgent) headers['User-Agent'] = srv.userAgent;
+        // Icy-MetaData forces DataSourceUtil singleton rebuild (prevents header leakage
+        // between channels). Default UA = AndroidXMedia3/1.8.0 — same as Mini Player
+        // and all Media3 1.8 apps; universally accepted by IPTV panels. Overridden if
+        // the server provides its own UA.
+        const headers: Record<string, string> = {
+          'Icy-MetaData': '1',
+          'User-Agent': srv.userAgent || 'AndroidXMedia3/1.8.0',
+        };
         if (srv.cookie)    headers['Cookie']     = srv.cookie;
         if (srv.referer)   headers['Referer']    = srv.referer;
         if (srv.origin)    headers['Origin']     = srv.origin;

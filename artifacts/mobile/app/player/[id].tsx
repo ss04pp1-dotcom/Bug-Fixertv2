@@ -69,13 +69,14 @@ function buildStreamSource(
   const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
   const origin    = data?.origin    || pipeHeaders['origin'];
 
-  // Always non-empty — Icy-MetaData forces DataSourceUtil to rebuild its
-  // OkHttpDataSource.Factory singleton for each stream, preventing header leakage.
-  // Virtually all HTTP streaming servers silently ignore Icy-MetaData.
-  // User-Agent: only set when explicitly provided; forcing a UA (even Lavf)
-  // can break channels on panels that whitelist specific UAs or block VLC UAs.
-  const headers: Record<string, string> = { 'Icy-MetaData': '1' };
-  if (userAgent) headers['User-Agent'] = userAgent;
+  // Icy-MetaData forces DataSourceUtil singleton rebuild (prevents header leakage).
+  // Default UA = AndroidXMedia3/1.8.0 — same as Mini Player and all Media3 1.8 apps;
+  // universally accepted by IPTV panels. DataSourceUtil would otherwise fall back to
+  // 'StreamPro/2.4.1 (Linux;Android…)' which many panels throttle or block.
+  const headers: Record<string, string> = {
+    'Icy-MetaData': '1',
+    'User-Agent': userAgent || 'AndroidXMedia3/1.8.0',
+  };
   if (cookie)    headers['Cookie']     = cookie;
   if (referer)   headers['Referer']    = referer;
   if (origin)    headers['Origin']     = origin;
