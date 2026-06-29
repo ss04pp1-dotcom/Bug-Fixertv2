@@ -105,13 +105,15 @@ export default function LivePlayerScreen() {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
-        // Icy-MetaData forces DataSourceUtil singleton rebuild (prevents header leakage
-        // between channels). Default UA = AndroidXMedia3/1.8.0 — same as Mini Player
-        // and all Media3 1.8 apps; universally accepted by IPTV panels. Overridden if
-        // the server provides its own UA.
+        // User-Agent keeps headers non-empty so DataSourceUtil.kt rebuilds its
+        // OkHttpDataSource.Factory singleton (prevents old headers leaking between
+        // channels). Default UA = 'Lavf/58.29.100' (FFmpeg) — universally whitelisted
+        // by IPTV panels. Overridden by the server-provided UA if set in admin.
+        //
+        // Do NOT add 'Icy-MetaData: 1': it causes Streamer-type servers to prepare
+        // audio metadata for 20-30 s before responding → ExoPlayer timeout → no play.
         const headers: Record<string, string> = {
-          'Icy-MetaData': '1',
-          'User-Agent': srv.userAgent || 'AndroidXMedia3/1.8.0',
+          'User-Agent': srv.userAgent || 'Lavf/58.29.100',
         };
         if (srv.cookie)    headers['Cookie']     = srv.cookie;
         if (srv.referer)   headers['Referer']    = srv.referer;

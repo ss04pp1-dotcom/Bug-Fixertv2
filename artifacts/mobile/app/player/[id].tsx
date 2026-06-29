@@ -69,13 +69,14 @@ function buildStreamSource(
   const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
   const origin    = data?.origin    || pipeHeaders['origin'];
 
-  // Icy-MetaData forces DataSourceUtil singleton rebuild (prevents header leakage).
-  // Default UA = AndroidXMedia3/1.8.0 — same as Mini Player and all Media3 1.8 apps;
-  // universally accepted by IPTV panels. DataSourceUtil would otherwise fall back to
-  // 'StreamPro/2.4.1 (Linux;Android…)' which many panels throttle or block.
+  // User-Agent keeps headers non-empty so DataSourceUtil.kt rebuilds its singleton
+  // OkHttpDataSource.Factory (prevents old headers leaking between streams).
+  // Default UA = 'Lavf/58.29.100' (FFmpeg) — universally whitelisted by IPTV panels.
+  //
+  // Do NOT add 'Icy-MetaData: 1': it causes Streamer-type IPTV servers to spend
+  // 20-30 s preparing audio metadata → ExoPlayer times out → channel never plays.
   const headers: Record<string, string> = {
-    'Icy-MetaData': '1',
-    'User-Agent': userAgent || 'AndroidXMedia3/1.8.0',
+    'User-Agent': userAgent || 'Lavf/58.29.100',
   };
   if (cookie)    headers['Cookie']     = cookie;
   if (referer)   headers['Referer']    = referer;

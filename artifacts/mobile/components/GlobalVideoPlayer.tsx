@@ -683,18 +683,20 @@ export default function GlobalVideoPlayer() {
 
     // Always keep headers non-empty — DataSourceUtil.kt caches a singleton
     // OkHttpDataSource.Factory and only rebuilds when requestHeaders is non-empty.
-    // 'Icy-MetaData: 1' is a standard Shoutcast/Icecast header that virtually all
-    // HTTP streaming servers silently ignore — safe on all CDNs and IPTV panels.
-    // (Confirmed: Mini Player also sends Icy-MetaData on all streams.)
+    // User-Agent alone is sufficient to trigger a rebuild and prevent old headers
+    // from leaking between streams.
     //
-    // User-Agent: use source-provided UA if present, else 'AndroidXMedia3/1.8.0'.
-    // This is the default UA of Media3 1.8.0 (used by Mini Player / most ExoPlayer-
-    // based IPTV apps). All IPTV panels accept it. Our react-native-video DataSourceUtil
-    // would otherwise fall back to 'StreamPro/2.4.1 (Linux;Android…)' which many
-    // panels throttle or block.
+    // IMPORTANT: Do NOT add 'Icy-MetaData: 1' here. That header tells Shoutcast /
+    // Icecast servers to embed ICY audio metadata inside the stream. On IPTV video
+    // streaming servers (e.g. "Streamer 23.07") it causes the server to spend 20-30 s
+    // preparing audio metadata before sending the first byte — ExoPlayer times out
+    // and the channel never plays. Without that header the same server responds in
+    // under 1 second. Mini Player works because it never sends Icy-MetaData.
+    //
+    // Default UA = 'Lavf/58.29.100' (FFmpeg). This is the most universally
+    // whitelisted UA across all IPTV panels and CDNs. Overridden by source-provided UA.
     const headers: Record<string, string> = {
-      'Icy-MetaData': '1',
-      'User-Agent': raw['User-Agent'] || 'AndroidXMedia3/1.8.0',
+      'User-Agent': raw['User-Agent'] || 'Lavf/58.29.100',
     };
     if (raw['Cookie'])     headers['Cookie']     = normalizeCookie(raw['Cookie']);
     if (raw['Referer'])    headers['Referer']    = raw['Referer'];
