@@ -113,7 +113,7 @@ export default function LivePlayerScreen() {
         if (srv.origin)    headers['Origin']     = srv.origin;
         srcs.push({
           url: srv.link,
-          label: cookieExpired ? `Server ${i + 1} ⚠️` : `Server ${i + 1}`,
+          label: `Server ${i + 1}`,
           quality: i === 0 ? 'HD' : 'SD',
           cookieExpired,
           cookieExpiresAt: srv.cookieExpiresAt ?? null,

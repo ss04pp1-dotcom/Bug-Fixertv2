@@ -75,7 +75,7 @@ export default function Channels() {
   const editStreamRef = useRef<HTMLSelectElement>(null);
   const editTvgRef   = useRef<HTMLInputElement>(null);
 
-  const params = new URLSearchParams({ page: String(page), limit: "20" });
+  const params = new URLSearchParams({ page: String(page), limit: "100" });
   if (debouncedSearch) params.set("search", debouncedSearch);
 
   const { data, isLoading: loading, error, refetch } = useApi<ChannelsResponse>(`/v1/channels?${params}`);
