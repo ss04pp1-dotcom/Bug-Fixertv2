@@ -23,7 +23,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Platform, BackHandler, StatusBar, ActivityIndicator,
-  PanResponder, Modal, useWindowDimensions,
+  PanResponder, Modal, useWindowDimensions, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -559,6 +559,7 @@ export default function GlobalVideoPlayer() {
   const [isLocked, setLocked]       = useState(false);
   const [sheet, setSheet]           = useState<SheetType>('none');
   const [speed, setSpeed]           = useState(1.0);
+  const [showDebug, setShowDebug]   = useState(false);
 
   // ── Volume / Brightness ──────────────────────────────────────────────────
   // FIX: old code used setState on every PanResponder move (60×/sec) → jank.
@@ -1444,6 +1445,9 @@ export default function GlobalVideoPlayer() {
                 <Ionicons name="refresh" size={14} color="#fff" />
                 <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
               </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowDebug(true)} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
+                <Text style={[g.retryTxt, { fontSize: 12 }]}>Debug</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1659,6 +1663,9 @@ export default function GlobalVideoPlayer() {
               <Ionicons name="refresh" size={16} color="#fff" />
               <Text style={g.retryTxt}>Retry</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDebug(true)} style={g.altBtn}>
+              <Text style={g.altBtnTxt}>Debug</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1862,6 +1869,133 @@ export default function GlobalVideoPlayer() {
           />
         </View>
       )}
+      {/* ══════════════════════════════════════════════════════════════════
+          STREAM DEBUG PANEL — shown when Debug button is tapped on error
+          ══════════════════════════════════════════════════════════════════ */}
+      <Modal
+        visible={showDebug}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDebug(false)}
+      >
+        <View style={db.backdrop}>
+          <View style={db.panel}>
+            {/* Header */}
+            <View style={db.header}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="settings-outline" size={18} color={C.primary} />
+                <Text style={db.headerTxt}>Stream Debug Info</Text>
+              </View>
+              <View style={[db.statusBadge, { backgroundColor: playerError ? 'rgba(239,68,68,0.18)' : buffering ? 'rgba(245,158,11,0.18)' : 'rgba(16,185,129,0.18)' }]}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: playerError ? C.live : buffering ? '#f59e0b' : C.green, marginRight: 5 }} />
+                <Text style={[db.statusTxt, { color: playerError ? C.live : buffering ? '#f59e0b' : C.green }]}>
+                  {playerError ? 'Error' : buffering ? 'Buffering...' : 'Playing'}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={db.scrollWrap} showsVerticalScrollIndicator={false}>
+              {/* Stream URL */}
+              <Text style={db.sectionTitle}>STREAM URL</Text>
+              <View style={db.codeBox}>
+                <Text style={db.codeText} selectable>{src?.url || 'N/A'}</Text>
+              </View>
+              <Text style={db.metaLine}>
+                Server {srcIdx + 1} of {sources.length} · {src?.label || 'N/A'}
+              </Text>
+
+              {/* Format Detection */}
+              <Text style={[db.sectionTitle, { marginTop: 14 }]}>FORMAT DETECTION</Text>
+              <View style={db.row}>
+                <Text style={db.rowLabel}>Detected format</Text>
+                <View style={[db.badge, { backgroundColor: 'rgba(16,185,129,0.18)' }]}>
+                  <Text style={[db.badgeTxt, { color: C.green }]}>{streamFormat}</Text>
+                </View>
+              </View>
+              <View style={db.row}>
+                <Text style={db.rowLabel}>ExoPlayer type hint</Text>
+                <View style={[db.badge, { backgroundColor: 'rgba(139,92,246,0.18)' }]}>
+                  <Text style={[db.badgeTxt, { color: C.primary }]}>
+                    {nativeSource?.type ?? 'auto (sniff)'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* HTTP Headers → ExoPlayer (from nativeSource — what actually reaches OkHttp) */}
+              <Text style={[db.sectionTitle, { marginTop: 14, color: C.primary }]}>HTTP HEADERS → EXOPLAYER</Text>
+              {(Object.entries(nativeSource?.headers ?? {
+                'User-Agent': 'not set',
+                Cookie: 'not set',
+                Referer: 'not set',
+                Origin: 'not set',
+              }) as [string, string][]).map(([key, val]) => (
+                <View key={key} style={db.row}>
+                  <Text style={db.rowLabel}>{key}</Text>
+                  <View style={[db.badge, { backgroundColor: val === 'not set' ? 'rgba(255,255,255,0.06)' : 'rgba(139,92,246,0.18)', maxWidth: '62%' }]}>
+                    <Text style={[db.badgeTxt, { color: val === 'not set' ? C.dim : C.primary }]} numberOfLines={1}>{val}</Text>
+                  </View>
+                </View>
+              ))}
+
+              {/* Raw source headers (pre-normalization) */}
+              <Text style={[db.sectionTitle, { marginTop: 14, color: C.dim }]}>RAW SOURCE HEADERS (PRE-NORMALIZATION)</Text>
+              {['User-Agent', 'Cookie', 'Referer', 'Origin'].map((key) => {
+                const val = (src as any)?.headers?.[key] || 'not set';
+                return (
+                  <View key={key} style={db.row}>
+                    <Text style={db.rowLabel}>{key}</Text>
+                    <View style={[db.badge, { backgroundColor: val === 'not set' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.1)', maxWidth: '62%' }]}>
+                      <Text style={[db.badgeTxt, { color: val === 'not set' ? C.dim : '#e5e7eb' }]} numberOfLines={1}>{val}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+              {/* Video Tracks */}
+              <Text style={[db.sectionTitle, { marginTop: 14, color: videoTracks.length ? C.green : C.dim }]}>
+                VIDEO TRACKS {videoTracks.length ? `(${videoTracks.length} DETECTED)` : '(NONE DETECTED)'}
+              </Text>
+              {videoTracks.length === 0 ? (
+                <Text style={db.emptyNote}>No video tracks reported yet — stream may still be loading</Text>
+              ) : videoTracks.slice(0, 5).map((t: any, i: number) => (
+                <View key={i} style={db.row}>
+                  <Text style={db.rowLabel}>Track {i + 1}</Text>
+                  <Text style={db.rowVal}>{t.height ? `${t.height}p` : '?'}{t.bitrate ? ` · ${Math.round(t.bitrate / 1000)}kbps` : ''}</Text>
+                </View>
+              ))}
+
+              {/* Audio Tracks */}
+              <Text style={[db.sectionTitle, { marginTop: 14, color: audioTracks.length ? C.green : C.dim }]}>
+                AUDIO TRACKS {audioTracks.length ? `(${audioTracks.length} DETECTED)` : '(NONE DETECTED)'}
+              </Text>
+              {audioTracks.length === 0 ? (
+                <Text style={db.emptyNote}>No audio tracks reported yet — stream may still be loading</Text>
+              ) : audioTracks.slice(0, 5).map((t: any, i: number) => (
+                <View key={i} style={db.row}>
+                  <Text style={db.rowLabel}>Track {i + 1}</Text>
+                  <Text style={db.rowVal}>{t.language || t.title || `Audio ${i + 1}`}</Text>
+                </View>
+              ))}
+
+              {/* Error detail */}
+              {playerError && (
+                <>
+                  <Text style={[db.sectionTitle, { marginTop: 14, color: C.live }]}>ERROR DETAIL</Text>
+                  <View style={db.codeBox}>
+                    <Text style={[db.codeText, { color: '#fca5a5' }]} selectable>{playerError}</Text>
+                  </View>
+                </>
+              )}
+              <View style={{ height: 8 }} />
+            </ScrollView>
+
+            {/* Close */}
+            <TouchableOpacity style={db.closeBtn} onPress={() => setShowDebug(false)}>
+              <Text style={db.closeTxt}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2028,4 +2162,58 @@ const g = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4,
   },
+});
+
+const db = StyleSheet.create({
+  backdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+  },
+  panel: {
+    backgroundColor: '#0f1729',
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '85%',
+    paddingBottom: 24,
+    borderTopWidth: 1, borderColor: 'rgba(139,92,246,0.3)',
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
+  },
+  headerTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  statusTxt: { fontSize: 12, fontWeight: '700' },
+  scrollWrap: { paddingHorizontal: 18, paddingTop: 14 },
+  sectionTitle: {
+    color: C.dim, fontSize: 10, fontWeight: '700',
+    letterSpacing: 0.8, marginBottom: 8,
+  },
+  codeBox: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 8, padding: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  codeText: { color: '#e5e7eb', fontSize: 11, lineHeight: 17 },
+  metaLine: { color: C.dim, fontSize: 11, marginTop: 5, marginBottom: 2 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  rowLabel: { color: C.dim, fontSize: 13 },
+  rowVal: { color: '#e5e7eb', fontSize: 13 },
+  badge: { borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4 },
+  badgeTxt: { fontSize: 12, fontWeight: '700' },
+  emptyNote: { color: C.dim, fontSize: 12, fontStyle: 'italic', paddingVertical: 4 },
+  closeBtn: {
+    marginTop: 18, marginHorizontal: 18,
+    backgroundColor: C.primary,
+    borderRadius: 24, paddingVertical: 13,
+    alignItems: 'center',
+  },
+  closeTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
