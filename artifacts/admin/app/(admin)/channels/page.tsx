@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight,
-  Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare, Settings2, GitMerge,
+  Menu, RefreshCw, Upload, Download, CheckSquare, Square, XSquare, Settings2, GitMerge, AlertTriangle,
 } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
@@ -60,6 +60,7 @@ export default function Channels() {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [fixingQuality, setFixingQuality] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
@@ -114,6 +115,28 @@ export default function Channels() {
     }
   };
 
+
+  const handleDeleteAll = async () => {
+    const answer = prompt(
+      '⚠️ সব চ্যানেল ও সার্ভার একবারে মুছে যাবে!\n\nনিশ্চিত করতে নিচে  DELETE ALL  টাইপ করুন:'
+    );
+    if (answer?.trim() !== 'DELETE ALL') {
+      if (answer !== null) alert('বাতিল — সঠিক টেক্সট লেখা হয়নি।');
+      return;
+    }
+    setDeletingAll(true);
+    try {
+      const res = await apiClient.delete<{ deletedChannels: number; deletedServers: number }>('/v1/channels/delete-all');
+      const d = res.data;
+      alert(`✅ সব মুছে গেছে!\nChannels: ${d?.deletedChannels ?? 0}\nServers: ${d?.deletedServers ?? 0}`);
+      refetch();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? 'Delete failed';
+      alert('❌ ' + (typeof msg === 'string' ? msg : 'Delete failed'));
+    } finally {
+      setDeletingAll(false);
+    }
+  };
 
   const handleCleanupBadNames = async () => {
     if (!confirm("এটি image URL-এর মতো ভুল নামের চ্যানেলগুলো ডিলিট করবে। GitHub re-sync করলে সঠিক নামে ফিরে আসবে। চালিয়ে যাবেন?")) return;
@@ -310,6 +333,15 @@ export default function Channels() {
           </button>
           <button onClick={() => { setModal(true); setNewLogo(""); }} className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
             <Plus size={13} /> Add Live Channel
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            disabled={deletingAll}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-700/40 bg-red-900/20 text-red-400 text-xs font-semibold hover:bg-red-900/40 disabled:opacity-50"
+            title="সব চ্যানেল ও সার্ভার একবারে মুছে ফেলুন"
+          >
+            <AlertTriangle size={13} className={deletingAll ? "animate-pulse" : ""} />
+            {deletingAll ? "Deleting…" : "Delete All Channels"}
           </button>
         </div>
       </div>

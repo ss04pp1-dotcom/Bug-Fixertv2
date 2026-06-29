@@ -179,6 +179,12 @@ export class ChannelsController {
     return this.channelsService.update(id, dto);
   }
 
+  @Delete('delete-all')
+  @ApiBearerAuth()
+  @Roles('super_admin')
+  @ApiOperation({ summary: 'Soft-delete ALL channels and servers in one shot (super_admin only)' })
+  deleteAll() { return this.channelsService.deleteAll(); }
+
   @Delete(':id')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin')

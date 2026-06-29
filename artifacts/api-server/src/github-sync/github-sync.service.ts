@@ -690,11 +690,15 @@ export class GitHubSyncService implements OnModuleInit {
       // Channel already found — update metadata (never overwrite admin overrides)
       const ch = await this.prisma.channel.findUnique({
         where: { id: channelId },
-        select: { adminLogoOverride: true, adminNameOverride: true, adminCategoryIdOverride: true },
+        select: { adminLogoOverride: true, adminNameOverride: true, adminCategoryIdOverride: true, logo: true },
       });
       const updateData: Record<string, unknown> = { normalizedName: normalized };
       if (!ch?.adminNameOverride) updateData.name = item.name;
-      if (item.logo && !ch?.adminLogoOverride) updateData.logo = item.logo;
+      // Only set logo if:
+      //   1. import provides one
+      //   2. no admin override exists
+      //   3. channel has NO logo yet (never overwrite an existing logo)
+      if (item.logo && !ch?.adminLogoOverride && !ch?.logo) updateData.logo = item.logo;
       if (categoryId && !ch?.adminCategoryIdOverride) updateData.categoryId = categoryId;
       try {
         await this.prisma.channel.update({ where: { id: channelId }, data: updateData });

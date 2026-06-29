@@ -160,6 +160,19 @@ export class ChannelsService {
     return { message: 'Channel deleted' };
   }
 
+  /**
+   * Soft-delete ALL channels and servers in one shot.
+   * Resets the entire catalog — GitHub re-sync will recreate everything fresh.
+   */
+  async deleteAll() {
+    const deletedAt = new Date();
+    const [channels, servers] = await this.prisma.$transaction([
+      this.prisma.channel.updateMany({ data: { deletedAt } }),
+      this.prisma.channelServer.updateMany({ data: { deletedAt } }),
+    ]);
+    return { deletedChannels: channels.count, deletedServers: servers.count };
+  }
+
   async incrementViewCount(id: string) {
     await this.prisma.channel.update({ where: { id }, data: { viewCount: { increment: 1 } } });
   }
@@ -192,15 +205,18 @@ export class ChannelsService {
     // Pre-fetch all existing channels for dedup
     const allExisting = await this.prisma.channel.findMany({
       where: { deletedAt: null },
-      select: { id: true, normalizedName: true, primaryStreamUrl: true, epgChannelId: true, slug: true },
+      select: { id: true, normalizedName: true, primaryStreamUrl: true, epgChannelId: true, slug: true, logo: true },
     });
     const existingUrls = new Set(allExisting.map(c => c.primaryStreamUrl).filter(Boolean));
     const existingTvgIds = new Set(allExisting.map(c => c.epgChannelId).filter(Boolean));
     const existingSlugs = new Set(allExisting.map(c => c.slug));
     // normalizedName → channelId map for same-name dedup
     const byNorm = new Map<string, string>();
+    // channelId → current logo (so we know whether to fill it in)
+    const logoById = new Map<string, string | null>();
     for (const c of allExisting) {
       if (c.normalizedName) byNorm.set(c.normalizedName, c.id);
+      logoById.set(c.id, c.logo ?? null);
     }
 
     for (const ch of channels) {
@@ -238,6 +254,14 @@ export class ChannelsService {
               addedAsServer++;
             } else {
               skipped++;
+            }
+            // If the import provides a logo AND the existing channel has no logo → fill it in
+            if (ch.logo && !logoById.get(existingChannelId)) {
+              await this.prisma.channel.update({
+                where: { id: existingChannelId },
+                data: { logo: ch.logo },
+              });
+              logoById.set(existingChannelId, ch.logo);
             }
           } else {
             skipped++;
