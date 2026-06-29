@@ -81,6 +81,14 @@ export class SupportService {
     return { message: 'Ticket deleted' };
   }
 
+  async findMyTickets(userEmail: string) {
+    const data = await this.prisma.supportTicket.findMany({
+      where: { userEmail },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { data };
+  }
+
   async getStats() {
     const [open, pending, resolved, total] = await Promise.all([
       this.prisma.supportTicket.count({ where: { status: 'Open' } }),

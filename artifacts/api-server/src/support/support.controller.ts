@@ -13,6 +13,11 @@ import { SupportService } from './support.service';
 export class SupportController {
   constructor(private readonly supportService: SupportService) {}
 
+  @Get('my-tickets') @Roles('user', 'moderator', 'admin', 'super_admin') @ApiOperation({ summary: 'Get my support tickets' })
+  getMyTickets(@CurrentUser() user: { email: string }) {
+    return this.supportService.findMyTickets(user.email);
+  }
+
   @Get('stats') @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Ticket stats (admin)' })
   getStats() { return this.supportService.getStats(); }
 

@@ -64,6 +64,9 @@ export class AdvertisementsController {
   @Post('providers/:id/activate') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Set active ad provider' })
   activateProvider(@Param('id') id: string) { return this.svc.activateProvider(id); }
 
+  @Public() @Get('placements/public') @ApiOperation({ summary: 'Get active placements by slug (mobile ad fetching)' })
+  getPublicPlacements(@Query('slug') slug?: string) { return this.svc.getPublicPlacements(slug); }
+
   @Get('placements') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Get all placements' })
   getPlacements() { return this.svc.getPlacements(); }
 

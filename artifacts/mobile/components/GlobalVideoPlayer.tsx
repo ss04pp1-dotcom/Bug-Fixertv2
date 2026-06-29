@@ -1564,7 +1564,7 @@ export default function GlobalVideoPlayer() {
           {!isLocked && (
             <View style={[g.topBar, { paddingTop: insets.top + 10 }]}>
               <TouchableOpacity style={g.iconBtn} onPress={() => { unlockOrientation(); enterTop(); }}>
-                <Ionicons name="stay-primary-portrait" size={22} color="#fff" />
+                <MaterialIcons name="stay-primary-portrait" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
                 <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>

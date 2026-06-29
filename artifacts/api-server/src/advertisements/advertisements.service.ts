@@ -130,6 +130,12 @@ export class AdvertisementsService {
     return provider;
   }
 
+  async getPublicPlacements(slug?: string) {
+    const where: Prisma.AdPlacementWhereInput = { isEnabled: true };
+    if (slug) where.slug = slug;
+    return this.prisma.adPlacement.findMany({ where });
+  }
+
   async getPlacements() {
     return this.prisma.adPlacement.findMany({ orderBy: [{ type: 'asc' }, { name: 'asc' }] });
   }

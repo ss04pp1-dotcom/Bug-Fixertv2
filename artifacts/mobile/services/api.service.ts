@@ -116,7 +116,8 @@ const SubscriptionService = {
 };
 
 const SupportService = {
-  getTickets: () => apiClient.get('/support'),
+  // /support (GET) is admin-only. Users view their own tickets via /support/my-tickets.
+  getTickets: () => apiClient.get('/support/my-tickets'),
   createTicket: (data: { subject: string; message: string; category?: string }) =>
     apiClient.post('/support', { subject: data.subject, description: data.message }),
   getFAQs: () => apiClient.get('/settings/public'),
@@ -126,9 +127,9 @@ const SportService = {
   getMatches: (params?: Record<string, unknown>) => apiClient.get('/sports', { params }),
   getMatch: (id: string) => apiClient.get(`/sports/${id}`),
   getMatchCommentary: (id: string) => apiClient.get(`/sports/${id}/commentary`),
+  // API uses a single POST toggle endpoint — no separate DELETE endpoint exists.
   setAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
-  // M-007: removeAlert must be DELETE, not POST — otherwise toggling off creates duplicates.
-  removeAlert: (matchId: string) => apiClient.delete(`/sports/matches/${matchId}/alert`),
+  removeAlert: (matchId: string) => apiClient.post(`/sports/matches/${matchId}/alert`),
 };
 
 const ReviewService = {
