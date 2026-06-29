@@ -393,6 +393,34 @@ export class GitHubSyncService implements OnModuleInit {
       });
 
       if (unchanged) {
+        // Even if the remote file is unchanged, local channels may have been
+        // deleted. If this source has zero active servers, force a fresh fetch
+        // by clearing the cached ETag so we re-parse and re-create channels.
+        const activeServerCount = await this.prisma.channelServer.count({
+          where: { githubSourceId: sourceId, deletedAt: null },
+        });
+
+        if (activeServerCount === 0) {
+          this.logger.warn(
+            `Source ${source.name}: remote unchanged but 0 active servers — clearing ETag cache and forcing re-sync`,
+          );
+          await this.prisma.gitHubSource.update({
+            where: { id: sourceId },
+            data: { etag: null, lastModified: null },
+          });
+          // Re-fetch without conditional headers so we get fresh content
+          const fresh = await this.fetchContent(source.url);
+          if (!fresh.unchanged && fresh.content) {
+            const parsed = this.detectAndParse(fresh.content, source.url);
+            stats.totalParsed = parsed.length;
+            this.logger.log(`Source ${source.name}: force re-sync parsed ${parsed.length} channels`);
+            await this.applyChanges(sourceId, parsed, stats);
+            await this.updateSourceCounts(sourceId);
+            await this.finalize(sourceId, logEntry.id, GitHubSyncStatus.success, stats, startedAt);
+            return;
+          }
+        }
+
         this.logger.log(`Source ${source.name}: unchanged (ETag hit)`);
         await this.finalize(sourceId, logEntry.id, GitHubSyncStatus.success, stats, startedAt, 'Content unchanged');
         return;
@@ -501,10 +529,10 @@ export class GitHubSyncService implements OnModuleInit {
     const byGhId = new Map<string, string>();   // githubChannelId → channelId (within this sync)
     const slugSet = new Set<string>();           // slugs already used in this sync
 
-    // Pre-load all existing channel slugs so uniqueSlug() never collides with the DB.
-    // We only select slug (one string per row) — far lighter than loading full channel objects.
+    // Pre-load ALL channel slugs (including soft-deleted) so uniqueSlug() never
+    // collides with the DB unique index. Soft-deleted rows still hold their slug
+    // in the unique index, so we must treat them as taken.
     const existingSlugRows = await this.prisma.channel.findMany({
-      where: { deletedAt: null },
       select: { slug: true },
     });
     for (const row of existingSlugRows) slugSet.add(row.slug);
@@ -627,16 +655,33 @@ export class GitHubSyncService implements OnModuleInit {
     }
 
     if (!channelId) {
-      // Not in in-memory maps — re-check DB (concurrent sync may have created it)
+      // Not in in-memory maps — re-check DB (concurrent sync or soft-deleted channel)
+      // Search including soft-deleted rows so we can restore them instead of hitting
+      // a P2002 unique constraint on normalizedName.
       const existingInDb = await this.prisma.channel.findFirst({
-        where: { normalizedName: normalized, deletedAt: null },
-        select: { id: true },
+        where: { normalizedName: normalized },
+        select: { id: true, deletedAt: true },
       });
 
       if (existingInDb) {
         channelId = existingInDb.id;
-        byNorm.set(normalized, channelId);
-        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId);
+        // Restore soft-deleted channel if needed
+        if (existingInDb.deletedAt) {
+          this.logger.log(`Restoring soft-deleted channel "${item.name}" found in DB pre-check`);
+          await this.prisma.channel.update({
+            where: { id: channelId },
+            data: {
+              deletedAt: null,
+              isActive: true,
+              name: item.name,
+              primaryStreamUrl: item.link,
+              ...(categoryId ? { categoryId } : {}),
+            },
+          });
+          stats.added++;
+        }
+        byNorm.set(normalized, channelId as string);
+        if (item.githubChannelId) byGhId.set(item.githubChannelId, channelId as string);
       } else {
         // Create a brand-new channel
         const slug = uniqueSlug(slugify(item.name), slugSet);
@@ -669,17 +714,40 @@ export class GitHubSyncService implements OnModuleInit {
           stats.added++;
         } catch (e: any) {
           if (e?.code !== P2002) throw e;
-          // Race condition (another process won) — find the winner by normalizedName or slug
+
+          // P2002 can happen because:
+          //   a) A concurrent sync created the channel first (race) → winner has deletedAt: null
+          //   b) The user deleted all channels (soft-delete) → winner has deletedAt set.
+          //      In this case we restore the soft-deleted row instead of creating a new one,
+          //      because the DB unique index on normalizedName still holds the old row.
           const winner = await this.prisma.channel.findFirst({
             where: {
               OR: [
-                { normalizedName: normalized, deletedAt: null },
-                { slug: slugify(item.name), deletedAt: null },
+                { normalizedName: normalized },
+                { slug: slugify(item.name) },
               ],
             },
-            select: { id: true },
+            select: { id: true, deletedAt: true },
           });
+
           if (!winner) throw e;
+
+          // If the winner is soft-deleted, restore it so it becomes active again
+          if (winner.deletedAt) {
+            this.logger.log(`Restoring soft-deleted channel "${item.name}" (normalizedName: ${normalized})`);
+            await this.prisma.channel.update({
+              where: { id: winner.id },
+              data: {
+                deletedAt: null,
+                isActive: true,
+                name: item.name,
+                primaryStreamUrl: item.link,
+                ...(categoryId ? { categoryId } : {}),
+              },
+            });
+            stats.added++;
+          }
+
           channelId = winner.id;
         }
 
