@@ -11,7 +11,7 @@ interface AppOpenAd {
 async function fetchAppOpenAd(): Promise<AppOpenAd | null> {
   try {
     const res = await fetch(
-      `${Config.API_BASE}/advertisements/placements?slug=app_open&isActive=true`,
+      `${Config.API_BASE}/advertisements/placements/public?slug=app_open`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (!res.ok) return null;
@@ -37,7 +37,7 @@ async function fetchAppOpenAd(): Promise<AppOpenAd | null> {
 
 async function trackImpression(adId: string) {
   try {
-    await fetch(`${Config.API_BASE}/advertisements/events`, {
+    await fetch(`${Config.API_BASE}/advertisements/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ advertisementId: adId, event: 'impression', placement: 'app_open' }),

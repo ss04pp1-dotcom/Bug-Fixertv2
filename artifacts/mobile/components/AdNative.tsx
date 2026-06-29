@@ -21,7 +21,7 @@ interface AdItem {
 async function fetchNativeAd(placement: string): Promise<AdItem | null> {
   try {
     const res = await fetch(
-      `${Config.API_BASE}/advertisements/placements?slug=${placement}&isActive=true`,
+      `${Config.API_BASE}/advertisements/placements/public?slug=${encodeURIComponent(placement)}`,
       { signal: AbortSignal.timeout(5000) },
     );
     if (!res.ok) return null;
@@ -48,7 +48,7 @@ async function fetchNativeAd(placement: string): Promise<AdItem | null> {
 
 async function trackEvent(adId: string, event: 'impression' | 'click', placement: string) {
   try {
-    await fetch(`${Config.API_BASE}/advertisements/events`, {
+    await fetch(`${Config.API_BASE}/advertisements/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ advertisementId: adId, event, placement }),
