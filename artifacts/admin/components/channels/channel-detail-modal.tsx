@@ -5,7 +5,7 @@ import {
   X, ChevronUp, ChevronDown, Play, Trash2, RotateCcw, Plus,
   CheckCircle, XCircle, Loader2, Clock, Github, Server,
   Shield, Save, AlertTriangle, Info, ExternalLink, ToggleLeft,
-  ToggleRight, Wifi, WifiOff, ImageIcon, Tag, Type, Copy,
+  ToggleRight, Wifi, WifiOff, ImageIcon, Tag, Type, Copy, Pencil,
 } from "lucide-react";
 import { apiClient } from "@/lib/axios-client";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -140,6 +140,15 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
   const addUARef        = useRef<HTMLInputElement>(null);
   const addRefererRef   = useRef<HTMLInputElement>(null);
   const addOriginRef    = useRef<HTMLInputElement>(null);
+
+  // ── Edit headers state ────────────────────────────────────────────────────
+  const [editingServerId,   setEditingServerId]   = useState<string | null>(null);
+  const [editHeaderSaving,  setEditHeaderSaving]  = useState(false);
+  const [editHeaderError,   setEditHeaderError]   = useState<string | null>(null);
+  const [editCookie,    setEditCookie]    = useState("");
+  const [editUserAgent, setEditUserAgent] = useState("");
+  const [editReferer,   setEditReferer]   = useState("");
+  const [editOrigin,    setEditOrigin]    = useState("");
 
   // ── Load data ─────────────────────────────────────────────────────────────
   const loadDetail = useCallback(async () => {
@@ -290,6 +299,47 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       await loadDetail();
     } finally {
       setReorderSaving(false);
+    }
+  };
+
+  const openEditHeaders = (srv: ChannelServer) => {
+    setEditingServerId(srv.id);
+    setEditCookie(srv.cookie ?? "");
+    setEditUserAgent(srv.userAgent ?? "");
+    setEditReferer(srv.referer ?? "");
+    setEditOrigin(srv.origin ?? "");
+    setEditHeaderError(null);
+  };
+
+  const handleSaveHeaders = async (srv: ChannelServer) => {
+    if (!detail) return;
+    setEditHeaderSaving(true);
+    setEditHeaderError(null);
+    try {
+      const res = await apiClient.patch(`/v1/channels/${detail.id}/servers/${srv.id}`, {
+        cookie:    editCookie.trim()    || null,
+        userAgent: editUserAgent.trim() || null,
+        referer:   editReferer.trim()   || null,
+        origin:    editOrigin.trim()    || null,
+      });
+      const updated = res.data?.data ?? res.data;
+      if (Array.isArray(updated)) {
+        setServers(updated);
+      } else {
+        setServers(prev => prev.map(s => s.id === srv.id ? {
+          ...s,
+          cookie:    editCookie.trim()    || null,
+          userAgent: editUserAgent.trim() || null,
+          referer:   editReferer.trim()   || null,
+          origin:    editOrigin.trim()    || null,
+        } : s));
+      }
+      setEditingServerId(null);
+      toast.success("Headers saved");
+    } catch (e: any) {
+      setEditHeaderError(e?.response?.data?.message ?? "Failed to save headers");
+    } finally {
+      setEditHeaderSaving(false);
     }
   };
 
@@ -722,6 +772,19 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                                 >
                                   {isTesting ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
                                 </button>
+                                {/* Edit headers */}
+                                <button
+                                  onClick={() => editingServerId === srv.id ? setEditingServerId(null) : openEditHeaders(srv)}
+                                  className={cn(
+                                    "w-6 h-6 flex items-center justify-center rounded transition-colors",
+                                    editingServerId === srv.id
+                                      ? "bg-primary/20 text-primary"
+                                      : "text-[#8B92A5] hover:bg-white/10 hover:text-white"
+                                  )}
+                                  title="Edit HTTP headers"
+                                >
+                                  <Pencil size={11} />
+                                </button>
                                 {/* Enable/disable */}
                                 <button
                                   onClick={() => handleToggleServer(srv)}
@@ -777,8 +840,8 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                               </div>
                             )}
 
-                            {/* HTTP headers (if set) */}
-                            {(srv.cookie || srv.userAgent || srv.referer || srv.origin) && (
+                            {/* HTTP headers display (when not editing) */}
+                            {editingServerId !== srv.id && (srv.cookie || srv.userAgent || srv.referer || srv.origin) && (
                               <div className="flex flex-col gap-1 pt-1 border-t border-border/50">
                                 {[
                                   { label: 'Cookie',     value: srv.cookie },
@@ -798,6 +861,72 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                                     </button>
                                   </div>
                                 ))}
+                              </div>
+                            )}
+
+                            {/* Inline header editor */}
+                            {editingServerId === srv.id && (
+                              <div className="pt-2 border-t border-border/50 space-y-2">
+                                <p className="text-[10px] text-[#8B92A5] font-medium uppercase tracking-wide">Edit HTTP Headers</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[10px] text-[#8B92A5] mb-1 block">Cookie</label>
+                                    <input
+                                      value={editCookie}
+                                      onChange={e => setEditCookie(e.target.value)}
+                                      placeholder="session=abc; token=xyz"
+                                      className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-primary font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-[#8B92A5] mb-1 block">User-Agent</label>
+                                    <input
+                                      value={editUserAgent}
+                                      onChange={e => setEditUserAgent(e.target.value)}
+                                      placeholder="AndroidXMedia3/1.8.0"
+                                      className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-primary font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-[#8B92A5] mb-1 block">Referer</label>
+                                    <input
+                                      value={editReferer}
+                                      onChange={e => setEditReferer(e.target.value)}
+                                      placeholder="https://example.com/"
+                                      className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-primary font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-[#8B92A5] mb-1 block">Origin</label>
+                                    <input
+                                      value={editOrigin}
+                                      onChange={e => setEditOrigin(e.target.value)}
+                                      placeholder="https://example.com"
+                                      className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-primary font-mono"
+                                    />
+                                  </div>
+                                </div>
+                                {editHeaderError && (
+                                  <p className="text-[10px] text-red-400">{editHeaderError}</p>
+                                )}
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingServerId(null)}
+                                    className="px-3 py-1.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:text-white transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveHeaders(srv)}
+                                    disabled={editHeaderSaving}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                                  >
+                                    {editHeaderSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                                    Save Headers
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>

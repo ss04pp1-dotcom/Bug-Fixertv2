@@ -15,30 +15,25 @@ export class UpdateServerDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
-  isEnabled?: boolean;
+  enabled?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  streamType?: string;
+  cookie?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  cookie?: string;
+  userAgent?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  userAgent?: string;
+  referer?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  referer?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  origin?: string;
+  origin?: string | null;
 }
