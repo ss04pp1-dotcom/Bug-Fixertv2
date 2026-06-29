@@ -192,7 +192,11 @@ export class M3uParser implements ChannelParser {
     const userAgent = attr('user-agent', 'useragent', 'http-user-agent', 'ua') || undefined;
 
     // ── Referer ──────────────────────────────────────────────────────────────
-    const referer = attr('referrer', 'referer', 'http-referrer', 'http-referer', 'origin') || undefined;
+    // NOTE: 'origin' is intentionally excluded here — it has its own field below.
+    // Including 'origin' in the referer list caused a single origin="https://x.com"
+    // attribute to populate BOTH Referer and Origin, which breaks servers that
+    // validate the Referer header strictly (wrong host or path mismatch).
+    const referer = attr('referrer', 'referer', 'http-referrer', 'http-referer') || undefined;
 
     // ── Cookie ───────────────────────────────────────────────────────────────
     const cookie = attr('cookie', 'http-cookie', 'cookies') || undefined;

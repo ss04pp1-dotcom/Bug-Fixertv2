@@ -852,11 +852,14 @@ export class GitHubSyncService implements OnModuleInit {
       });
 
       if (globalExisting) {
-        // Another source already tracks this URL for this channel — update headers/cookie only
+        // Another source (or a manually-created admin server) already has this URL
+        // for this channel.  We only update the lastSeenAt / enabled state to keep it
+        // alive — we must NOT overwrite its headers.  An admin may have manually set a
+        // cookie/UA on that server; blindly applying this source's headerFields would
+        // silently clear those credentials and break the stream.
         await this.prisma.channelServer.update({
           where: { id: globalExisting.id },
           data: {
-            ...headerFields,
             lastSeenAt: new Date(),
             deletedAt: null,
             enabled: true,
@@ -875,10 +878,12 @@ export class GitHubSyncService implements OnModuleInit {
           data: {
             channelId,
             link: item.link,
-            cookie:    item.cookie    ?? null,
-            userAgent: item.userAgent ?? null,
-            referer:   item.referer   ?? null,
-            origin:    item.origin    ?? null,
+            // Apply per-item headers first; fall back to source-level defaults
+            // (same logic as the existingServer update path above).
+            cookie:    item.cookie    ?? sourceDefaults.cookie    ?? null,
+            userAgent: item.userAgent ?? sourceDefaults.userAgent ?? null,
+            referer:   item.referer   ?? sourceDefaults.referer   ?? null,
+            origin:    item.origin    ?? sourceDefaults.origin    ?? null,
             priority: 100,
             sourceType: ServerSourceType.GITHUB,
             githubSourceId: sourceId,
