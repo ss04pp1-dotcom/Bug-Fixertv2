@@ -657,13 +657,19 @@ export default function GlobalVideoPlayer() {
       return c.split('&').join('; ');
     };
 
-    // Always include UA — use explicit one from source, else Lavf (FFmpeg/VLC)
-    const headers: Record<string, string> = {
-      'User-Agent': raw['User-Agent'] || 'Lavf/58.29.100',
-    };
-    if (raw['Cookie'])  headers['Cookie']  = normalizeCookie(raw['Cookie']);
-    if (raw['Referer']) headers['Referer'] = raw['Referer'];
-    if (raw['Origin'])  headers['Origin']  = raw['Origin'];
+    // Always keep headers non-empty — DataSourceUtil.kt caches a singleton
+    // OkHttpDataSource.Factory and only rebuilds when requestHeaders is non-empty.
+    // 'Icy-MetaData: 1' is a standard Shoutcast/Icecast header that virtually all
+    // HTTP streaming servers silently ignore — safe on all CDNs and IPTV panels.
+    const headers: Record<string, string> = { 'Icy-MetaData': '1' };
+
+    // User-Agent: ONLY set if the source/admin explicitly provides one.
+    // Forcing a UA (even Lavf) can break channels on panels that whitelist specific UAs
+    // or block VLC-style UAs. Let ExoPlayer's OkHttp use its built-in default otherwise.
+    if (raw['User-Agent']) headers['User-Agent'] = raw['User-Agent'];
+    if (raw['Cookie'])     headers['Cookie']     = normalizeCookie(raw['Cookie']);
+    if (raw['Referer'])    headers['Referer']    = raw['Referer'];
+    if (raw['Origin'])     headers['Origin']     = raw['Origin'];
     // Forward any other custom headers the server requires
     Object.keys(raw).forEach((k) => {
       if (!headers[k]) headers[k] = raw[k];

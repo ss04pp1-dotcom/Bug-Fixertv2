@@ -69,15 +69,16 @@ function buildStreamSource(
   const referer   = data?.referer   || pipeHeaders['referer'] || pipeHeaders['referrer'];
   const origin    = data?.origin    || pipeHeaders['origin'];
 
-  // Always include UA so DataSourceUtil.kt always rebuilds its OkHttpDataSource.Factory
-  // (empty headers map → singleton cache returned → old headers leak between streams).
-  // Lavf/58.29.100 (FFmpeg UA) is whitelisted by all major IPTV panels at full bitrate.
-  const headers: Record<string, string> = {
-    'User-Agent': userAgent || 'Lavf/58.29.100',
-  };
-  if (cookie)   headers['Cookie']  = cookie;
-  if (referer)  headers['Referer'] = referer;
-  if (origin)   headers['Origin']  = origin;
+  // Always non-empty — Icy-MetaData forces DataSourceUtil to rebuild its
+  // OkHttpDataSource.Factory singleton for each stream, preventing header leakage.
+  // Virtually all HTTP streaming servers silently ignore Icy-MetaData.
+  // User-Agent: only set when explicitly provided; forcing a UA (even Lavf)
+  // can break channels on panels that whitelist specific UAs or block VLC UAs.
+  const headers: Record<string, string> = { 'Icy-MetaData': '1' };
+  if (userAgent) headers['User-Agent'] = userAgent;
+  if (cookie)    headers['Cookie']     = cookie;
+  if (referer)   headers['Referer']    = referer;
+  if (origin)    headers['Origin']     = origin;
 
   return { label, url, quality, headers };
 }

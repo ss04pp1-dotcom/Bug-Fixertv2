@@ -105,17 +105,17 @@ export default function LivePlayerScreen() {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
-        // Always include headers (non-empty) so DataSourceUtil rebuilds its
-        // OkHttpDataSource.Factory for this stream — avoids header leakage
-        // between channels due to the singleton caching in DataSourceUtil.kt.
-        // Use server-provided UA if available, else Lavf (FFmpeg/VLC UA) which
-        // IPTV panels universally whitelist at full bitrate.
-        const headers: Record<string, string> = {
-          'User-Agent': srv.userAgent || 'Lavf/58.29.100',
-        };
-        if (srv.cookie)  headers['Cookie']  = srv.cookie;
-        if (srv.referer) headers['Referer'] = srv.referer;
-        if (srv.origin)  headers['Origin']  = srv.origin;
+        // Always non-empty — Icy-MetaData forces DataSourceUtil to rebuild its
+        // OkHttpDataSource.Factory singleton for each channel, preventing header
+        // leakage from a previously-loaded channel. Virtually all HTTP streaming
+        // servers silently ignore Icy-MetaData.
+        // User-Agent: only set when explicitly provided; forcing a UA (even Lavf)
+        // can break channels on panels that whitelist specific UAs or block VLC UAs.
+        const headers: Record<string, string> = { 'Icy-MetaData': '1' };
+        if (srv.userAgent) headers['User-Agent'] = srv.userAgent;
+        if (srv.cookie)    headers['Cookie']     = srv.cookie;
+        if (srv.referer)   headers['Referer']    = srv.referer;
+        if (srv.origin)    headers['Origin']     = srv.origin;
         srcs.push({
           url: srv.link,
           label: `Server ${i + 1}`,
