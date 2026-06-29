@@ -91,7 +91,7 @@ export class ChannelsService {
    */
   async findOneWithSources(id: string) {
     const channel = await this.prisma.channel.findFirst({
-      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       include: {
         category: { select: { id: true, name: true, slug: true } },
         epgPrograms: {
@@ -163,12 +163,23 @@ export class ChannelsService {
   async getStreamUrl(id: string) {
     const channel = await this.prisma.channel.findFirst({
       where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
-      select: { id: true, name: true, primaryStreamUrl: true, backupStreamUrl: true, streamType: true, isPremium: true },
+      select: {
+        id: true, name: true, primaryStreamUrl: true,
+        backupStreamUrl: true, streamType: true, isPremium: true,
+        servers: {
+          where: { deletedAt: null, enabled: true },
+          orderBy: { priority: 'asc' },
+          select: { link: true },
+          take: 1,
+        },
+      },
     });
     if (!channel) throw new NotFoundException('Channel not found');
-    if (!channel.primaryStreamUrl) throw new NotFoundException('Stream URL not available for this channel');
+    // Fall back to first enabled server link if primaryStreamUrl is not set
+    const streamUrl = channel.primaryStreamUrl || (channel as any).servers?.[0]?.link || null;
+    if (!streamUrl) throw new NotFoundException('Stream URL not available for this channel');
     return {
-      streamUrl: channel.primaryStreamUrl,
+      streamUrl,
       backupUrl: channel.backupStreamUrl ?? null,
       streamType: channel.streamType,
       id: channel.id,

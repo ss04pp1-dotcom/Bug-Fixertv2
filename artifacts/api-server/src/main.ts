@@ -83,7 +83,7 @@ async function bootstrap(): Promise<void> {
         }
       : false,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Client'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Client', 'Accept', 'X-Requested-With'],
     exposedHeaders: ['X-Request-ID'],
     credentials: true,
   });

@@ -98,8 +98,8 @@ function detectStreamFormat(url: string): StreamFormat {
   if (lower.endsWith('.ts') || lower.includes('/ts/')) return 'MPEGTS';
   if (lower.endsWith('.mp4') || lower.includes('.mp4?')) return 'MP4';
   if (lower.endsWith('.mkv')) return 'MKV';
-  if (lower.match(/:\d{2,5}\/(live|stream|channel)\//)) return 'HLS';
-  if (lower.match(/:\d{2,5}\/(movie|vod)\//)) return 'MP4';
+  if (lower.match(/(:\d{2,5})?\/(live|stream|channel)\//)) return 'HLS';
+  if (lower.match(/(:\d{2,5})?\/(movie|vod)\//)) return 'MP4';
   if (lower.match(/\/live\/[^/]+\/[^/]+\/\d+$/)) return 'HLS';
   if (lower.match(/\/movie\/[^/]+\/[^/]+\/\d+$/)) return 'MP4';
   return 'UNKNOWN';
@@ -265,6 +265,18 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         onBuffer={(d: any) => onBuffer(d?.isBuffering ?? false)}
         onError={onError}
         onEnd={onEnd}
+        onVideoTracks={(data: any) => {
+          const tracks = Array.isArray(data) ? data : data?.videoTracks ?? [];
+          if (tracks.length) onVideoTracks(tracks);
+        }}
+        onAudioTracks={(data: any) => {
+          const tracks = Array.isArray(data) ? data : data?.audioTracks ?? [];
+          if (tracks.length) onAudioTracks(tracks);
+        }}
+        onTextTracks={(data: any) => {
+          const tracks = Array.isArray(data) ? data : data?.textTracks ?? [];
+          if (tracks.length) onTextTracks(tracks);
+        }}
         onBandwidthUpdate={(d: any) => {
           // Media3 onBandwidthUpdate fires alongside reportBandwidth.
           // No-op here; hook into if you need adaptive quality UI.
@@ -658,13 +670,15 @@ export default function GlobalVideoPlayer() {
 
     const raw = src.headers ?? {};
 
-    // Normalize Cookie: '&'-separated → '; '-separated
+    // Normalize Cookie to HTTP-spec format: 'k=v; k2=v2'
+    // Handles two common IPTV panel formats:
+    //   1. '&'-separated  → 'k=v; k2=v2'   (e.g. "session=abc&token=xyz")
+    //   2. ';'-separated without space → 'k=v; k2=v2'   (e.g. "session=abc;token=xyz")
     const normalizeCookie = (c: string): string => {
       if (!c) return c;
-      // If already contains ';' it is already HTTP-format — leave it
-      if (c.includes(';')) return c;
-      // Convert '&'-separated k=v pairs → 'k=v; k2=v2'
-      return c.split('&').join('; ');
+      if (c.includes('&') && !c.includes(';')) return c.split('&').join('; ');
+      // Normalize bare semicolons (no trailing space) to '; ' as HTTP spec requires
+      return c.replace(/;\s*/g, '; ').trim();
     };
 
     // Always keep headers non-empty — DataSourceUtil.kt caches a singleton

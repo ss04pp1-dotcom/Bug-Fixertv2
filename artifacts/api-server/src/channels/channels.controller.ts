@@ -136,13 +136,14 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor', 'moderator', 'user')
   @ApiOperation({ summary: 'Get channel with full server credentials for authenticated playback (mobile)' })
-  async findOneWithSources(@Param('id') id: string) {
+  async findOneWithSources(@Param('id') id: string, @Req() req: Request) {
+    await this.enforceGeoBlock(req);
     return this.channelsService.findOneWithSources(id);
   }
 
   @Get(':id/details')
   @ApiBearerAuth()
-  @Roles('super_admin', 'admin', 'editor', 'moderator')
+  @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Get channel by ID or slug with full server credentials (admin only)' })
   async findOneAdmin(@Param('id') id: string) {
     return this.channelsService.findOneAdmin(id);
