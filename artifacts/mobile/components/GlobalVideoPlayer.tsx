@@ -533,6 +533,11 @@ export default function GlobalVideoPlayer() {
   const sy   = useSharedValue(SH * 0.55);
   const miniScale = useSharedValue(0);
   const miniOpac  = useSharedValue(0);
+  // Gate shared value: 1 when mini, 0 otherwise.
+  // Prevents stale translateX/Y from leaking into top/fullscreen mode on
+  // React Native's new architecture (Fabric) where conditional animated
+  // styles don't always detach cleanly between renders.
+  const isMiniSV = useSharedValue(0);
   const clampMinY = useSharedValue(40 + MINI_MARGIN);
   const clampMaxY = useSharedValue(SH - MINI_H - MINI_TITLE_H - 80 - MINI_MARGIN);
 
@@ -605,11 +610,11 @@ export default function GlobalVideoPlayer() {
 
   const miniAnimStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: posX.value },
-      { translateY: posY.value },
-      { scale: miniScale.value },
+      { translateX: isMiniSV.value === 1 ? posX.value : 0 },
+      { translateY: isMiniSV.value === 1 ? posY.value : 0 },
+      { scale: isMiniSV.value === 1 ? miniScale.value : 1 },
     ],
-    opacity: miniOpac.value,
+    opacity: isMiniSV.value === 1 ? miniOpac.value : 1,
   }));
 
   // Brightness overlay — driven by shared value, ZERO re-renders during swipe
@@ -1033,6 +1038,7 @@ export default function GlobalVideoPlayer() {
   // ── Mini mode enter/exit animation ──────────────────────────────────────
   useEffect(() => {
     if (mode === 'mini') {
+      isMiniSV.value = 1;
       posX.value = SNAP_RIGHT;
       posY.value = SH * 0.55;
       sx.value   = SNAP_RIGHT;
@@ -1040,6 +1046,7 @@ export default function GlobalVideoPlayer() {
       miniScale.value = withSpring(1, { damping: 20, stiffness: 260 });
       miniOpac.value  = withTiming(1, { duration: 200 });
     } else {
+      isMiniSV.value = 0;
       miniScale.value = 0;
       miniOpac.value  = 0;
     }
@@ -1090,7 +1097,7 @@ export default function GlobalVideoPlayer() {
   //   ExoPlayer/AVPlayer never gets destroyed → no rebuffer, no reload.
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <>
+    <View style={g.playerRoot} pointerEvents="box-none">
       {/* ══════════════════════════════════════════════════════════════════
           SINGLE VIDEO SURFACE — never unmounts between mode transitions.
           style changes (position/size) are applied without remounting.
@@ -1098,7 +1105,7 @@ export default function GlobalVideoPlayer() {
           ══════════════════════════════════════════════════════════════════ */}
       {nativeSource && (
         <Animated.View
-          style={[videoSurfaceBaseStyle, mode === 'mini' ? miniAnimStyle : undefined]}
+          style={[videoSurfaceBaseStyle, miniAnimStyle]}
           pointerEvents="none"
         >
           <NativeIPTVPlayer
@@ -1679,7 +1686,7 @@ export default function GlobalVideoPlayer() {
           />
         </View>
       )}
-    </>
+    </View>
   );
 }
 
@@ -1687,6 +1694,18 @@ export default function GlobalVideoPlayer() {
 // STYLES
 // ════════════════════════════════════════════════════════════════════════════
 const g = StyleSheet.create({
+  // Root wrapper — absoluteFill so all absolute children position correctly
+  // on React Native new architecture (Fabric). Using a Fragment caused
+  // translateY from the mini-player's shared values to leak into top mode.
+  playerRoot: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9997,
+    elevation: 49,
+  },
   // Fullscreen
   fullRoot: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
