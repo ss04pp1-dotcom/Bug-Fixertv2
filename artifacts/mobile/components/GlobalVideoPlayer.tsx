@@ -1719,7 +1719,7 @@ const g = StyleSheet.create({
   // Fullscreen
   fullRoot: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#000', zIndex: 9999, elevation: 50,
+    backgroundColor: 'transparent', zIndex: 9999, elevation: 50,
   },
   overlayCenter: {
     ...StyleSheet.absoluteFillObject,
@@ -1779,7 +1779,7 @@ const g = StyleSheet.create({
   // Top mode (video at top, related channels visible below)
   topRoot: {
     position: 'absolute', left: 0, right: 0,
-    backgroundColor: '#000', zIndex: 9999, elevation: 50,
+    backgroundColor: 'transparent', zIndex: 9999, elevation: 50,
   },
   topControls: {
     position: 'absolute', top: 0, left: 0, right: 0,
