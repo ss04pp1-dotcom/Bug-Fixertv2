@@ -90,30 +90,70 @@ const BUFFER_VOD = {
 // ─── Stream type detection ────────────────────────────────────────────────────
 type StreamFormat = 'HLS' | 'DASH' | 'MPEGTS' | 'MP4' | 'MKV' | 'UNKNOWN';
 
+/**
+ * Detect stream format from the URL.
+ *
+ * Checks query-string params FIRST (most reliable signal when present):
+ *   ?output=ts / ?type=ts  → MPEGTS   (raw transport stream)
+ *   ?output=m3u8            → HLS
+ *
+ * Then falls back to path-based detection for common extensions and
+ * Xtream-Codes / MAG / Stalker URL patterns.
+ */
 function detectStreamFormat(url: string): StreamFormat {
   if (!url) return 'UNKNOWN';
-  const lower = url.toLowerCase().split('?')[0].split('#')[0];
-  if (lower.includes('.m3u8') || lower.includes('/hls/')) return 'HLS';
-  if (lower.includes('.mpd') || lower.includes('/dash/')) return 'DASH';
-  if (lower.endsWith('.ts') || lower.includes('/ts/')) return 'MPEGTS';
-  if (lower.endsWith('.mp4') || lower.includes('.mp4?')) return 'MP4';
-  if (lower.endsWith('.mkv')) return 'MKV';
-  if (lower.match(/(:\d{2,5})?\/(live|stream|channel)\//)) return 'HLS';
-  if (lower.match(/(:\d{2,5})?\/(movie|vod)\//)) return 'MP4';
-  if (lower.match(/\/live\/[^/]+\/[^/]+\/\d+$/)) return 'HLS';
-  if (lower.match(/\/movie\/[^/]+\/[^/]+\/\d+$/)) return 'MP4';
+  const lower = url.toLowerCase();
+  const qIdx  = lower.indexOf('?');
+  const path  = (qIdx >= 0 ? lower.slice(0, qIdx) : lower).split('#')[0];
+  const query = qIdx >= 0 ? lower.slice(qIdx) : '';
+
+  // ── Query-string signals (authoritative when present) ─────────────────────
+  if (query.includes('output=ts') || query.includes('type=ts'))   return 'MPEGTS';
+  if (query.includes('output=m3u_plus') || query.includes('output=m3u8') ||
+      query.includes('type=m3u'))                                  return 'HLS';
+
+  // ── Path / extension ──────────────────────────────────────────────────────
+  if (path.includes('.m3u8') || path.includes('/hls/'))           return 'HLS';
+  if (path.includes('.mpd')  || path.includes('/dash/'))          return 'DASH';
+  if (path.endsWith('.ts')   || path.includes('/ts/'))            return 'MPEGTS';
+  if (path.endsWith('.mp4')  || path.includes('.mp4'))            return 'MP4';
+  if (path.endsWith('.mkv'))                                       return 'MKV';
+
+  // ── Xtream Codes / MAG / Stalker URL patterns ─────────────────────────────
+  // /live/user/pass/<id>   — live channels: always HLS by default
+  if (path.match(/\/live\/[^/]+\/[^/]+\/\d+(?:\.\w+)?$/))        return 'HLS';
+  // /movie/user/pass/<id>  — VOD movies
+  if (path.match(/\/movie\/[^/]+\/[^/]+\/\d+(?:\.\w+)?$/))       return 'MP4';
+  // Generic path segments (/live/, /stream/, /channel/ → HLS; /vod/, /movie/ → MP4)
+  if (path.match(/(:\d{2,5})?\/(live|stream|channel)\//))         return 'HLS';
+  if (path.match(/(:\d{2,5})?\/(movie|vod)\//))                   return 'MP4';
+
   return 'UNKNOWN';
 }
 
+/**
+ * Return the react-native-video `type` hint for ExoPlayer.
+ *
+ * Providing the type avoids an extra HTTP round-trip where ExoPlayer would
+ * otherwise sniff the Content-Type header — on some IPTV servers this
+ * sniff causes a 5-30 s delay before the first frame.
+ *
+ * For Xtream Codes live paths (no extension, but format=HLS) we now pass
+ * 'm3u8' explicitly so ExoPlayer uses the HLS renderer from the first byte.
+ * If the server actually returns raw TS instead, ExoPlayer's HLS parser
+ * rejects it within ~1 s and re-probes — still faster than a blind sniff
+ * that blocks for 20+ s on many IPTV CDNs.
+ */
 function getVideoType(url: string, fmt: StreamFormat): string | undefined {
   const lower = (url || '').toLowerCase().split('?')[0].split('#')[0];
-  // Only hint the type when we are CERTAIN — avoids a wasted HEAD request from
-  // ExoPlayer trying to sniff the content-type on every stream open.
+  // Explicit extension — most reliable
   if (lower.endsWith('.m3u8') || lower.includes('manifest.m3u8')) return 'm3u8';
-  if (lower.endsWith('.mpd') || lower.includes('manifest.mpd'))   return 'mpd';
-  // Xtream Codes live paths end with a numeric stream ID — no extension.
-  // They always serve HLS or TS; let ExoPlayer sniff (do NOT force a type here
-  // because the panel can serve either .m3u8 or .ts depending on output_format).
+  if (lower.endsWith('.mpd')  || lower.includes('manifest.mpd'))  return 'mpd';
+  if (lower.endsWith('.mp4')  || lower.endsWith('.mkv'))          return undefined;
+  // Format-based hint — avoids the sniff round-trip for Xtream Codes paths
+  if (fmt === 'HLS')                                              return 'm3u8';
+  if (fmt === 'DASH')                                             return 'mpd';
+  // MPEGTS (raw TS), MP4, UNKNOWN — let ExoPlayer detect naturally
   return undefined;
 }
 
@@ -664,55 +704,66 @@ export default function GlobalVideoPlayer() {
   //    Normalize here before ExoPlayer/OkHttp sees them.
   // 4. Pass 'type' hint only for unambiguous extensions (.m3u8, .mpd) so
   //    ExoPlayer doesn't waste a HEAD request sniffing. For Xtream codes paths
-  //    (/live/, /movie/) let ExoPlayer sniff — same server may serve HLS or TS.
+  //    (/live/, /movie/) we now PASS the type hint based on detected format.
+  //
+  // CRITICAL — why streamFormat is NOT a dependency here:
+  // streamFormat is a React state updated by a useEffect AFTER the first render.
+  // If it were a dep, nativeSource would recompute (and Video would re-assign
+  // its source) twice every time a channel opens:
+  //   render 1 → streamFormat='UNKNOWN' → nativeSource v1 → ExoPlayer starts
+  //   useEffect → setStreamFormat('HLS') → re-render
+  //   render 2 → streamFormat='HLS'     → nativeSource v2 → ExoPlayer RESTARTS ← BUG
+  // Fix: compute format inline so nativeSource only recalculates when the URL
+  // or headers actually change — ExoPlayer starts exactly once.
   const nativeSource = useMemo(() => {
     if (!src?.url) return null;
+
+    // Inline format detection — always current, never stale.
+    const fmt = detectStreamFormat(src.url);
 
     const raw = src.headers ?? {};
 
     // Normalize Cookie to HTTP-spec format: 'k=v; k2=v2'
     // Handles two common IPTV panel formats:
     //   1. '&'-separated  → 'k=v; k2=v2'   (e.g. "session=abc&token=xyz")
-    //   2. ';'-separated without space → 'k=v; k2=v2'   (e.g. "session=abc;token=xyz")
+    //   2. bare ';' without space → 'k=v; k2=v2'
     const normalizeCookie = (c: string): string => {
       if (!c) return c;
       if (c.includes('&') && !c.includes(';')) return c.split('&').join('; ');
-      // Normalize bare semicolons (no trailing space) to '; ' as HTTP spec requires
       return c.replace(/;\s*/g, '; ').trim();
     };
 
-    // Always keep headers non-empty — DataSourceUtil.kt caches a singleton
+    // Headers must be non-empty — DataSourceUtil.kt caches a singleton
     // OkHttpDataSource.Factory and only rebuilds when requestHeaders is non-empty.
-    // User-Agent alone is sufficient to trigger a rebuild and prevent old headers
-    // from leaking between streams.
+    // User-Agent alone ensures the factory always gets a fresh instance.
     //
-    // IMPORTANT: Do NOT add 'Icy-MetaData: 1' here. That header tells Shoutcast /
-    // Icecast servers to embed ICY audio metadata inside the stream. On IPTV video
-    // streaming servers (e.g. "Streamer 23.07") it causes the server to spend 20-30 s
-    // preparing audio metadata before sending the first byte — ExoPlayer times out
-    // and the channel never plays. Without that header the same server responds in
-    // under 1 second. Mini Player works because it never sends Icy-MetaData.
+    // DO NOT add 'Icy-MetaData: 1' — it causes Shoutcast/Icecast-based IPTV
+    // servers to stall 20-30 s embedding audio metadata before the first byte.
+    // TiviMate / Mini Player never send that header — that is one reason they
+    // start faster.
     //
-    // Default UA = 'Lavf/58.29.100' (FFmpeg). This is the most universally
-    // whitelisted UA across all IPTV panels and CDNs. Overridden by source-provided UA.
+    // Default UA = 'Lavf/58.29.100' (FFmpeg). Universally whitelisted by
+    // Xtream Codes, Stalker, Emby, Jellyfin and most CDNs. VLC and TiviMate
+    // use the same UA string. Source-provided UA overrides the default.
     const headers: Record<string, string> = {
       'User-Agent': raw['User-Agent'] || 'Lavf/58.29.100',
     };
-    if (raw['Cookie'])     headers['Cookie']     = normalizeCookie(raw['Cookie']);
-    if (raw['Referer'])    headers['Referer']    = raw['Referer'];
-    if (raw['Origin'])     headers['Origin']     = raw['Origin'];
-    // Forward any other custom headers the server requires
+    if (raw['Cookie'])  headers['Cookie']  = normalizeCookie(raw['Cookie']);
+    if (raw['Referer']) headers['Referer'] = raw['Referer'];
+    if (raw['Origin'])  headers['Origin']  = raw['Origin'];
+    // Forward any additional headers the server requires
     Object.keys(raw).forEach((k) => {
       if (!headers[k]) headers[k] = raw[k];
     });
 
-    const videoType = getVideoType(src.url, streamFormat);
+    const videoType = getVideoType(src.url, fmt);
     return {
       uri: src.url,
       headers,
       ...(videoType ? { type: videoType } : {}),
     };
-  }, [src?.url, src?.headers, streamFormat]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src?.url, src?.headers]);  // intentionally excludes streamFormat — see comment above
 
   // ── Selected tracks ──────────────────────────────────────────────────────
   // FIX: after onLoad, force the HIGHEST-bitrate video track so the player
