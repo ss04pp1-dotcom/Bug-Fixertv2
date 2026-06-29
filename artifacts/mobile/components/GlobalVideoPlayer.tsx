@@ -1452,8 +1452,8 @@ export default function GlobalVideoPlayer() {
           </View>
         )}
 
-        {/* Gesture layer */}
-        {!pipActive && (
+        {/* Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
+        {!pipActive && !playerError && (
           <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
         )}
 
@@ -1670,8 +1670,8 @@ export default function GlobalVideoPlayer() {
         </View>
       )}
 
-      {/* ── Gesture layer (volume + brightness + double-tap seek) ────────── */}
-      {!pipActive && (
+      {/* ── Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
+      {!pipActive && !playerError && (
         <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
       )}
 
