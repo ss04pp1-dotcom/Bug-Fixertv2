@@ -381,50 +381,20 @@ export class GitHubSyncService implements OnModuleInit {
     const startedAt = Date.now();
 
     try {
-      const { content, etag, lastModified, unchanged } = await this.fetchContent(
-        source.url,
-        source.etag ?? undefined,
-        source.lastModified ?? undefined,
-      );
+      // Always clear ETag/Last-Modified before fetching so every sync — both
+      // scheduled and manual — re-fetches the full file content. This guarantees
+      // that even a single character change in the source is picked up immediately.
+      await this.prisma.gitHubSource.update({
+        where: { id: sourceId },
+        data: { etag: null, lastModified: null },
+      });
+
+      const { content } = await this.fetchContent(source.url);
 
       await this.prisma.gitHubSource.update({
         where: { id: sourceId },
-        data: { lastFetchedAt: new Date(), etag: etag ?? null, lastModified: lastModified ?? null },
+        data: { lastFetchedAt: new Date() },
       });
-
-      if (unchanged) {
-        // Even if the remote file is unchanged, local channels may have been
-        // deleted. If this source has zero active servers, force a fresh fetch
-        // by clearing the cached ETag so we re-parse and re-create channels.
-        const activeServerCount = await this.prisma.channelServer.count({
-          where: { githubSourceId: sourceId, deletedAt: null },
-        });
-
-        if (activeServerCount === 0) {
-          this.logger.warn(
-            `Source ${source.name}: remote unchanged but 0 active servers — clearing ETag cache and forcing re-sync`,
-          );
-          await this.prisma.gitHubSource.update({
-            where: { id: sourceId },
-            data: { etag: null, lastModified: null },
-          });
-          // Re-fetch without conditional headers so we get fresh content
-          const fresh = await this.fetchContent(source.url);
-          if (!fresh.unchanged && fresh.content) {
-            const parsed = this.detectAndParse(fresh.content, source.url);
-            stats.totalParsed = parsed.length;
-            this.logger.log(`Source ${source.name}: force re-sync parsed ${parsed.length} channels`);
-            await this.applyChanges(sourceId, parsed, stats);
-            await this.updateSourceCounts(sourceId);
-            await this.finalize(sourceId, logEntry.id, GitHubSyncStatus.success, stats, startedAt);
-            return;
-          }
-        }
-
-        this.logger.log(`Source ${source.name}: unchanged (ETag hit)`);
-        await this.finalize(sourceId, logEntry.id, GitHubSyncStatus.success, stats, startedAt, 'Content unchanged');
-        return;
-      }
 
       const parsed = this.detectAndParse(content, source.url);
       stats.totalParsed = parsed.length;
@@ -554,18 +524,15 @@ export class GitHubSyncService implements OnModuleInit {
       );
     }
 
-    // Soft-delete servers from this source that were NOT in latest fetch
-    const staleIds = existingServers
-      .filter(s => !seenServerIds.has(s.id))
-      .map(s => s.id);
-
-    if (staleIds.length > 0) {
-      await this.prisma.channelServer.updateMany({
-        where: { id: { in: staleIds } },
-        data: { deletedAt: new Date() },
-      });
-      stats.deleted += staleIds.length;
-      await this.cleanupOrphanChannels(staleIds);
+    // Servers not seen in this sync are intentionally left active.
+    // A separate daily scheduler (cleanupStaleGithubServers) will soft-delete
+    // them after 2 days if they are still missing, so short-lived outages or
+    // temporary source changes do not immediately remove channels from the DB.
+    const missedCount = existingServers.filter(s => !seenServerIds.has(s.id)).length;
+    if (missedCount > 0) {
+      this.logger.log(
+        `${missedCount} server(s) not seen in this sync — will be cleaned up by the stale-server job if absent for 2+ days`,
+      );
     }
   }
 
@@ -928,6 +895,51 @@ export class GitHubSyncService implements OnModuleInit {
       this.logger.warn(`Could not resolve category "${groupName}": ${e.message}`);
       return null;
     }
+  }
+
+  /**
+   * Daily cleanup: soft-delete GitHub-managed servers that have not been seen
+   * in any sync for 2+ days, then clean up any channels that become orphaned.
+   *
+   * Rules:
+   *  • Only targets servers where githubSourceId IS NOT NULL (GitHub-owned).
+   *  • A server is "stale" when lastSeenAt < (now − 48 h) AND deletedAt IS NULL.
+   *  • After soft-deleting a stale server, if the channel has NO other active
+   *    servers (from any source) the channel itself is also soft-deleted.
+   *  • If the channel still has active servers from another source or admin, it
+   *    is kept — only the stale GitHub server is removed.
+   */
+  async cleanupStaleGithubServers(): Promise<void> {
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000); // 48 hours ago
+
+    const staleServers = await this.prisma.channelServer.findMany({
+      where: {
+        githubSourceId: { not: null },
+        deletedAt: null,
+        lastSeenAt: { lt: cutoff },
+      },
+      select: { id: true, channelId: true },
+    });
+
+    if (staleServers.length === 0) {
+      this.logger.log('Stale-server cleanup: nothing to clean up');
+      return;
+    }
+
+    this.logger.log(`Stale-server cleanup: found ${staleServers.length} server(s) not seen in 48 h`);
+
+    const staleIds = staleServers.map(s => s.id);
+
+    await this.prisma.channelServer.updateMany({
+      where: { id: { in: staleIds } },
+      data: { deletedAt: new Date() },
+    });
+
+    this.logger.log(`Stale-server cleanup: soft-deleted ${staleIds.length} server(s)`);
+
+    // Orphan-channel cleanup: only remove channels that have zero active servers
+    // left across ALL sources (GitHub + admin + manual).
+    await this.cleanupOrphanChannels(staleIds);
   }
 
   private async cleanupOrphanChannels(deletedServerIds: string[]): Promise<void> {

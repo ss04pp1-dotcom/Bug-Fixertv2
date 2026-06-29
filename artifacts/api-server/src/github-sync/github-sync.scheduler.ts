@@ -79,25 +79,31 @@ export class GitHubSyncScheduler implements OnApplicationBootstrap {
       const due = Date.now() - lastSync >= intervalMs;
 
       if (due) {
-        this.logger.log(`Due sync (force): ${source.name}`);
-
-        // Always force-sync on schedule: clear ETag so content is always
-        // re-fetched and re-processed regardless of whether the remote file
-        // has changed. This ensures stream URLs stay fresh even when the
-        // GitHub file itself reports as unchanged via ETag/Last-Modified.
-        try {
-          await this.prisma.gitHubSource.update({
-            where: { id: source.id },
-            data: { etag: null, lastModified: null },
-          });
-        } catch (err: any) {
-          this.logger.warn(`Could not clear ETag for ${source.name}: ${err?.message}`);
-        }
-
+        this.logger.log(`Due sync: ${source.name}`);
+        // ETag is always cleared inside syncSource itself — no need to do it here.
         this.syncService.syncSource(source.id).catch(err =>
           this.logger.error(`Unhandled sync error for ${source.name}: ${err.message}`),
         );
       }
+    }
+  }
+
+  /**
+   * Daily stale-server cleanup — runs at 02:00 every night.
+   *
+   * Soft-deletes GitHub-managed ChannelServer rows that have not appeared in
+   * any sync for 48+ hours (meaning the source file no longer contains them).
+   * Channels that lose ALL their active servers across every source are then
+   * also soft-deleted (orphan cleanup).  Channels that still have servers from
+   * another source or admin are kept — only the stale GitHub server is removed.
+   */
+  @Cron('0 2 * * *', { name: 'stale-server-cleanup' })
+  async cleanupStaleServers(): Promise<void> {
+    this.logger.log('Running nightly stale-server cleanup…');
+    try {
+      await this.syncService.cleanupStaleGithubServers();
+    } catch (err: any) {
+      this.logger.error(`Stale-server cleanup failed: ${err.message}`, err.stack);
     }
   }
 }
