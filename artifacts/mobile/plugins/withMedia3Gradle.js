@@ -29,7 +29,7 @@ const {
   withGradleProperties,
 } = require('@expo/config-plugins');
 
-const MEDIA3_VERSION = '1.5.1';
+const MEDIA3_VERSION = '1.8.1';
 
 // All media3 artifacts that need version-pinning (superset of what RN Video bundles)
 const MEDIA3_FORCE_VERSIONS = [
