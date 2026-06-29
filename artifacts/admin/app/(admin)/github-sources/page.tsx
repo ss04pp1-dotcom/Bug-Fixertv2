@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   Github, Plus, RefreshCw, Trash2, Edit, ToggleLeft, ToggleRight,
   CheckCircle, XCircle, Clock, Loader2, ExternalLink, ChevronDown, ChevronUp,
-  Server, Tv, AlertTriangle, Zap,
+  Server, Tv, AlertTriangle, Zap, Shield,
 } from "lucide-react";
 import { useApiQuery, useInvalidate } from "@/lib/use-api";
 import { apiClient } from "@/lib/axios-client";
@@ -24,6 +24,10 @@ interface GitHubSource {
   isSyncing: boolean;
   channelCount: number;
   serverCount: number;
+  cookie: string | null;
+  userAgent: string | null;
+  referer: string | null;
+  origin: string | null;
   createdAt: string;
   syncLogs: SyncLog[];
   _count: { syncLogs: number };
@@ -90,28 +94,54 @@ export default function GitHubSourcesPage() {
     return () => clearInterval(t);
   }, []);
 
-  const [showModal, setShowModal] = useState(false);
-  const [editItem, setEditItem] = useState<GitHubSource | null>(null);
+  const [showModal, setShowModal]   = useState(false);
+  const [editItem, setEditItem]     = useState<GitHubSource | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
 
+  // Form refs / state
   const nameRef     = useRef<HTMLInputElement>(null);
   const urlRef      = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<HTMLInputElement>(null);
+  const [cookie,    setCookie]    = useState("");
+  const [userAgent, setUserAgent] = useState("");
+  const [referer,   setReferer]   = useState("");
+  const [origin,    setOrigin]    = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [showHeaders, setShowHeaders] = useState(false);
 
-  const openAdd  = () => { setEditItem(null); setModalError(null); setShowModal(true); };
-  const openEdit = (s: GitHubSource) => { setEditItem(s); setModalError(null); setShowModal(true); };
+  const openAdd = () => {
+    setEditItem(null);
+    setModalError(null);
+    setCookie(""); setUserAgent(""); setReferer(""); setOrigin("");
+    setShowHeaders(false);
+    setShowModal(true);
+  };
+
+  const openEdit = (s: GitHubSource) => {
+    setEditItem(s);
+    setModalError(null);
+    setCookie(s.cookie ?? "");
+    setUserAgent(s.userAgent ?? "");
+    setReferer(s.referer ?? "");
+    setOrigin(s.origin ?? "");
+    setShowHeaders(!!(s.cookie || s.userAgent || s.referer || s.origin));
+    setShowModal(true);
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setModalError(null);
-    const body = {
+    const body: Record<string, unknown> = {
       name: nameRef.current?.value.trim(),
       url: urlRef.current?.value.trim(),
       syncIntervalMinutes: parseInt(intervalRef.current?.value || "10"),
+      cookie:    cookie.trim()    || null,
+      userAgent: userAgent.trim() || null,
+      referer:   referer.trim()   || null,
+      origin:    origin.trim()    || null,
     };
     try {
       if (editItem) {
@@ -222,6 +252,7 @@ export default function GitHubSourcesPage() {
                   const isSyncing = source.isSyncing || syncingIds.has(source.id);
                   const expanded  = expandedId === source.id;
                   const lastLog   = source.syncLogs?.[0];
+                  const hasHeaders = !!(source.cookie || source.userAgent || source.referer || source.origin);
                   const nextSyncMs = source.lastSyncAt
                     ? new Date(source.lastSyncAt).getTime() + source.syncIntervalMinutes * 60_000 - Date.now()
                     : 0;
@@ -241,7 +272,14 @@ export default function GitHubSourcesPage() {
                               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
                             <div>
-                              <div className="text-white font-medium">{source.name}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-white font-medium">{source.name}</span>
+                                {hasHeaders && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary" title="Has default HTTP headers">
+                                    <Shield size={9} /> Headers
+                                  </span>
+                                )}
+                              </div>
                               <a
                                 href={source.url} target="_blank" rel="noreferrer"
                                 className="text-xs text-[#8B92A5] hover:text-primary flex items-center gap-1 mt-0.5"
@@ -320,35 +358,62 @@ export default function GitHubSourcesPage() {
                         </td>
                       </tr>
 
-                      {expanded && source.syncLogs?.length > 0 && (
+                      {expanded && (
                         <tr key={`${source.id}-log`} className="bg-white/[0.015]">
-                          <td colSpan={7} className="px-8 py-3">
-                            <p className="text-xs text-[#8B92A5] font-medium mb-2">Recent sync logs</p>
-                            <div className="space-y-1.5">
-                              {source.syncLogs.slice(0, 5).map((log, i) => (
-                                <div key={i} className="flex flex-wrap items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
-                                  <span className={cn(
-                                    "px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
-                                    log.status === "success" ? "bg-green-500/20 text-green-400"
-                                    : log.status === "running" ? "bg-blue-500/20 text-blue-400"
-                                    : "bg-red-500/20 text-red-400"
-                                  )}>
-                                    {log.status}
-                                  </span>
-                                  <span className="text-[#8B92A5] shrink-0">{formatRelative(log.startedAt)}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">+{log.added} added</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">↻{log.updated} updated</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">−{log.deleted} removed</span>
-                                  {log.failed > 0 && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">✕{log.failed} failed</span>
-                                  )}
-                                  <span className="text-[#8B92A5]">{formatMs(log.durationMs)}</span>
-                                  {log.errorMessage && (
-                                    <span className="text-red-400 truncate max-w-xs">{log.errorMessage}</span>
-                                  )}
+                          <td colSpan={7} className="px-8 py-3 space-y-3">
+                            {/* Default headers display */}
+                            {hasHeaders && (
+                              <div>
+                                <p className="text-xs text-[#8B92A5] font-medium mb-1.5 flex items-center gap-1">
+                                  <Shield size={11} /> Default HTTP Headers
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { label: "Cookie",     val: source.cookie },
+                                    { label: "User-Agent", val: source.userAgent },
+                                    { label: "Referer",    val: source.referer },
+                                    { label: "Origin",     val: source.origin },
+                                  ].filter(h => h.val).map(h => (
+                                    <div key={h.label} className="flex items-center gap-1.5 text-xs bg-white/5 rounded px-2 py-1">
+                                      <span className="text-[#8B92A5] font-mono text-[10px]">{h.label}:</span>
+                                      <span className="text-white font-mono text-[10px] max-w-[200px] truncate" title={h.val!}>{h.val}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            )}
+
+                            {/* Sync logs */}
+                            {source.syncLogs?.length > 0 && (
+                              <div>
+                                <p className="text-xs text-[#8B92A5] font-medium mb-2">Recent sync logs</p>
+                                <div className="space-y-1.5">
+                                  {source.syncLogs.slice(0, 5).map((log, i) => (
+                                    <div key={i} className="flex flex-wrap items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
+                                      <span className={cn(
+                                        "px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                                        log.status === "success" ? "bg-green-500/20 text-green-400"
+                                        : log.status === "running" ? "bg-blue-500/20 text-blue-400"
+                                        : "bg-red-500/20 text-red-400"
+                                      )}>
+                                        {log.status}
+                                      </span>
+                                      <span className="text-[#8B92A5] shrink-0">{formatRelative(log.startedAt)}</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">+{log.added} added</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">↻{log.updated} updated</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">−{log.deleted} removed</span>
+                                      {log.failed > 0 && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">✕{log.failed} failed</span>
+                                      )}
+                                      <span className="text-[#8B92A5]">{formatMs(log.durationMs)}</span>
+                                      {log.errorMessage && (
+                                        <span className="text-red-400 truncate max-w-xs">{log.errorMessage}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -363,8 +428,8 @@ export default function GitHubSourcesPage() {
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-white mb-4">
               {editItem ? "Edit GitHub Source" : "Add GitHub Source"}
             </h2>
@@ -402,6 +467,72 @@ export default function GitHubSourcesPage() {
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
                 />
               </div>
+
+              {/* Default HTTP Headers section */}
+              <div className="border border-border rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowHeaders(h => !h)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm text-white hover:bg-white/[0.03] transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Shield size={14} className="text-primary" />
+                    Default HTTP Headers
+                    {(cookie || userAgent || referer || origin) && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">set</span>
+                    )}
+                  </span>
+                  {showHeaders ? <ChevronUp size={14} className="text-[#8B92A5]" /> : <ChevronDown size={14} className="text-[#8B92A5]" />}
+                </button>
+
+                {showHeaders && (
+                  <div className="px-4 pb-4 space-y-3 border-t border-border bg-white/[0.01]">
+                    <p className="text-xs text-[#8B92A5] pt-3">
+                      Applied to every server synced from this source when the playlist entry does not provide its own headers.
+                      Entry-level headers always take precedence.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-[#8B92A5] mb-1 font-medium uppercase tracking-wide">Cookie</label>
+                        <input
+                          value={cookie}
+                          onChange={e => setCookie(e.target.value)}
+                          placeholder="session=abc; token=xyz"
+                          className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-[#4B5563] focus:outline-none focus:border-primary font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[#8B92A5] mb-1 font-medium uppercase tracking-wide">User-Agent</label>
+                        <input
+                          value={userAgent}
+                          onChange={e => setUserAgent(e.target.value)}
+                          placeholder="Mozilla/5.0 ..."
+                          className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-[#4B5563] focus:outline-none focus:border-primary font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[#8B92A5] mb-1 font-medium uppercase tracking-wide">Referer</label>
+                        <input
+                          value={referer}
+                          onChange={e => setReferer(e.target.value)}
+                          placeholder="https://example.com/"
+                          className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-[#4B5563] focus:outline-none focus:border-primary font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[#8B92A5] mb-1 font-medium uppercase tracking-wide">Origin</label>
+                        <input
+                          value={origin}
+                          onChange={e => setOrigin(e.target.value)}
+                          placeholder="https://example.com"
+                          className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-[#4B5563] focus:outline-none focus:border-primary font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {modalError && (
                 <p className="text-xs text-red-400 flex items-center gap-1">
                   <XCircle size={12} /> {modalError}

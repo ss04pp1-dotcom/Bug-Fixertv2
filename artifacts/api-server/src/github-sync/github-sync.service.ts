@@ -71,6 +71,13 @@ interface ExistingServer {
   githubChannelId: string | null;
 }
 
+interface SourceHeaderDefaults {
+  cookie:     string | null;
+  userAgent:  string | null;
+  referer:    string | null;
+  origin:     string | null;
+}
+
 @Injectable()
 export class GitHubSyncService implements OnModuleInit {
   private readonly logger = new Logger(GitHubSyncService.name);
@@ -400,7 +407,14 @@ export class GitHubSyncService implements OnModuleInit {
       stats.totalParsed = parsed.length;
       this.logger.log(`Source ${source.name}: parsed ${parsed.length} channels`);
 
-      await this.applyChanges(sourceId, parsed, stats);
+      const sourceDefaults: SourceHeaderDefaults = {
+        cookie:    source.cookie    ?? null,
+        userAgent: source.userAgent ?? null,
+        referer:   source.referer   ?? null,
+        origin:    source.origin    ?? null,
+      };
+
+      await this.applyChanges(sourceId, parsed, stats, sourceDefaults);
       await this.updateSourceCounts(sourceId);
       await this.finalize(sourceId, logEntry.id, GitHubSyncStatus.success, stats, startedAt);
 
@@ -479,6 +493,7 @@ export class GitHubSyncService implements OnModuleInit {
     sourceId: string,
     parsed: ParsedChannel[],
     stats: { added: number; updated: number; deleted: number; failed: number },
+    sourceDefaults: SourceHeaderDefaults = { cookie: null, userAgent: null, referer: null, origin: null },
   ): Promise<void> {
     // Active servers from this source (used for soft-delete of removed entries)
     const existingServers: ExistingServer[] = await this.prisma.channelServer.findMany({
@@ -521,6 +536,7 @@ export class GitHubSyncService implements OnModuleInit {
         slugSet,
         stats,
         categoryCache,
+        sourceDefaults,
       );
     }
 
@@ -551,11 +567,12 @@ export class GitHubSyncService implements OnModuleInit {
     slugSet: Set<string>,
     stats: { added: number; updated: number; deleted: number; failed: number },
     categoryCache: Map<string, string>,
+    sourceDefaults: SourceHeaderDefaults = { cookie: null, userAgent: null, referer: null, origin: null },
   ): Promise<void> {
     for (const item of batch) {
       try {
         await this.processItem(
-          item, sourceId, existingServers, seenServerIds, byNorm, byGhId, slugSet, stats, categoryCache,
+          item, sourceId, existingServers, seenServerIds, byNorm, byGhId, slugSet, stats, categoryCache, sourceDefaults,
         );
       } catch (e: any) {
         this.logger.warn(`Failed to process "${item.name}": ${e.message}`);
@@ -588,6 +605,7 @@ export class GitHubSyncService implements OnModuleInit {
     slugSet: Set<string>,
     stats: { added: number; updated: number; deleted: number; failed: number },
     categoryCache: Map<string, string>,
+    sourceDefaults: SourceHeaderDefaults = { cookie: null, userAgent: null, referer: null, origin: null },
   ): Promise<void> {
     const normalized = normalizeName(item.name);
     if (!normalized) return;
@@ -762,14 +780,22 @@ export class GitHubSyncService implements OnModuleInit {
         : undefined) ??
       existingServers.find(s => s.channelId === channelId && s.link === item.link);
 
-    // Build header fields: if source provides a value → use it (even empty string clears it).
-    // If source has no value (undefined) → omit the key so the DB retains whatever was there.
-    const headerFields = (src: typeof item) => ({
-      ...(src.cookie     !== undefined ? { cookie:     src.cookie     || null } : {}),
-      ...(src.userAgent  !== undefined ? { userAgent:  src.userAgent  || null } : {}),
-      ...(src.referer    !== undefined ? { referer:    src.referer    || null } : {}),
-      ...(src.origin     !== undefined ? { origin:     src.origin     || null } : {}),
-    });
+    // Merge item-level headers with source-level defaults.
+    // Item-level headers always win; source defaults fill in the gaps.
+    // A defined (non-undefined) item value — even empty string — takes precedence
+    // so that an explicit empty value in the playlist intentionally clears the header.
+    const effectiveCookie    = item.cookie    !== undefined ? item.cookie    : (sourceDefaults.cookie    ?? undefined);
+    const effectiveUserAgent = item.userAgent !== undefined ? item.userAgent : (sourceDefaults.userAgent ?? undefined);
+    const effectiveReferer   = item.referer   !== undefined ? item.referer   : (sourceDefaults.referer   ?? undefined);
+    const effectiveOrigin    = item.origin    !== undefined ? item.origin    : (sourceDefaults.origin    ?? undefined);
+
+    // Build header update fields: only write keys that have a determined value.
+    const headerFields = {
+      ...(effectiveCookie    !== undefined ? { cookie:    effectiveCookie    || null } : {}),
+      ...(effectiveUserAgent !== undefined ? { userAgent: effectiveUserAgent || null } : {}),
+      ...(effectiveReferer   !== undefined ? { referer:   effectiveReferer   || null } : {}),
+      ...(effectiveOrigin    !== undefined ? { origin:    effectiveOrigin    || null } : {}),
+    };
 
     if (existingServer) {
       await this.prisma.channelServer.update({
@@ -777,7 +803,7 @@ export class GitHubSyncService implements OnModuleInit {
         data: {
           channelId,
           link: item.link,
-          ...headerFields(item),
+          ...headerFields,
           lastSeenAt: new Date(),
           deletedAt: null,
           enabled: true,
@@ -798,7 +824,7 @@ export class GitHubSyncService implements OnModuleInit {
         await this.prisma.channelServer.update({
           where: { id: globalExisting.id },
           data: {
-            ...headerFields(item),
+            ...headerFields,
             lastSeenAt: new Date(),
             deletedAt: null,
             enabled: true,
@@ -817,10 +843,10 @@ export class GitHubSyncService implements OnModuleInit {
           data: {
             channelId,
             link: item.link,
-            cookie: item.cookie ?? null,
-            userAgent: item.userAgent ?? null,
-            referer: item.referer ?? null,
-            origin: item.origin ?? null,
+            cookie:    effectiveCookie    ?? null,
+            userAgent: effectiveUserAgent ?? null,
+            referer:   effectiveReferer   ?? null,
+            origin:    effectiveOrigin    ?? null,
             priority: 100,
             sourceType: ServerSourceType.GITHUB,
             githubSourceId: sourceId,

@@ -329,6 +329,13 @@ model GitHubSource {
   syncStartedAt        DateTime?         @map("sync_started_at")
   channelCount         Int               @default(0) @map("channel_count")
   serverCount          Int               @default(0) @map("server_count")
+  // Per-source default HTTP headers — applied to every server synced from this
+  // source when the M3U/JSON entry itself does not provide the header.
+  // Entry-level headers always take precedence over these defaults.
+  cookie               String?
+  userAgent            String?           @map("user_agent")
+  referer              String?
+  origin               String?
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 

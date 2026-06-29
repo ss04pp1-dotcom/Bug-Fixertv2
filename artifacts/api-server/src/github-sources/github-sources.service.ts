@@ -51,6 +51,10 @@ export class GitHubSourcesService {
         url: dto.url,
         enabled: dto.enabled ?? true,
         syncIntervalMinutes: dto.syncIntervalMinutes ?? 10,
+        cookie:    dto.cookie    ?? null,
+        userAgent: dto.userAgent ?? null,
+        referer:   dto.referer   ?? null,
+        origin:    dto.origin    ?? null,
       },
     });
 

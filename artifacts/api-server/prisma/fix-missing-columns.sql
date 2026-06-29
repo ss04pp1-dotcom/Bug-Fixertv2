@@ -94,7 +94,12 @@ ALTER TABLE github_sources
   ADD COLUMN IF NOT EXISTS is_syncing              BOOLEAN      NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS sync_started_at         TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS channel_count           INT          NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS server_count            INT          NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS server_count            INT          NOT NULL DEFAULT 0,
+  -- Per-source default HTTP headers (fallback when M3U/JSON entries have none)
+  ADD COLUMN IF NOT EXISTS cookie                  TEXT,
+  ADD COLUMN IF NOT EXISTS user_agent              TEXT,
+  ADD COLUMN IF NOT EXISTS referer                 TEXT,
+  ADD COLUMN IF NOT EXISTS origin                  TEXT;
 
 -- last_sync_status uses enum — add only if missing
 DO $$ BEGIN
