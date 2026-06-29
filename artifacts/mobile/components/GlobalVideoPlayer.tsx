@@ -1076,59 +1076,114 @@ export default function GlobalVideoPlayer() {
 
   if (mode === 'hidden') return null;
 
-  // ── Computed ─────────────────────────────────────────────────────────────
-  const progress   = durationRef.current > 0 ? currentTime / durationRef.current : 0;
-  const isLiveNow  = isLive && duration === 0;
+  const progress  = durationRef.current > 0 ? currentTime / durationRef.current : 0;
+  const isLiveNow = isLive && duration === 0;
+  const topH      = Math.round(SW * 9 / 16);
+
+  // ── Video surface position/size by mode ──────────────────────────────────
+  // The NativeIPTVPlayer (ExoPlayer/AVPlayer) lives inside this Animated.View.
+  // When mode changes, only the style updates — NO unmount, NO reload.
+  const videoSurfaceStyle: any =
+    mode === 'fullscreen'
+      ? { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: '#000', zIndex: 9999, elevation: 50 }
+      : mode === 'top'
+      ? { position: 'absolute', top: insets.top, left: 0, right: 0,
+          height: topH, backgroundColor: '#000', zIndex: 9999, elevation: 50 }
+      : { position: 'absolute', top: 0, left: 0, width: MINI_W, height: MINI_H,
+          backgroundColor: '#000', overflow: 'hidden',
+          borderTopLeftRadius: 12, borderTopRightRadius: 12,
+          zIndex: 9998, elevation: 59 };
+
+  // ── Shared NativeIPTVPlayer callbacks (same for all modes) ───────────────
+  // NOTE: These are inline here (not extracted to an object) so that the
 
   // ═════════════════════════════════════════════════════════════════════════
-  // MINI MODE — In-app floating draggable player (browse while watching)
-  // Triggered by back press inside the app. NOT native PiP.
-  // Native PiP is only used when the app goes to background (Home/Recent).
+  // UNIFIED RENDER — single NativeIPTVPlayer, mode-specific overlays on top
   // ═════════════════════════════════════════════════════════════════════════
-  if (mode === 'mini') {
-    return (
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[g.miniRoot, miniAnimStyle]}>
 
-          {/* ── Video surface ─────────────────────────────────────────────── */}
-          <View style={g.miniVideo}>
-            {nativeSource && (
-              <NativeIPTVPlayer
-                key={`v-${videoKey}`}
-                source={nativeSource}
-                paused={!isPlaying}
-                rate={1}
-                volume={videoVolume}
-                resizeMode="cover"
-                pip={false}
-                isLive={isLive}
-                videoRef={videoRef}
-                selectedVideoTrack={selectedVideoTrack}
-                selectedAudioTrack={selectedAudioTrack}
-                selectedTextTrack={selectedTextTrack}
-                onLoadStart={() => { setBuffering(true); setReady(false); }}
-                onLoad={handleLoad}
-                onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
-                onProgress={(d) => {
-                  currentTimeRef.current = d.currentTime;
-                  if (d.seekableDuration > 0) {
-                    setDuration(d.seekableDuration);
-                    durationRef.current = d.seekableDuration;
-                  }
-                }}
-                onBuffer={setBuffering}
-                onError={handleError}
-                onEnd={() => { setEnded(true); setPlaying(false); }}
-                onVideoTracks={setVideoTracks}
-                onAudioTracks={setAudioTracks}
-                onTextTracks={setTextTracks}
-                onPipChange={(active) => {
-                  setPipActive(active);
-                  setPip(active);
-                  if (!active) enterTop();
-                }}
-              />
-            )}
+  // ─────────────────────────────────────────────────────────────────────────
+  // UNIFIED RETURN — ONE NativeIPTVPlayer always alive at the same tree depth.
+  //
+  // Architecture:
+  //   Fragment
+  //     └─ Animated.View [videoSurfaceBaseStyle + miniAnimStyle when mini]
+  //          └─ NativeIPTVPlayer  ← SINGLE ExoPlayer/AVPlayer instance
+  //     └─ Mini overlay (GestureDetector + controls)  — only when mini
+  //     └─ Top overlay (controls, buffering, error)   — only when top
+  //     └─ Fullscreen overlay                         — only when fullscreen
+  //
+  // Why this prevents reload:
+  //   React sees NativeIPTVPlayer at the same JSX position every render.
+  //   It updates props (style, paused, rate…) in-place without unmounting.
+  //   ExoPlayer/AVPlayer never gets destroyed → no rebuffer, no reload.
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* ══════════════════════════════════════════════════════════════════
+          SINGLE VIDEO SURFACE — never unmounts between mode transitions.
+          style changes (position/size) are applied without remounting.
+          pointerEvents="none" → all touches handled by the overlay layers.
+          ══════════════════════════════════════════════════════════════════ */}
+      {nativeSource && (
+        <Animated.View
+          style={[videoSurfaceBaseStyle, mode === 'mini' ? miniAnimStyle : undefined]}
+          pointerEvents="none"
+        >
+          <NativeIPTVPlayer
+            key={`v-${videoKey}`}
+            source={nativeSource}
+            paused={!isPlaying}
+            rate={mode === 'mini' ? 1 : speed}
+            volume={videoVolume}
+            resizeMode={mode === 'mini' ? 'cover' : aspect}
+            pip={mode === 'mini' ? false : pip}
+            isLive={isLive}
+            videoRef={videoRef}
+            selectedVideoTrack={selectedVideoTrack}
+            selectedAudioTrack={selectedAudioTrack}
+            selectedTextTrack={selectedTextTrack}
+            onLoadStart={() => { setBuffering(true); setReady(false); }}
+            onLoad={handleLoad}
+            onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
+            onProgress={(d) => {
+              setTime(d.currentTime);
+              currentTimeRef.current = d.currentTime;
+              if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
+                setDuration(d.seekableDuration);
+                durationRef.current = d.seekableDuration;
+              }
+            }}
+            onBuffer={setBuffering}
+            onError={handleError}
+            onEnd={() => { setEnded(true); setPlaying(false); }}
+            onVideoTracks={setVideoTracks}
+            onAudioTracks={setAudioTracks}
+            onTextTracks={setTextTracks}
+            onPipChange={(active) => {
+              setPipActive(active);
+              setPip(active);
+              if (!active) {
+                autoPipRef.current = false;
+                useGlobalPlayer.getState().enterTop();
+              }
+            }}
+          />
+        </Animated.View>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          MINI MODE OVERLAY — gesture + controls + title bar.
+          Tracks the same miniAnimStyle as the video surface above.
+          The video area here is transparent — video renders behind it.
+          ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'mini' && (
+        <GestureDetector gesture={panGesture}>
+          <Animated.View style={[g.miniRoot, miniAnimStyle]}>
+
+            {/* Transparent video area (actual video is the sibling behind) */}
+            <View style={[g.miniVideo, { backgroundColor: 'transparent' }]}>{/* ── Video surface ─────────────────────────────────────────────── */}
+            {/* (rendered as sibling Animated.View above — kept alive across modes) */}
 
             {/* LIVE badge */}
             {isLive && (
@@ -1193,61 +1248,15 @@ export default function GlobalVideoPlayer() {
           </View>
 
         </Animated.View>
-      </GestureDetector>
-    );
-  }
+        </GestureDetector>
+      )}
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // TOP MODE  (video at top of screen, related channels visible below)
-  // Full controls UI matching the player screenshot design.
-  // ═════════════════════════════════════════════════════════════════════════
-  if (mode === 'top') {
-    const topH = Math.round(SW * 9 / 16);
-    return (
-      <View style={[g.topRoot, { top: insets.top, height: topH }]}>
-        {nativeSource && (
-          <NativeIPTVPlayer
-            key={`v-${videoKey}`}
-            source={nativeSource}
-            paused={!isPlaying}
-            rate={speed}
-            volume={videoVolume}
-            resizeMode={aspect}
-            pip={pip}
-            isLive={isLive}
-            videoRef={videoRef}
-            selectedVideoTrack={selectedVideoTrack}
-            selectedAudioTrack={selectedAudioTrack}
-            selectedTextTrack={selectedTextTrack}
-            onLoadStart={() => { setBuffering(true); setReady(false); }}
-            onLoad={handleLoad}
-            onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
-            onProgress={(d) => {
-              setTime(d.currentTime);
-              currentTimeRef.current = d.currentTime;
-              if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
-                setDuration(d.seekableDuration);
-                durationRef.current = d.seekableDuration;
-              }
-            }}
-            onBuffer={setBuffering}
-            onError={handleError}
-            onEnd={() => { setEnded(true); setPlaying(false); }}
-            onVideoTracks={setVideoTracks}
-            onAudioTracks={setAudioTracks}
-            onTextTracks={setTextTracks}
-            onPipChange={(active) => {
-              setPipActive(active);
-              setPip(active);
-              if (!active) {
-                // PiP ended — user either expanded or closed the window.
-                // Always restore to top mode so player is visible.
-                autoPipRef.current = false;
-                useGlobalPlayer.getState().enterTop();
-              }
-            }}
-          />
-        )}
+      {/* ══════════════════════════════════════════════════════════════════
+          TOP MODE OVERLAY — controls on top of the video surface.
+          Video is the sibling Animated.View above (transparent overlay here).
+          ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'top' && (
+        <View style={[g.topRoot, { top: insets.top, height: topH }]} pointerEvents="box-none">
 
         {/* Brightness overlay */}
         <Animated.View
@@ -1454,62 +1463,17 @@ export default function GlobalVideoPlayer() {
           speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
           selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
         />
-      </View>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  // FULLSCREEN MODE
-  // ═════════════════════════════════════════════════════════════════════════
-  return (
-    <View style={g.fullRoot}>
-      <StatusBar hidden barStyle="light-content" backgroundColor="#000" />
-
-      {/* ── Video — SAME instance, just full-size container ─────────────── */}
-      {nativeSource && (
-        <NativeIPTVPlayer
-          key={`v-${videoKey}`}
-          source={nativeSource}
-          paused={!isPlaying}
-          rate={speed}
-          volume={videoVolume}
-          resizeMode={aspect}
-          pip={pip}
-          isLive={isLive}
-          videoRef={videoRef}
-          selectedVideoTrack={selectedVideoTrack}
-          selectedAudioTrack={selectedAudioTrack}
-          selectedTextTrack={selectedTextTrack}
-          onLoadStart={() => { setBuffering(true); setReady(false); }}
-          onLoad={handleLoad}
-          onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
-          onProgress={(d) => {
-            setTime(d.currentTime);
-            currentTimeRef.current = d.currentTime;
-            if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
-              setDuration(d.seekableDuration);
-              durationRef.current = d.seekableDuration;
-            }
-          }}
-          onBuffer={setBuffering}
-          onError={handleError}
-          onEnd={() => { setEnded(true); setPlaying(false); }}
-          onVideoTracks={setVideoTracks}
-          onAudioTracks={setAudioTracks}
-          onTextTracks={setTextTracks}
-          onPipChange={(active) => {
-            setPipActive(active);
-            setPip(active);
-            if (!active) {
-              // PiP ended — restore to top mode so player is visible.
-              autoPipRef.current = false;
-              useGlobalPlayer.getState().enterTop();
-            }
-          }}
-        />
+        </View>
       )}
 
-      {/* ── Brightness overlay (animated, ZERO re-renders) ──────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════
+          FULLSCREEN MODE OVERLAY
+          ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'fullscreen' && (
+        <View style={g.fullRoot} pointerEvents="box-none">
+          <StatusBar hidden barStyle="light-content" backgroundColor="#000" />
+
+          {/* ── Brightness overlay (animated, ZERO re-renders) ──────────────── */}
       <Animated.View
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, brightnessOverlayStyle]}
@@ -1719,30 +1683,32 @@ export default function GlobalVideoPlayer() {
         </Animated.View>
       )}
 
-      {/* Tap to show controls when hidden */}
-      {!showCtrl && !pipActive && !playerError && (
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={bumpCtrl} />
-      )}
+          {/* Tap to show controls when hidden */}
+          {!showCtrl && !pipActive && !playerError && (
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={bumpCtrl} />
+          )}
 
-      {/* Seek feedback + swipe indicator */}
-      {!pipActive && seekSide && (
-        <SeekFeedback
-          key={seekSide.side + Date.now()}
-          side={seekSide.side}
-          seconds={seekSide.secs}
-          onDone={() => setSeekSide(null)}
-        />
-      )}
-      {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
+          {/* Seek feedback + swipe indicator */}
+          {!pipActive && seekSide && (
+            <SeekFeedback
+              key={seekSide.side + Date.now()}
+              side={seekSide.side}
+              seconds={seekSide.secs}
+              onDone={() => setSeekSide(null)}
+            />
+          )}
+          {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
 
-      {/* Settings sheet */}
-      <SettingsSheet
-        visible={sheet !== 'none'} sheet={sheet}
-        onClose={() => setSheet('none')} onSelect={handleSheetSelect}
-        speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
-        selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
-      />
-    </View>
+          {/* Settings sheet */}
+          <SettingsSheet
+            visible={sheet !== 'none'} sheet={sheet}
+            onClose={() => setSheet('none')} onSelect={handleSheetSelect}
+            speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
+            selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
+          />
+        </View>
+      )}
+    </>
   );
 }
 
