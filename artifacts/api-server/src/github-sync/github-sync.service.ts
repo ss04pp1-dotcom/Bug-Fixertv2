@@ -818,13 +818,15 @@ export class GitHubSyncService implements OnModuleInit {
         ? existingServers.find(s => s.channelId === channelId && urlWithoutQuery(s.link) === newBaseUrl)
         : undefined);
 
-    // Use only the item's own headers — no fallback to source-level defaults.
-    // If the entry provides a value, use it; otherwise store null (empty headers).
+    // Per-item headers take priority; fall back to source-level defaults so that
+    // a GitHub source configured with a shared Cookie/UA/Referer/Origin applies
+    // those values to every channel it manages — even entries that don't carry
+    // their own header attributes in the M3U/JSON file.
     const headerFields = {
-      cookie:    item.cookie    ?? null,
-      userAgent: item.userAgent ?? null,
-      referer:   item.referer   ?? null,
-      origin:    item.origin    ?? null,
+      cookie:    item.cookie    ?? sourceDefaults.cookie    ?? null,
+      userAgent: item.userAgent ?? sourceDefaults.userAgent ?? null,
+      referer:   item.referer   ?? sourceDefaults.referer   ?? null,
+      origin:    item.origin    ?? sourceDefaults.origin    ?? null,
     };
 
     if (existingServer) {

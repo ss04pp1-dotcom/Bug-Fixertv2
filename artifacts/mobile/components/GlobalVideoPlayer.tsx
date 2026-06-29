@@ -68,13 +68,17 @@ const MINI_MARGIN = 12;
 //   minBufferMs                   ≈ 10 000 ms  (not over-buffering at start)
 //   maxBufferMs                   ≈ 30 000 ms
 //
-// LIVE — aggressive low-latency start; matching popular IPTV player defaults.
+// LIVE — balanced start: fast enough for a good UX yet long enough for audio/video
+// sync.  300 ms was too aggressive — many IPTV servers deliver audio and video in
+// separate bursts; at 300 ms ExoPlayer often starts before the audio codec is
+// initialised, producing video-only playback or an immediate stall/rebuffer.
+// 1 500 ms gives both tracks time to arrive and be parsed together.
 const BUFFER_LIVE = {
-  minBufferMs:                    10_000,  // keep 10 s ahead (was 30 s)
-  maxBufferMs:                    30_000,  // cap at 30 s   (was 90 s)
-  bufferForPlaybackMs:               300,  // play after 300 ms  (was 1 500 ms) ← FAST START
-  bufferForPlaybackAfterRebufferMs: 1_000, // resume after 1 s stall (was 3 s)
-  backBufferDurationMs:           10_000,  // 10 s back-buffer (was 30 s)
+  minBufferMs:                    15_000,  // keep 15 s ahead
+  maxBufferMs:                    30_000,  // cap at 30 s
+  bufferForPlaybackMs:             1_500,  // play after 1.5 s — audio+video in sync
+  bufferForPlaybackAfterRebufferMs: 2_000, // resume after 2 s stall
+  backBufferDurationMs:           10_000,  // 10 s back-buffer
   cacheSizeMB: 0,                          // no disk cache for live
 };
 // VOD — a bit more buffer for smooth seeking; disk-cache for instant re-seek.
@@ -752,13 +756,18 @@ export default function GlobalVideoPlayer() {
     const raw = src.headers ?? {};
 
     // Normalize Cookie to HTTP-spec format: 'k=v; k2=v2'
-    // Handles two common IPTV panel formats:
-    //   1. '&'-separated  → 'k=v; k2=v2'   (e.g. "session=abc&token=xyz")
-    //   2. bare ';' without space → 'k=v; k2=v2'
+    // Handles three common IPTV panel formats:
+    //   1. '&'-separated only     → 'k=v; k2=v2'   (e.g. "session=abc&token=xyz")
+    //   2. '&'-and-';' mixed      → normalize both  (e.g. "session=abc&token=xyz; expires=…")
+    //   3. bare ';' without space → 'k=v; k2=v2'
+    // Process '&' first so that mixed cookies ("k=v&k2=v2; expires=...") are fully normalized.
     const normalizeCookie = (c: string): string => {
       if (!c) return c;
-      if (c.includes('&') && !c.includes(';')) return c.split('&').join('; ');
-      return c.replace(/;\s*/g, '; ').trim();
+      // Replace '&' separators with '; ' before normalizing existing semicolons.
+      // Only replace '&' that are between cookie pairs (not inside encoded values
+      // like URLs), but a global replace is safe because cookie values rarely
+      // contain literal '&' in IPTV auth cookies.
+      return c.replace(/&/g, '; ').replace(/;\s*/g, '; ').trim();
     };
 
     // Headers must be non-empty — DataSourceUtil.kt caches a singleton
@@ -806,7 +815,11 @@ export default function GlobalVideoPlayer() {
 
   const selectedAudioTrack = useMemo(() =>
     selectedAudIdx === -1
-      ? { type: 'system' }
+      // 'default' picks the first audio track in the stream, which is always the
+      // primary/only track on most IPTV servers.  'system' makes ExoPlayer match
+      // on the device language — if the stream has no language metadata (very
+      // common in IPTV) ExoPlayer selects nothing and audio is silent.
+      ? { type: 'default' }
       : { type: 'index', value: selectedAudIdx },
     [selectedAudIdx]);
 

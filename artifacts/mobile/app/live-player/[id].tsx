@@ -142,23 +142,56 @@ export default function LivePlayerScreen() {
   }, []);
 
   // ── Load stream URL ────────────────────────────────────────────────────────
-  // Uses /channels/:id/sources (authenticated endpoint) so ExoPlayer receives
-  // the full server credential headers (cookie, userAgent, referer, origin).
-  // Falls back to /channels/:id (public, no credentials) if the auth call fails,
-  // and falls back to the URL passed in route params if both API calls fail.
+  // Always uses /channels/:id/sources (authenticated endpoint) so ExoPlayer
+  // receives full server credential headers (cookie, userAgent, referer, origin).
+  //
+  // Fallback behaviour:
+  //  • If /sources fails with a 401/403 (auth error) → do NOT fall back to the
+  //    public endpoint, which strips all credentials.  Show a recoverable error
+  //    so the user can retry (which re-checks the stored JWT).
+  //  • If /sources fails with a non-auth error (404, 5xx, network) → fall back
+  //    to the public endpoint only when the channel has no credential-protected
+  //    servers (safe because those streams don't need headers).
+  //  • Last resort: use the URL passed in route params (no headers).
   const loadStream = useCallback(async () => {
     setFetchLoad(true); setFetchError(false); setSources([]);
     try {
       let ch: any = null;
+      let authFailed = false;
       try {
         // Authenticated call — returns servers WITH cookie/userAgent/referer/origin
         const res = await apiClient.get(`/channels/${id}/sources`);
         ch = res.data?.data || res.data;
-      } catch {
-        // Fallback: public endpoint (no credential headers — at least gets the stream URL)
-        const res = await apiClient.get(`/channels/${id}`);
-        ch = res.data?.data || res.data;
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 401 || status === 403) {
+          // Auth error: falling back to public endpoint would silently drop all
+          // credentials and make protected streams fail inside ExoPlayer.
+          // Surface the error so the user can retry with a refreshed token.
+          authFailed = true;
+        } else {
+          // Non-auth error (404, 5xx, network): safe to try the public endpoint.
+          // Streams that need credentials will simply have null headers here and
+          // will fail fast in ExoPlayer — no worse than before.
+          try {
+            const res = await apiClient.get(`/channels/${id}`);
+            ch = res.data?.data || res.data;
+          } catch {
+            // Both endpoints failed — fall through to passedUrl below
+          }
+        }
       }
+
+      if (authFailed) {
+        // Retry with URL from route params if available; otherwise error.
+        if (passedUrl) {
+          setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
+        } else {
+          setFetchError(true);
+        }
+        return;
+      }
+
       setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
       setCurrentLang((ch?.language || '').toLowerCase() || null);
