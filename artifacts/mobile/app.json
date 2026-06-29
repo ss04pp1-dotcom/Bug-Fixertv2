@@ -21,7 +21,11 @@
           "audio",
           "fetch"
         ],
-        "UIRequiresFullScreen": false
+        "UIRequiresFullScreen": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsArbitraryLoadsForMedia": true
+        }
       }
     },
     "android": {

@@ -71,6 +71,27 @@ interface ExistingServer {
   githubChannelId: string | null;
 }
 
+/**
+ * Strip query string and fragment from a URL so that two URLs that differ only
+ * in token/session query params are treated as the same stream endpoint.
+ *
+ * Example:
+ *   "http://server:8080/LIVE-Sports/video.m3u8?token=OLD" → "http://server:8080/LIVE-Sports/video.m3u8"
+ *   "http://server:8080/LIVE-Sports/video.m3u8?token=NEW" → "http://server:8080/LIVE-Sports/video.m3u8"
+ *
+ * Used as a third-pass match when githubChannelId is absent — handles auto-updated
+ * playlists (like T-Sports-Playlist-Auto-Update) where only the token changes between syncs.
+ */
+function urlWithoutQuery(link: string): string {
+  try {
+    const u = new URL(link);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    // Fallback for malformed URLs: strip everything after '?'
+    return link.split('?')[0].split('#')[0];
+  }
+}
+
 interface SourceHeaderDefaults {
   cookie:     string | null;
   userAgent:  string | null;
@@ -771,14 +792,31 @@ export class GitHubSyncService implements OnModuleInit {
     // ── 2. Resolve ChannelServer ─────────────────────────────────────────────
     //
     // existingServers is filtered to this githubSourceId — each source owns
-    // only its own server rows.  Match by (channelId + link) so distinct URLs
-    // for the same channel get separate rows.
-
+    // only its own server rows.
+    //
+    // Three-pass matching (in order of reliability):
+    //
+    // Pass 1 — githubChannelId (tvg-id from M3U): most reliable, stable across token rotations.
+    //   Matches even when the URL (token) has changed.
+    //
+    // Pass 2 — exact URL match (channelId + link): works when URL is stable.
+    //
+    // Pass 3 — base-URL match (channelId + URL without query string):
+    //   Handles auto-updated playlists (e.g. T-Sports-Playlist-Auto-Update) where
+    //   only the `?token=` query parameter changes between syncs.  Without this pass,
+    //   every token rotation creates a new orphan server row — the channel accumulates
+    //   stale-token rows, the API returns the oldest (expired) one first, and the
+    //   stream fails even though a valid-token row also exists.
+    //   Condition: only applied when githubChannelId is absent (otherwise Pass 1 already fired).
+    const newBaseUrl = urlWithoutQuery(item.link);
     const existingServer =
       (item.githubChannelId
         ? existingServers.find(s => s.githubChannelId === item.githubChannelId)
         : undefined) ??
-      existingServers.find(s => s.channelId === channelId && s.link === item.link);
+      existingServers.find(s => s.channelId === channelId && s.link === item.link) ??
+      (!item.githubChannelId
+        ? existingServers.find(s => s.channelId === channelId && urlWithoutQuery(s.link) === newBaseUrl)
+        : undefined);
 
     // Use only the item's own headers — no fallback to source-level defaults.
     // If the entry provides a value, use it; otherwise store null (empty headers).
