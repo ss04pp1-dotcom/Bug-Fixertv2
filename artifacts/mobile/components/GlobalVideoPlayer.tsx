@@ -65,19 +65,19 @@ const MINI_MARGIN = 12;
 // backBufferDurationMs: allow rewinding ~30 s into the live edge.
 // cacheSizeMB: 0 → disabled for live (byte cache pointless for live streams).
 const BUFFER_LIVE = {
-  minBufferMs: 15_000,
-  maxBufferMs: 50_000,
-  bufferForPlaybackMs: 2_500,
-  bufferForPlaybackAfterRebufferMs: 5_000,
+  minBufferMs: 30_000,
+  maxBufferMs: 90_000,
+  bufferForPlaybackMs: 1_500,
+  bufferForPlaybackAfterRebufferMs: 3_000,
   backBufferDurationMs: 30_000,           // rewind up to 30 s in live DVR
   cacheSizeMB: 0,                         // no disk cache for live
 };
 // VOD — bigger buffers + 200 MB disk cache for smooth seeking.
 const BUFFER_VOD = {
-  minBufferMs: 20_000,
-  maxBufferMs: 60_000,
-  bufferForPlaybackMs: 2_500,
-  bufferForPlaybackAfterRebufferMs: 5_000,
+  minBufferMs: 30_000,
+  maxBufferMs: 90_000,
+  bufferForPlaybackMs: 2_000,
+  bufferForPlaybackAfterRebufferMs: 4_000,
   backBufferDurationMs: 60_000,           // 60 s back buffer for VOD seek
   cacheSizeMB: 200,                       // disk-cache chunks for seek performance
 };
@@ -499,6 +499,7 @@ export default function GlobalVideoPlayer() {
   const currentTimeRef = useRef(0);
   const durationRef    = useRef(0);
   const ctrlTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const miniCtrlTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef     = useRef<{ time: number; x: number } | null>(null);
   // Keep refs in sync with state so PanResponder (memoized) reads correct values
@@ -721,7 +722,10 @@ export default function GlobalVideoPlayer() {
 
   useEffect(() => {
     if (mode === 'fullscreen' || mode === 'top') startHide();
-    return () => { if (ctrlTimer.current) clearTimeout(ctrlTimer.current); };
+    return () => {
+      if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
+      if (miniCtrlTimer.current) clearTimeout(miniCtrlTimer.current);
+    };
   }, [mode, startHide]);
 
   // ── Seek ─────────────────────────────────────────────────────────────────
@@ -1026,10 +1030,13 @@ export default function GlobalVideoPlayer() {
   // ── Orientation management ────────────────────────────────────────────────
   // fullscreen mode ALWAYS locks landscape (portrait fullscreen is removed).
   // top/mini/hidden → restore portrait.
+  // Also reset aspect to 'contain' on fullscreen entry so the video fills
+  // the landscape screen correctly without needing manual cycling.
   useEffect(() => {
     if (IS_EXPO_GO || IS_WEB) return;
     if (mode === 'fullscreen') {
       lockLandscape();
+      setAspect('contain');
     } else {
       unlockOrientation();
     }
@@ -1171,11 +1178,20 @@ export default function GlobalVideoPlayer() {
               </View>
             )}
 
-            {/* Tap area — toggle controls */}
+            {/* Tap area — show controls, then auto-hide after 1.5 s */}
             <TouchableOpacity
               activeOpacity={1}
               style={StyleSheet.absoluteFill}
-              onPress={() => setShowCtrl(v => !v)}
+              onPress={() => {
+                setShowCtrl(v => {
+                  const next = !v;
+                  if (miniCtrlTimer.current) clearTimeout(miniCtrlTimer.current);
+                  if (next) {
+                    miniCtrlTimer.current = setTimeout(() => setShowCtrl(false), 1500);
+                  }
+                  return next;
+                });
+              }}
             >
               {showCtrl && (
                 <View style={g.miniOverlay}>
@@ -1280,7 +1296,7 @@ export default function GlobalVideoPlayer() {
         {showCtrl && !pipActive && !playerError && (
           <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
             <LinearGradient
-              colors={['rgba(0,0,0,0.82)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.88)']}
+              colors={['rgba(0,0,0,0.52)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.60)']}
               locations={[0, 0.28, 0.62, 1]}
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
@@ -1496,7 +1512,7 @@ export default function GlobalVideoPlayer() {
       {showCtrl && !pipActive && !playerError && (
         <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
           <LinearGradient
-            colors={['rgba(0,0,0,0.78)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
+            colors={['rgba(0,0,0,0.52)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.60)']}
             locations={[0, 0.25, 0.65, 1]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
@@ -1506,7 +1522,7 @@ export default function GlobalVideoPlayer() {
           {!isLocked && (
             <View style={[g.topBar, { paddingTop: insets.top + 10 }]}>
               <TouchableOpacity style={g.iconBtn} onPress={() => { unlockOrientation(); enterTop(); }}>
-                <MaterialIcons name="stay-primary-portrait" size={22} color="#fff" />
+                <Ionicons name="arrow-back" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
                 <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>
