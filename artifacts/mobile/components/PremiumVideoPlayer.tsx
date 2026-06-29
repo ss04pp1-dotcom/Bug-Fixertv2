@@ -881,16 +881,17 @@ export default function PremiumVideoPlayer({
   // ── Auto PiP when app goes to background (YouTube-style) ──────────────────
   // NOTE: On Android, AppState NEVER emits 'inactive' — it goes directly
   // 'active' → 'background'. We must listen for 'background' only.
-  // Android 12+ (autoEnterPictureInPicture="true" in manifest) handles PiP
-  // automatically without any JS code. This listener covers Android < 12
-  // by triggering enterPictureInPictureMode() via the pictureInPicture prop.
+  //
+  // Android 12+ (API 31+): withPipNative.js injects onUserLeaveHint() into
+  // MainActivity with PictureInPictureParams.Builder().setAutoEnterEnabled(true)
+  // — this gives the smooth OS-level swipe-to-home transition natively.
+  //
+  // Android 8-11 (API 26-30): This JS listener fires setPip(true) which
+  // triggers enterPictureInPictureMode() via react-native-video's prop.
   useEffect(() => {
     if (Platform.OS !== 'android' || IS_WEB) return;
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' && isReady && !hasError && !playerError) {
-        // Trigger PiP entry for Android < 12.
-        // Android 12+ enters PiP automatically via manifest autoEnterPictureInPicture.
-        // useTextureView={true} ensures no reload on PiP entry/exit.
         setPip(true);
       }
       // When returning to foreground, onPipChange(false) fires and resets pip.

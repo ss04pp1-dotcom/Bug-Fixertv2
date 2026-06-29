@@ -74,6 +74,7 @@
       ],
       "expo-screen-orientation",
       "./plugins/withPipSupport",
+      "./plugins/withPipNative",
       "./plugins/withMedia3Gradle",
       "./plugins/withMedia3ProGuard"
     ],
