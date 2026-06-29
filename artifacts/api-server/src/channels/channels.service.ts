@@ -84,6 +84,47 @@ export class ChannelsService {
   }
 
   /**
+   * Authenticated-user variant: returns channel + enabled servers WITH full
+   * credential fields (cookie, userAgent, referer, origin) so the mobile player
+   * can pass them to ExoPlayer for protected streams.
+   * Requires a valid JWT — never exposed on the public path.
+   */
+  async findOneWithSources(id: string) {
+    const channel = await this.prisma.channel.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      include: {
+        category: { select: { id: true, name: true, slug: true } },
+        epgPrograms: {
+          where: { endTime: { gte: new Date() } },
+          orderBy: { startTime: 'asc' },
+          take: 10,
+        },
+        servers: {
+          where: { deletedAt: null, enabled: true },
+          orderBy: { priority: 'asc' },
+          select: {
+            id: true, channelId: true, link: true, priority: true,
+            enabled: true, sourceType: true, createdBySync: true,
+            githubSourceId: true,
+            // credential fields — returned only to authenticated users
+            cookie: true, userAgent: true, referer: true, origin: true,
+            createdAt: true, updatedAt: true,
+          },
+        },
+      },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+
+    const servers = channel.servers.map((srv: any) => {
+      if (!srv.cookie) return { ...srv, cookieExpired: false, cookieExpiresAt: null };
+      const info = cookieExpiryInfo(srv.cookie);
+      return { ...srv, cookieExpired: info.expired, cookieExpiresAt: info.expiresAt?.toISOString() ?? null };
+    });
+
+    return { ...channel, servers };
+  }
+
+  /**
    * Admin-only variant of findOne() that returns the full server rows including
    * credential fields (cookie, userAgent, referer, origin). Used by the
    * GET /channels/:id/details admin endpoint so admins can edit headers without

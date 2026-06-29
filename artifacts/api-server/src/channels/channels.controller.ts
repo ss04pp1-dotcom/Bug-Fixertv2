@@ -132,6 +132,14 @@ export class ChannelsController {
     return this.channelsService.findOne(id);
   }
 
+  @Get(':id/sources')
+  @ApiBearerAuth()
+  @Roles('super_admin', 'admin', 'editor', 'moderator', 'user')
+  @ApiOperation({ summary: 'Get channel with full server credentials for authenticated playback (mobile)' })
+  async findOneWithSources(@Param('id') id: string) {
+    return this.channelsService.findOneWithSources(id);
+  }
+
   @Get(':id/details')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor', 'moderator')

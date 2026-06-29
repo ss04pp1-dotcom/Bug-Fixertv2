@@ -135,11 +135,23 @@ export default function LivePlayerScreen() {
   }, []);
 
   // ── Load stream URL ────────────────────────────────────────────────────────
+  // Uses /channels/:id/sources (authenticated endpoint) so ExoPlayer receives
+  // the full server credential headers (cookie, userAgent, referer, origin).
+  // Falls back to /channels/:id (public, no credentials) if the auth call fails,
+  // and falls back to the URL passed in route params if both API calls fail.
   const loadStream = useCallback(async () => {
     setFetchLoad(true); setFetchError(false); setSources([]);
     try {
-      const res = await apiClient.get(`/channels/${id}`);
-      const ch  = res.data?.data || res.data;
+      let ch: any = null;
+      try {
+        // Authenticated call — returns servers WITH cookie/userAgent/referer/origin
+        const res = await apiClient.get(`/channels/${id}/sources`);
+        ch = res.data?.data || res.data;
+      } catch {
+        // Fallback: public endpoint (no credential headers — at least gets the stream URL)
+        const res = await apiClient.get(`/channels/${id}`);
+        ch = res.data?.data || res.data;
+      }
       setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
       setCurrentLang((ch?.language || '').toLowerCase() || null);
