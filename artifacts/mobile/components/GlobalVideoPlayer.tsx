@@ -1083,7 +1083,7 @@ export default function GlobalVideoPlayer() {
   // ── Video surface position/size by mode ──────────────────────────────────
   // The NativeIPTVPlayer (ExoPlayer/AVPlayer) lives inside this Animated.View.
   // When mode changes, only the style updates — NO unmount, NO reload.
-  const videoSurfaceStyle: any =
+  const videoSurfaceBaseStyle: any =
     mode === 'fullscreen'
       ? { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: '#000', zIndex: 9999, elevation: 50 }
