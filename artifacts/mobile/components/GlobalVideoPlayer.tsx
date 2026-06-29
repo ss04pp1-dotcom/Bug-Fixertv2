@@ -1316,10 +1316,10 @@ export default function GlobalVideoPlayer() {
                   <TouchableOpacity
                     key={i}
                     onPress={() => switchToSource(i)}
-                    style={[g.pill, i === srcIdx && g.pillActive, s.cookieExpired && g.pillExpired]}
+                    style={[g.pill, i === srcIdx && g.pillActive]}
                   >
-                    <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt, s.cookieExpired && g.pillExpiredTxt]}>
-                      {i === srcIdx ? '● ' : ''}{s.label || `Server ${i + 1}`}{s.cookieExpired ? ' ⚠' : ''}
+                    <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt]}>
+                      {i === srcIdx ? '● ' : ''}{s.label || `Server ${i + 1}`}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1536,10 +1536,10 @@ export default function GlobalVideoPlayer() {
                 <TouchableOpacity
                   key={i}
                   onPress={() => switchToSource(i)}
-                  style={[g.pill, i === srcIdx && g.pillActive, s.cookieExpired && g.pillExpired]}
+                  style={[g.pill, i === srcIdx && g.pillActive]}
                 >
-                  <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt, s.cookieExpired && g.pillExpiredTxt]}>
-                    {i === srcIdx ? '● ' : ''}{s.label || `S${i + 1}`}{s.cookieExpired ? ' ⚠' : ''}
+                  <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt]}>
+                    {i === srcIdx ? '● ' : ''}{s.label || `S${i + 1}`}
                   </Text>
                 </TouchableOpacity>
               ))}
