@@ -729,8 +729,8 @@ export default function GlobalVideoPlayer() {
   // 2. User-Agent MUST be present. Without it DataSourceUtil falls back to
   //    Util.getUserAgent(ctx, packageName) = "StreamPro/2.4.1 (Linux;Android…)"
   //    which many IPTV/CDN servers block or rate-limit to ~500 kbps.
-  //    "Lavf/58.29.100" (FFmpeg UA) is universally whitelisted by IPTV panels
-  //    (Xtream, Stalker, Emby, Jellyfin). VLC and TiviMate use the same UA.
+  //    "Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0" is the
+  //    default Media3/AndroidX UA — whitelisted by IPTV panels and CDNs.
   // 3. Cookie strings from IPTV panels often use '&' as separator
   //    (e.g. "session=abc&token=xyz") but the HTTP Cookie header requires '; '.
   //    Normalize here before ExoPlayer/OkHttp sees them.
@@ -779,11 +779,11 @@ export default function GlobalVideoPlayer() {
     // TiviMate / Mini Player never send that header — that is one reason they
     // start faster.
     //
-    // Default UA = 'Lavf/58.29.100' (FFmpeg). Universally whitelisted by
-    // Xtream Codes, Stalker, Emby, Jellyfin and most CDNs. VLC and TiviMate
-    // use the same UA string. Source-provided UA overrides the default.
+    // Default UA = 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0'
+    // (Media3 / AndroidX UA). Whitelisted by IPTV panels and CDNs.
+    // Source-provided UA overrides the default.
     const headers: Record<string, string> = {
-      'User-Agent': raw['User-Agent'] || 'Lavf/58.29.100',
+      'User-Agent': raw['User-Agent'] || 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0',
     };
     if (raw['Cookie'])  headers['Cookie']  = normalizeCookie(raw['Cookie']);
     if (raw['Referer']) headers['Referer'] = raw['Referer'];
@@ -1456,12 +1456,6 @@ export default function GlobalVideoPlayer() {
         {/* Full controls overlay */}
         {showCtrl && !pipActive && !playerError && (
           <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
-            <LinearGradient
-              colors={['rgba(0,0,0,0.52)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.60)']}
-              locations={[0, 0.28, 0.62, 1]}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
 
             {/* Top bar */}
             <View style={[g.topBar, { paddingTop: 10 }]}>
