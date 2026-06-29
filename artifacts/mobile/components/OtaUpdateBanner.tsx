@@ -8,57 +8,67 @@ import Animated, {
 } from 'react-native-reanimated';
 import Constants from 'expo-constants';
 
-const IS_EXPO_GO =
-  Constants.appOwnership === 'expo' ||
-  (Constants as any).executionEnvironment === 'storeClient';
+// ── Expo Go detection ──────────────────────────────────────────────────────
+// Primary: executionEnvironment (SDK 45+, not deprecated)
+// Fallback: appOwnership (older SDK, deprecated but still works)
+const IS_EXPO_GO: boolean = (() => {
+  try {
+    const env = (Constants as any).executionEnvironment;
+    if (env === 'storeClient') return true;   // Expo Go
+    if (env === 'standalone' || env === 'bare') return false; // real build
+    // Legacy fallback
+    return Constants.appOwnership === 'expo';
+  } catch {
+    return false;
+  }
+})();
 
-type State = 'idle' | 'available' | 'downloading' | 'done';
+type State = 'idle' | 'available' | 'downloading' | 'done' | 'error';
 
 export default function OtaUpdateBanner() {
-  const [state, setState] = useState<State>('idle');
+  const [state, setState]       = useState<State>('idle');
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState('');
-  const progressAnim = useSharedValue(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // M-021: track the reload timeout so it can be cleared on unmount.
-  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const checkingRef = useRef(false);
+  const [errMsg, setErrMsg]     = useState('');
+  const progressAnim            = useSharedValue(0);
+  const timerRef                = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reloadTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkingRef             = useRef(false);
 
+  // ── Cleanup timers on unmount ──────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (timerRef.current)       clearInterval(timerRef.current);
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    };
+  }, []);
+
+  // ── Check for OTA update ───────────────────────────────────────────────────
   const checkForUpdate = useCallback(async () => {
-    if (checkingRef.current) return;
+    if (checkingRef.current)   return;
     if (Platform.OS === 'web') return;
-    if (IS_EXPO_GO) return;
+    if (IS_EXPO_GO)            return;   // not available in Expo Go
 
     checkingRef.current = true;
     try {
       const Updates = await import('expo-updates');
 
-      if (!Updates.isEnabled) {
-        checkingRef.current = false;
-        return;
-      }
+      // isEnabled is false in dev builds / bare workflow without expo-updates
+      if (!Updates.isEnabled) return;
 
       const result = await Updates.checkForUpdateAsync();
       if (result.isAvailable) setState('available');
     } catch (e: any) {
-      if (__DEV__) console.warn('[OTA] checkForUpdate error:', e?.message ?? e);
+      // Network errors / server down — do not surface to the user; silent fail.
+      console.warn('[OTA] checkForUpdate:', e?.message ?? e);
     } finally {
       checkingRef.current = false;
     }
   }, []);
 
-  useEffect(() => {
-    checkForUpdate();
-  }, [checkForUpdate]);
+  // Check on mount
+  useEffect(() => { checkForUpdate(); }, [checkForUpdate]);
 
-  // M-021: clear any pending timers when the banner unmounts.
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-    };
-  }, []);
-
+  // Re-check when user returns to the app
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (next === 'active') checkForUpdate();
@@ -66,42 +76,77 @@ export default function OtaUpdateBanner() {
     return () => sub.remove();
   }, [checkForUpdate]);
 
+  // ── Fake progress ticker (visual feedback while fetchUpdateAsync runs) ─────
   function startProgressTimer() {
+    if (timerRef.current) clearInterval(timerRef.current);
     let current = 0;
     timerRef.current = setInterval(() => {
       current += Math.random() * 12 + 3;
-      if (current >= 95) {
-        current = 95;
-        if (timerRef.current) clearInterval(timerRef.current);
+      if (current >= 90) {
+        current = 90;
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
       }
-      const rounded = Math.min(Math.round(current), 95);
+      const rounded = Math.min(Math.round(current), 90);
       setProgress(rounded);
       progressAnim.value = withTiming(rounded / 100, { duration: 200 });
     }, 300);
   }
 
+  // ── Apply the downloaded update ────────────────────────────────────────────
   async function applyUpdate() {
     setState('downloading');
     setProgress(0);
     progressAnim.value = 0;
-    setError('');
+    setErrMsg('');
     startProgressTimer();
+
     try {
       const Updates = await import('expo-updates');
+
+      // Download the bundle
       await Updates.fetchUpdateAsync();
-      if (timerRef.current) clearInterval(timerRef.current);
+
+      // Stop fake ticker, jump to 100 %
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setProgress(100);
       progressAnim.value = withTiming(1, { duration: 300 });
       setState('done');
-      reloadTimerRef.current = setTimeout(() => Updates.reloadAsync(), 1200);
-    } catch (e: any) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (__DEV__) console.warn('[OTA] applyUpdate error:', e?.message ?? e);
-      setError('আপডেট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
-      setState('available');
+
+      // Reload after a short pause so the user sees the 100 % confirmation.
+      // Bug fix: use an async IIFE inside the timeout so errors from
+      // reloadAsync() are caught and shown instead of silently swallowed.
+      reloadTimerRef.current = setTimeout(() => {
+        (async () => {
+          try {
+            await Updates.reloadAsync();
+          } catch (reloadErr: any) {
+            // reloadAsync should never fail in practice, but if it does
+            // (bad state, already reloading, etc.) show a recoverable message.
+            console.warn('[OTA] reloadAsync failed:', reloadErr?.message ?? reloadErr);
+            setErrMsg('রিস্টার্ট হয়নি — অ্যাপ বন্ধ করে আবার খুলুন।');
+            setState('error');
+          }
+        })();
+      }, 1200);
+
+    } catch (fetchErr: any) {
+      // fetchUpdateAsync failed — network error, corrupt bundle, etc.
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      console.warn('[OTA] fetchUpdateAsync:', fetchErr?.message ?? fetchErr);
+      // Always visible (not just __DEV__) so the user knows something went wrong.
+      setErrMsg('ডাউনলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+      setState('error');
       setProgress(0);
       progressAnim.value = withTiming(0, { duration: 200 });
     }
+  }
+
+  function retry() {
+    setErrMsg('');
+    setState('available');
+    setProgress(0);
+    progressAnim.value = 0;
   }
 
   const progressBarStyle = useAnimatedStyle(() => ({
@@ -118,16 +163,19 @@ export default function OtaUpdateBanner() {
     >
       <View style={styles.content}>
         <View style={styles.row}>
+          {/* Left: title + subtitle / error */}
           <View style={styles.left}>
             <Text style={styles.title}>
               {state === 'done'
                 ? '✅ আপডেট সম্পন্ন!'
                 : state === 'downloading'
                 ? `⬇️ ডাউনলোড হচ্ছে… ${progress}%`
+                : state === 'error'
+                ? '❌ আপডেট ব্যর্থ'
                 : '🔄 নতুন আপডেট এসেছে!'}
             </Text>
-            {error ? (
-              <Text style={styles.error}>{error}</Text>
+            {errMsg ? (
+              <Text style={styles.errText}>{errMsg}</Text>
             ) : (
               <Text style={styles.sub}>
                 {state === 'downloading'
@@ -139,19 +187,25 @@ export default function OtaUpdateBanner() {
             )}
           </View>
 
+          {/* Right: action button */}
           {state === 'available' && (
             <TouchableOpacity style={styles.btn} onPress={applyUpdate} activeOpacity={0.75}>
               <Text style={styles.btnText}>আপডেট</Text>
             </TouchableOpacity>
           )}
-
           {state === 'done' && (
             <View style={[styles.btn, styles.btnDone]}>
               <Text style={styles.btnText}>✓</Text>
             </View>
           )}
+          {state === 'error' && (
+            <TouchableOpacity style={[styles.btn, styles.btnRetry]} onPress={retry} activeOpacity={0.75}>
+              <Text style={styles.btnText}>আবার</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
+        {/* Progress bar — visible while downloading */}
         {state === 'downloading' && (
           <View style={styles.progressTrack}>
             <Animated.View style={[styles.progressFill, progressBarStyle]} />
@@ -190,10 +244,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  left: { flex: 1, marginRight: 12 },
-  title: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, marginBottom: 3 },
-  sub: { color: '#A1A1AA', fontSize: 12 },
-  error: { color: '#F87171', fontSize: 12 },
+  left:    { flex: 1, marginRight: 12 },
+  title:   { color: '#FFFFFF', fontWeight: '700', fontSize: 14, marginBottom: 3 },
+  sub:     { color: '#A1A1AA', fontSize: 12 },
+  errText: { color: '#F87171', fontSize: 12 },
   btn: {
     backgroundColor: '#8B5CF6',
     paddingHorizontal: 18,
@@ -203,8 +257,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 76,
   },
-  btnDone: { backgroundColor: '#10B981' },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  btnDone:  { backgroundColor: '#10B981' },
+  btnRetry: { backgroundColor: '#EF4444' },
+  btnText:  { color: '#fff', fontWeight: '700', fontSize: 13 },
   progressTrack: {
     marginTop: 12,
     height: 6,
