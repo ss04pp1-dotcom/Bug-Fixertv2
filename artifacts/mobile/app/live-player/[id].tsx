@@ -258,6 +258,9 @@ export default function LivePlayerScreen() {
     );
   }
 
+  // ── Cookie-expired banner: shown if ANY loaded server has an expired cookie ──
+  const hasCookieExpired = sources.some((s) => s.cookieExpired === true);
+
   // ── Render metadata below the (singleton) player ───────────────────────────
   return (
     <View style={s.root}>
@@ -275,6 +278,20 @@ export default function LivePlayerScreen() {
       <View style={{ height: isLandscape ? 0 : insets.top + Math.round(W * 9 / 16), backgroundColor: '#000' }} />
 
       <View style={{ flex: 1, backgroundColor: C.bg }}>
+
+      {/* Cookie-expired warning banner */}
+      {hasCookieExpired && (
+        <View style={{
+          backgroundColor: '#78350f', borderLeftWidth: 3, borderLeftColor: '#f59e0b',
+          marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 8,
+          flexDirection: 'row', alignItems: 'center', gap: 8,
+        }}>
+          <Ionicons name="warning-outline" size={18} color="#f59e0b" />
+          <Text style={{ color: '#fde68a', fontSize: 12, flex: 1, lineHeight: 17 }}>
+            Stream credential (cookie) has expired. Please contact admin to refresh the channel credentials.
+          </Text>
+        </View>
+      )}
         {/* Channel header */}
         <View style={s.channelHeader}>
           {logoUrl ? (

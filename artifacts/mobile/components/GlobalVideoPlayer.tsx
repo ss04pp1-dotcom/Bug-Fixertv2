@@ -1337,6 +1337,11 @@ export default function GlobalVideoPlayer() {
           <View style={g.overlayCenter}>
             <Ionicons name="alert-circle-outline" size={32} color={C.live} />
             <Text style={[g.errorTxt, { fontSize: 13 }]}>Playback Failed</Text>
+            {src?.cookieExpired && (
+              <Text style={[g.errorSub, { fontSize: 11, color: '#f59e0b', marginTop: 4, textAlign: 'center' }]}>
+                🍪 Cookie expired — admin needs to update stream credentials
+              </Text>
+            )}
             <View style={[g.errorActions, { marginTop: 10 }]}>
               {sources.length > 1 && srcIdx < sources.length - 1 && (
                 <TouchableOpacity onPress={() => switchToSource(srcIdx + 1)} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
@@ -1553,6 +1558,11 @@ export default function GlobalVideoPlayer() {
           <Ionicons name="alert-circle-outline" size={48} color={C.live} />
           <Text style={g.errorTxt}>Playback Failed</Text>
           <Text style={g.errorSub} numberOfLines={3}>{playerError}</Text>
+          {src?.cookieExpired && (
+            <Text style={[g.errorSub, { fontSize: 12, color: '#f59e0b', marginTop: 6, textAlign: 'center' }]}>
+              🍪 Cookie expired — admin needs to update stream credentials
+            </Text>
+          )}
           <View style={g.errorActions}>
             {sources.length > 1 && srcIdx < sources.length - 1 && (
               <TouchableOpacity onPress={() => switchToSource(srcIdx + 1)} style={g.altBtn}>
