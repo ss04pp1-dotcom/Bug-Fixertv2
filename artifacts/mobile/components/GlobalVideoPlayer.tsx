@@ -144,16 +144,44 @@ function detectStreamFormat(url: string): StreamFormat {
  * rejects it within ~1 s and re-probes — still faster than a blind sniff
  * that blocks for 20+ s on many IPTV CDNs.
  */
+// getVideoType: return an ExoPlayer type hint ONLY when the URL itself gives
+// an unambiguous signal.  Never guess from path patterns like /live/ or /movie/
+// because Xtream Codes servers can serve either HLS *or* raw MPEG-TS on those
+// same paths depending on server config — forcing 'm3u8' causes a silent black
+// screen on TS-serving nodes.  ExoPlayer's content-type sniff is < 500 ms on
+// live streams; that is a better trade-off than a wrong type that never plays.
+//
+// Signals we trust:
+//  .m3u8 / manifest.m3u8 / /hls/  → definitely HLS
+//  .mpd  / manifest.mpd  / /dash/ → definitely DASH
+//  .mp4 / .mkv / .ts              → progressive/TS — let ExoPlayer handle natively
+//  query: output=m3u8|m3u_plus    → panel said HLS explicitly
+//  query: output=ts|type=ts       → panel said TS explicitly
+//  everything else (Xtream /live/, /movie/, plain HTTP, RTSP, UNKNOWN) → sniff
 function getVideoType(url: string, fmt: StreamFormat): string | undefined {
-  const lower = (url || '').toLowerCase().split('?')[0].split('#')[0];
-  // Explicit extension — most reliable
-  if (lower.endsWith('.m3u8') || lower.includes('manifest.m3u8')) return 'm3u8';
-  if (lower.endsWith('.mpd')  || lower.includes('manifest.mpd'))  return 'mpd';
-  if (lower.endsWith('.mp4')  || lower.endsWith('.mkv'))          return undefined;
-  // Format-based hint — avoids the sniff round-trip for Xtream Codes paths
-  if (fmt === 'HLS')                                              return 'm3u8';
-  if (fmt === 'DASH')                                             return 'mpd';
-  // MPEGTS (raw TS), MP4, UNKNOWN — let ExoPlayer detect naturally
+  const raw   = (url || '').toLowerCase();
+  const noQ   = raw.split('?')[0].split('#')[0];
+  const query = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
+
+  // Query-string hints (authoritative — panel declared the format explicitly)
+  if (query.includes('output=m3u8') || query.includes('output=m3u_plus') || query.includes('type=m3u')) return 'm3u8';
+  if (query.includes('output=ts')   || query.includes('type=ts'))                                       return undefined; // TS — ExoPlayer auto
+
+  // Explicit file extensions
+  if (noQ.endsWith('.m3u8') || noQ.includes('manifest.m3u8')) return 'm3u8';
+  if (noQ.endsWith('.mpd')  || noQ.includes('manifest.mpd'))  return 'mpd';
+  if (noQ.endsWith('.mp4')  || noQ.endsWith('.mkv') || noQ.endsWith('.ts')) return undefined;
+
+  // Explicit path segments (high confidence — dedicated HLS/DASH origin paths)
+  if (noQ.includes('/hls/'))  return 'm3u8';
+  if (noQ.includes('/dash/')) return 'mpd';
+
+  // DASH format from detectStreamFormat (e.g. .mpd already caught above, but fmt is a safety net)
+  if (fmt === 'DASH') return 'mpd';
+
+  // Everything else — Xtream /live/, /movie/, plain HTTP streams, RTSP, UNKNOWN:
+  // Let ExoPlayer sniff the content type from the server's Content-Type header.
+  // Do NOT force 'm3u8' here — a TS-serving Xtream node will silently black-screen.
   return undefined;
 }
 
