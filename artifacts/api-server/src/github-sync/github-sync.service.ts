@@ -780,21 +780,13 @@ export class GitHubSyncService implements OnModuleInit {
         : undefined) ??
       existingServers.find(s => s.channelId === channelId && s.link === item.link);
 
-    // Merge item-level headers with source-level defaults.
-    // Item-level headers always win; source defaults fill in the gaps.
-    // A defined (non-undefined) item value — even empty string — takes precedence
-    // so that an explicit empty value in the playlist intentionally clears the header.
-    const effectiveCookie    = item.cookie    !== undefined ? item.cookie    : (sourceDefaults.cookie    ?? undefined);
-    const effectiveUserAgent = item.userAgent !== undefined ? item.userAgent : (sourceDefaults.userAgent ?? undefined);
-    const effectiveReferer   = item.referer   !== undefined ? item.referer   : (sourceDefaults.referer   ?? undefined);
-    const effectiveOrigin    = item.origin    !== undefined ? item.origin    : (sourceDefaults.origin    ?? undefined);
-
-    // Build header update fields: only write keys that have a determined value.
+    // Use only the item's own headers — no fallback to source-level defaults.
+    // If the entry provides a value, use it; otherwise store null (empty headers).
     const headerFields = {
-      ...(effectiveCookie    !== undefined ? { cookie:    effectiveCookie    || null } : {}),
-      ...(effectiveUserAgent !== undefined ? { userAgent: effectiveUserAgent || null } : {}),
-      ...(effectiveReferer   !== undefined ? { referer:   effectiveReferer   || null } : {}),
-      ...(effectiveOrigin    !== undefined ? { origin:    effectiveOrigin    || null } : {}),
+      cookie:    item.cookie    ?? null,
+      userAgent: item.userAgent ?? null,
+      referer:   item.referer   ?? null,
+      origin:    item.origin    ?? null,
     };
 
     if (existingServer) {
@@ -843,10 +835,10 @@ export class GitHubSyncService implements OnModuleInit {
           data: {
             channelId,
             link: item.link,
-            cookie:    effectiveCookie    ?? null,
-            userAgent: effectiveUserAgent ?? null,
-            referer:   effectiveReferer   ?? null,
-            origin:    effectiveOrigin    ?? null,
+            cookie:    item.cookie    ?? null,
+            userAgent: item.userAgent ?? null,
+            referer:   item.referer   ?? null,
+            origin:    item.origin    ?? null,
             priority: 100,
             sourceType: ServerSourceType.GITHUB,
             githubSourceId: sourceId,
