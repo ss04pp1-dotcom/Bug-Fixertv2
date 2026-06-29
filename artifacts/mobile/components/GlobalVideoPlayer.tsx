@@ -58,28 +58,33 @@ const MINI_TITLE_H = 36;
 const MINI_MARGIN = 12;
 
 // ─── Buffer configs (Media3 / ExoPlayer) ─────────────────────────────────────
-// Media3 bufferConfig reference:
-//   https://rnvideo.dev/docs/other/bufferconfig
 //
-// LIVE — 15s min / 50s max matches TiviMate / OTT Navigator defaults.
-// backBufferDurationMs: allow rewinding ~30 s into the live edge.
-// cacheSizeMB: 0 → disabled for live (byte cache pointless for live streams).
+// The #1 factor for "fast channel start" is bufferForPlaybackMs — how much data
+// ExoPlayer needs before it starts rendering the first frame.
+//
+// Mini Player (Media3 1.8.0) observed behaviour:
+//   bufferForPlaybackMs           ≈ 300 ms   (starts almost instantly)
+//   bufferForPlaybackAfterRebufferMs ≈ 1 000 ms
+//   minBufferMs                   ≈ 10 000 ms  (not over-buffering at start)
+//   maxBufferMs                   ≈ 30 000 ms
+//
+// LIVE — aggressive low-latency start; matching popular IPTV player defaults.
 const BUFFER_LIVE = {
-  minBufferMs: 30_000,
-  maxBufferMs: 90_000,
-  bufferForPlaybackMs: 1_500,
-  bufferForPlaybackAfterRebufferMs: 3_000,
-  backBufferDurationMs: 30_000,           // rewind up to 30 s in live DVR
-  cacheSizeMB: 0,                         // no disk cache for live
+  minBufferMs:                    10_000,  // keep 10 s ahead (was 30 s)
+  maxBufferMs:                    30_000,  // cap at 30 s   (was 90 s)
+  bufferForPlaybackMs:               300,  // play after 300 ms  (was 1 500 ms) ← FAST START
+  bufferForPlaybackAfterRebufferMs: 1_000, // resume after 1 s stall (was 3 s)
+  backBufferDurationMs:           10_000,  // 10 s back-buffer (was 30 s)
+  cacheSizeMB: 0,                          // no disk cache for live
 };
-// VOD — bigger buffers + 200 MB disk cache for smooth seeking.
+// VOD — a bit more buffer for smooth seeking; disk-cache for instant re-seek.
 const BUFFER_VOD = {
-  minBufferMs: 30_000,
-  maxBufferMs: 90_000,
-  bufferForPlaybackMs: 2_000,
-  bufferForPlaybackAfterRebufferMs: 4_000,
-  backBufferDurationMs: 60_000,           // 60 s back buffer for VOD seek
-  cacheSizeMB: 200,                       // disk-cache chunks for seek performance
+  minBufferMs:                    15_000,  // (was 30 s)
+  maxBufferMs:                    50_000,  // (was 90 s)
+  bufferForPlaybackMs:               500,  // (was 2 000 ms)
+  bufferForPlaybackAfterRebufferMs: 1_500, // (was 4 s)
+  backBufferDurationMs:           30_000,  // 30 s for seek-back
+  cacheSizeMB: 200,                        // disk-cache chunks for instant seek
 };
 
 // ─── Stream type detection ────────────────────────────────────────────────────
@@ -102,9 +107,14 @@ function detectStreamFormat(url: string): StreamFormat {
 
 function getVideoType(url: string, fmt: StreamFormat): string | undefined {
   const lower = (url || '').toLowerCase().split('?')[0].split('#')[0];
+  // Only hint the type when we are CERTAIN — avoids a wasted HEAD request from
+  // ExoPlayer trying to sniff the content-type on every stream open.
   if (lower.endsWith('.m3u8') || lower.includes('manifest.m3u8')) return 'm3u8';
-  if (lower.endsWith('.mpd')) return 'mpd';
-  return undefined; // let ExoPlayer sniff Content-Type
+  if (lower.endsWith('.mpd') || lower.includes('manifest.mpd'))   return 'mpd';
+  // Xtream Codes live paths end with a numeric stream ID — no extension.
+  // They always serve HLS or TS; let ExoPlayer sniff (do NOT force a type here
+  // because the panel can serve either .m3u8 or .ts depending on output_format).
+  return undefined;
 }
 
 // ─── Time format ──────────────────────────────────────────────────────────────
@@ -994,20 +1004,12 @@ export default function GlobalVideoPlayer() {
     durationRef.current = data?.duration || 0;
     setBuffering(false); setReady(true); setEnded(false); setError(null);
 
-    // Collect tracks
-    if (data?.videoTracks?.length) {
-      setVideoTracks(data.videoTracks);
-      // FIX: force HIGHEST-bitrate track so we consume full MB (like other apps).
-      // ExoPlayer's ABR with a small buffer drops to low quality → "network problem".
-      let bestIdx = -1, bestBr = 0;
-      data.videoTracks.forEach((t: any, i: number) => {
-        const br = t.bitrate || 0;
-        if (br > bestBr) { bestBr = br; bestIdx = i; }
-      });
-      if (bestIdx >= 0) {
-        setSelVid(bestIdx);
-      }
-    }
+    // Collect tracks — leave selectedVideoTrack as 'auto' so ExoPlayer ABR
+    // starts at a quality it can sustain immediately and ramps up as bandwidth
+    // is measured. Forcing the highest bitrate up-front causes an extra segment
+    // fetch at max quality before playback begins → slower start, more rebuffers.
+    // (Mini Player also leaves ABR on auto for fast start.)
+    if (data?.videoTracks?.length) setVideoTracks(data.videoTracks);
     if (data?.audioTracks?.length) setAudioTracks(data.audioTracks);
     if (data?.textTracks?.length)  setTextTracks(data.textTracks);
 
@@ -1053,9 +1055,11 @@ export default function GlobalVideoPlayer() {
     if (isNetworkErr && networkRetryRef.current < 3) {
       networkRetryRef.current += 1;
       setBuffering(true); setError(null);
+      // 500 ms retry (was 1 500 ms) — IPTV servers recover fast; waiting 1.5 s
+      // feels sluggish. If 3 fast retries all fail we fall through to next server.
       retryTimerRef.current = setTimeout(() => {
         setVideoKey(k => k + 1); // clean remount, same srcIdx
-      }, 1500);
+      }, 500);
     } else if (srcIdx < sourcesRef.current.length - 1) {
       setSrcIdx(srcIdx + 1);
       setVideoKey(k => k + 1);
