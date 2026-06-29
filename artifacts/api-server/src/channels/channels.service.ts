@@ -391,7 +391,7 @@ export class ChannelsService {
     }
     let content: string;
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'StreamPro/1.0' }, signal: AbortSignal.timeout(15000) });
+      const res = await fetch(url, { headers: { 'User-Agent': 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0' }, signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       content = await res.text();
     } catch (e: any) {
@@ -596,7 +596,7 @@ export class ChannelsService {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 12000);
       const reqHeaders: Record<string, string> = {
-        'User-Agent': server.userAgent ?? 'StreamPro/1.0',
+        'User-Agent': server.userAgent ?? 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0',
         'Range': 'bytes=0-1023',
       };
       if (server.cookie)  reqHeaders['Cookie']  = server.cookie;

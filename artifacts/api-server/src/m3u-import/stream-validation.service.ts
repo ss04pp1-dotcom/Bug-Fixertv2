@@ -172,7 +172,7 @@ export class StreamValidationService {
         redirect: 'follow',
         signal: controller.signal,
         headers: {
-          'User-Agent': headers?.userAgent || 'StreamPro-Validator/1.0',
+          'User-Agent': headers?.userAgent || 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0',
           'Accept': '*/*',
           ...(headers?.cookie  ? { Cookie:  headers.cookie  } : {}),
           ...(headers?.referer ? { Referer: headers.referer } : {}),
