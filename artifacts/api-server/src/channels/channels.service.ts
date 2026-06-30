@@ -18,9 +18,12 @@ export class ChannelsService {
     private githubSyncService: GitHubSyncService,
   ) {}
 
-  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; isFeatured?: boolean }) {
+  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; isFeatured?: boolean; isActive?: boolean }) {
     const { skip, limit = 20, page = 1, search } = query;
-    const where: Prisma.ChannelWhereInput = { deletedAt: null };
+    // Default: show only active channels to users.
+    // Admin panel can pass isActive=false (or omit to get all) via query param if needed.
+    const isActiveFilter = query.isActive !== undefined ? String(query.isActive) === 'true' : true;
+    const where: Prisma.ChannelWhereInput = { deletedAt: null, isActive: isActiveFilter };
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
     // HTTP query params arrive as strings even when typed as boolean; cast first.
