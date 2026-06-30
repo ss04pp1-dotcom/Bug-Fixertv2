@@ -45,9 +45,9 @@ export class ChannelsController {
   @Public()
   @Get()
   @ApiOperation({ summary: 'Get all channels' })
-  async findAll(@Query() query: PaginationDto, @Req() req: Request) {
+  async findAll(@Query() query: PaginationDto & { categoryId?: string; isPremium?: string; isFeatured?: string; isActive?: string }, @Req() req: Request) {
     await this.enforceGeoBlock(req);
-    return this.channelsService.findAll(query);
+    return this.channelsService.findAll(query as any);
   }
 
   @Public()

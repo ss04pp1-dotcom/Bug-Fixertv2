@@ -43,7 +43,7 @@ export class ChannelsService {
 
   async findOne(id: string) {
     const channel = await this.prisma.channel.findFirst({
-      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       include: {
         category: true,
         epgPrograms: {
