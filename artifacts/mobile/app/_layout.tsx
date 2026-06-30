@@ -10,6 +10,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
+import { Config } from '@/constants/config';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,7 +43,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
 
   const { data: forceUpdate } = useQuery({
     queryKey: ['force-update', 'app-guard'],
-    queryFn: () => apiClient.get('/force-update/check', { params: { version: '2.4.1', platform: Platform.OS === 'ios' ? 'ios' : 'android' } }).then(unwrap),
+    queryFn: () => apiClient.get('/force-update/check', { params: { version: Config.APP_VERSION, platform: Platform.OS === 'ios' ? 'ios' : 'android' } }).then(unwrap),
     retry: false,
     staleTime: 1000 * 60 * 10,
   });

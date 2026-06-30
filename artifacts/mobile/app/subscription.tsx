@@ -39,7 +39,13 @@ export default function SubscriptionScreen() {
         id: p.id,
         name: p.name || `Plan ${i + 1}`,
         price: p.price || p.amount || 0,
-        period: p.description || p.period || '1 Month',
+        period: p.period || (p.durationDays
+          ? (p.durationDays >= 365
+            ? `${Math.round(p.durationDays / 365)} Year`
+            : p.durationDays >= 28
+              ? `${Math.round(p.durationDays / 30)} Month`
+              : `${p.durationDays} Days`)
+          : p.description || '1 Month'),
         features: Array.isArray(p.features) ? p.features : [],
         popular: p.popular || i === 1,
         theme: i === 2 ? 'gradient' : (i === 1 ? 'border' : 'dark'),

@@ -85,7 +85,10 @@ export default function WatchHistoryScreen() {
             if (!content) return null;
             
             const isMovie = !!item.movie;
-            const progressPercent = item.progress ? Math.min(100, Math.round(item.progress * 100)) : 0;
+            // API returns position (seconds watched) and duration (total seconds)
+            const progressPercent = (item.duration && item.duration > 0)
+              ? Math.min(100, Math.round((item.position / item.duration) * 100))
+              : 0;
             const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'Recently';
 
             return (
@@ -93,8 +96,8 @@ export default function WatchHistoryScreen() {
                 style={s.historyCard}
                 onPress={() => router.push(isMovie ? `/movie/${content.id}` : `/series/${content.id}`)}
               >
-                {(content.posterUrl || content.thumbnailUrl) ? (
-                  <Image source={{ uri: getImageUrl(content.posterUrl || content.thumbnailUrl) }} style={s.poster} />
+                {(content.poster || content.posterUrl || content.thumbnailUrl) ? (
+                  <Image source={{ uri: getImageUrl(content.poster || content.posterUrl || content.thumbnailUrl) }} style={s.poster} />
                 ) : (
                   <View style={[s.poster, { backgroundColor: '#1E1E2E', justifyContent: 'center', alignItems: 'center' }]}>
                     <Ionicons name="film-outline" size={24} color="#4A4A5A" />

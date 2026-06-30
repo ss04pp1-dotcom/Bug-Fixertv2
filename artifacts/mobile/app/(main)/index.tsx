@@ -137,13 +137,13 @@ export default function HomeScreen() {
     return liveMatchData.slice(0, 4).map((m: any, i: number) => ({
       id: m.id || String(i),
       title: m.tournament || m.title || 'Live Match',
-      team1: m.homeTeam?.name || m.team1 || 'Team A',
-      team2: m.awayTeam?.name || m.team2 || 'Team B',
-      score1: m.homeTeam?.score ?? m.score1 ?? '',
-      score2: m.awayTeam?.score ?? m.score2 ?? '',
-      time: m.elapsed || m.time || 'LIVE',
-      logo1: m.homeTeam?.logo || '',
-      logo2: m.awayTeam?.logo || '',
+      team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
+      team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',
+      score1: m.score ?? m.score1 ?? '',
+      score2: m.score2 ?? '',
+      time: m.elapsed || m.time || (m.scheduledAt ? new Date(m.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'LIVE'),
+      logo1: m.teamA?.logo || m.homeTeam?.logo || '',
+      logo2: m.teamB?.logo || m.awayTeam?.logo || '',
     }));
   }, [liveMatchData]);
 
@@ -196,8 +196,8 @@ export default function HomeScreen() {
       id: m.id || String(i),
       title: m.title || m.tournament || 'Upcoming Match',
       date: m.startTime || m.date || '',
-      team1: m.homeTeam?.name || m.team1 || 'Team A',
-      team2: m.awayTeam?.name || m.team2 || 'Team B',
+      team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
+      team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',
       sportId: m.sportId || '',
     }));
   }, [upcomingData]);

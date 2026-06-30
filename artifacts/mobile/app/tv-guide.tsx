@@ -78,22 +78,44 @@ export default function TVGuideScreen() {
 
   const { data: epgData, isLoading, isError, refetch } = useEPG({ date: dateParam });
 
+  // Convert ISO startTime → 30-min slot index relative to 6:00 AM (slot 0)
+  const timeToSlot = (iso: string): number => {
+    const d = new Date(iso);
+    return Math.max(0, (d.getHours() - 6) * 2 + (d.getMinutes() >= 30 ? 1 : 0));
+  };
+
   // Map API data to Channel format
+  // API returns: { channel: { id, name }, programs: [{ id, title, startTime, endTime }] }
   const channels: Channel[] = useMemo(() => {
+    const now = new Date();
     if (!epgData || !Array.isArray(epgData) || epgData.length === 0) return [];
-    return epgData.map((ch: any, chIdx: number) => ({
-      id: ch.id || `ch${chIdx + 1}`,
-      name: ch.name || ch.channelName || 'Channel',
-      logo: (ch.name || ch.channelName || 'CH').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
-      programs: (ch.programs || ch.schedule || []).map((p: any, pIdx: number) => ({
-        id: p.id || `p${chIdx}-${pIdx}`,
-        title: p.title || p.name || 'Program',
-        startSlot: p.startSlot || p.slotIndex || pIdx * 2 + 4,
-        durationSlots: p.durationSlots || Math.max(1, Math.round((p.duration || 60) / 30)),
-        color: PROGRAM_COLORS[pIdx % PROGRAM_COLORS.length],
-        isLive: p.isLive || p.isCurrentlyAiring || false,
-      })),
-    }));
+    return epgData.map((entry: any, chIdx: number) => {
+      // API may return grouped { channel, programs } or flat channel with programs array
+      const ch = entry.channel || entry;
+      const programList: any[] = entry.programs || ch.programs || ch.schedule || [];
+      return {
+        id: ch.id || `ch${chIdx + 1}`,
+        name: ch.name || ch.channelName || 'Channel',
+        logo: (ch.name || ch.channelName || 'CH').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
+        programs: programList.map((p: any, pIdx: number) => {
+          const start = p.startTime ? new Date(p.startTime) : null;
+          const end = p.endTime ? new Date(p.endTime) : null;
+          const durationMins = start && end
+            ? Math.max(30, Math.round((end.getTime() - start.getTime()) / 60000))
+            : (p.duration || 60);
+          return {
+            id: p.id || `p${chIdx}-${pIdx}`,
+            title: p.title || p.name || 'Program',
+            startSlot: start ? timeToSlot(p.startTime) : (p.startSlot ?? pIdx * 2 + 4),
+            durationSlots: Math.max(1, Math.round(durationMins / 30)),
+            color: PROGRAM_COLORS[pIdx % PROGRAM_COLORS.length],
+            isLive: start && end
+              ? now >= start && now < end
+              : (p.isLive || p.isCurrentlyAiring || false),
+          };
+        }),
+      };
+    });
   }, [epgData]);
 
   React.useEffect(() => {
