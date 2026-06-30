@@ -23,7 +23,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Platform, BackHandler, StatusBar, ActivityIndicator,
-  PanResponder, Modal, useWindowDimensions, ScrollView,
+  PanResponder, Modal, useWindowDimensions, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,7 +35,9 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { useGlobalPlayer, type PlayerSource, type PlayerMode } from '@/lib/player-store';
+import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
+import { PosterFade } from './player/PosterFade';
+import { NextEpisodeOverlay } from './player/NextEpisodeOverlay';
 import { router } from 'expo-router';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -57,6 +59,8 @@ const MINI_W = 220;
 const MINI_H = 124;        // 16:9
 const MINI_TITLE_H = 36;
 const MINI_MARGIN = 12;
+// Tab bar base height (without bottom safe-area inset — that is subtracted separately)
+const TAB_BAR_BASE_H = 60;
 
 // ─── Buffer configs (Media3 / ExoPlayer) ─────────────────────────────────────
 //
@@ -505,7 +509,7 @@ export default function GlobalVideoPlayer() {
   const { width: SW, height: SH } = useWindowDimensions();
   const {
     mode, sources, srcIdx, title, logo, contentId, contentType, isLive,
-    isPlaying, enterTop, enterMini, hide, setPlaying, setSrcIdx,
+    isPlaying, enterTop, enterMini, hide, setPlaying, setSrcIdx, nextEpisode, setNextEpisode,
   } = useGlobalPlayer();
 
   // ── Landscape / Orientation ──────────────────────────────────────────────
@@ -625,6 +629,22 @@ export default function GlobalVideoPlayer() {
   const ctrlOpacity = useSharedValue(1);
   const ctrlStyle   = useAnimatedStyle(() => ({ opacity: ctrlOpacity.value }));
 
+  // ── SharedValue seek bar (Phase 2 — zero re-renders on every progress tick) ─
+  const progressSV = useSharedValue(0);
+  const lastProgressUpdateRef = useRef(0);
+  const trackWidthSV = useSharedValue(200); // measured track width (px)
+
+  // Reanimated-driven fill + thumb — update every frame without React re-renders
+  const seekFillStyle = useAnimatedStyle(() => ({
+    width: progressSV.value * trackWidthSV.value,
+  }));
+  const seekThumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progressSV.value * trackWidthSV.value - 7 }],
+  }));
+
+  // ── Poster crossfade (Phase 1) ───────────────────────────────────────────
+  const [posterVisible, setPosterVisible] = useState(false);
+
   // ── Mini player animated position ────────────────────────────────────────
   const SNAP_RIGHT = SW - MINI_W - MINI_MARGIN;
   const SNAP_LEFT  = MINI_MARGIN;
@@ -644,7 +664,10 @@ export default function GlobalVideoPlayer() {
 
   useEffect(() => {
     clampMinY.value = (insets.top || 20) + MINI_MARGIN;
-    clampMaxY.value = SH - MINI_H - MINI_TITLE_H - 80 - (insets.bottom || 0) - MINI_MARGIN;
+    // Keep mini player fully above the tab bar.
+    // Tab bar height = TAB_BAR_BASE_H + Math.max(insets.bottom, 8).
+    // insets.bottom is already handled by Math.max so we use the raw value here.
+    clampMaxY.value = SH - MINI_H - MINI_TITLE_H - TAB_BAR_BASE_H - Math.max(insets.bottom || 0, 8) - MINI_MARGIN;
   }, [insets.top, insets.bottom, SH]);
 
   // ── Controls auto-hide ───────────────────────────────────────────────────
@@ -857,6 +880,9 @@ export default function GlobalVideoPlayer() {
       currentTimeRef.current = 0; durationRef.current = 0;
       networkRetryRef.current = 0;
       resumePosRef.current = null;
+      progressSV.value = 0;
+      // Phase 1: show poster crossfade while video loads
+      setPosterVisible(true);
       // Bump videoKey to force a clean Video remount for the new URL
       setVideoKey(k => k + 1);
       // Load resume position for VOD
@@ -900,18 +926,21 @@ export default function GlobalVideoPlayer() {
   const seek = useCallback((delta: number) => {
     const t = Math.max(0, Math.min(durationRef.current || 0, currentTimeRef.current + delta));
     videoRef.current?.seek?.(t);
-    setTime(t); currentTimeRef.current = t;
+    currentTimeRef.current = t;
+    if (durationRef.current > 0) progressSV.value = t / durationRef.current;
+    setTime(t);
     bumpCtrl();
-  }, [bumpCtrl]);
+  }, [bumpCtrl, progressSV]);
 
   const seekToFrac = useCallback((frac: number) => {
     if (!durationRef.current) return;
-    if (!trackWidthRef.current) return; // guard div-by-zero
     const t = Math.max(0, Math.min(1, frac)) * durationRef.current;
     videoRef.current?.seek?.(t);
-    setTime(t); currentTimeRef.current = t;
+    currentTimeRef.current = t;
+    progressSV.value = Math.max(0, Math.min(1, frac));
+    setTime(t);
     bumpCtrl();
-  }, [bumpCtrl]);
+  }, [bumpCtrl, progressSV]);
 
   // ── Settings handler ─────────────────────────────────────────────────────
   const handleSheetSelect = useCallback((type: SheetType, value: any) => {
@@ -1071,7 +1100,8 @@ export default function GlobalVideoPlayer() {
   // (was outside causing stale closure when isLive changed mid-play).
   useEffect(() => {
     if (mode === 'hidden') return;
-    const STALL_MS = isLive ? 15_000 : 25_000;
+    // Phase 1: faster stall detection (7s live / 8s VOD vs old 15s / 25s)
+    const STALL_MS = isLive ? 7_000 : 8_000;
     if (buffering && !playerError && src && !ended) {
       stallTimerRef.current = setTimeout(() => {
         const srcs = sourcesRef.current;
@@ -1081,7 +1111,6 @@ export default function GlobalVideoPlayer() {
         } else {
           setError('Stream stalled. No data received. Try refreshing.');
           setBuffering(false);
-          // Report stall failure so User Playback health data is accurate
           if (!reportedRef.current) {
             reportedRef.current = true;
             reportPlayback(false);
@@ -1233,7 +1262,6 @@ export default function GlobalVideoPlayer() {
 
   if (mode === 'hidden') return null;
 
-  const progress  = durationRef.current > 0 ? currentTime / durationRef.current : 0;
   const isLiveNow = isLive && duration === 0;
   const topH      = Math.round(SW * 9 / 16);
 
@@ -1302,13 +1330,29 @@ export default function GlobalVideoPlayer() {
             selectedTextTrack={selectedTextTrack}
             onLoadStart={() => { setBuffering(true); setReady(false); }}
             onLoad={handleLoad}
-            onReadyForDisplay={() => { setBuffering(false); setReady(true); }}
+            onReadyForDisplay={() => {
+              setBuffering(false);
+              setReady(true);
+              // Phase 1: fade out poster once first frame is displayed
+              setPosterVisible(false);
+            }}
             onProgress={(d) => {
-              setTime(d.currentTime);
+              // Phase 2: update SharedValue on every tick (drives seek bar, zero re-renders)
               currentTimeRef.current = d.currentTime;
               if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
-                setDuration(d.seekableDuration);
                 durationRef.current = d.seekableDuration;
+              }
+              if (durationRef.current > 0) {
+                progressSV.value = currentTimeRef.current / durationRef.current;
+              }
+              // Throttle setState to 2×/sec — enough for time display, zero seek-bar jank
+              const now = Date.now();
+              if (now - lastProgressUpdateRef.current > 500) {
+                lastProgressUpdateRef.current = now;
+                setTime(d.currentTime);
+                if (d.seekableDuration > 0 && d.seekableDuration !== durationRef.current) {
+                  setDuration(d.seekableDuration);
+                }
               }
             }}
             onBuffer={setBuffering}
@@ -1326,6 +1370,11 @@ export default function GlobalVideoPlayer() {
               }
             }}
           />
+
+          {/* Phase 1: Poster crossfade — shown while video loads, fades when first frame arrives */}
+          {mode !== 'mini' && (
+            <PosterFade uri={logo} visible={posterVisible} />
+          )}
         </Animated.View>
       )}
 
@@ -1571,19 +1620,26 @@ export default function GlobalVideoPlayer() {
                   <TouchableOpacity
                     style={g.trackWrap}
                     activeOpacity={1}
-                    onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+                    onLayout={(e) => {
+                      const w = e.nativeEvent.layout.width;
+                      trackWidthRef.current = w;
+                      trackWidthSV.value = w;
+                    }}
                     onPress={(e) => {
                       if (!trackWidthRef.current) return;
                       seekToFrac(e.nativeEvent.locationX / trackWidthRef.current);
                     }}
                   >
                     <View style={g.trackBg}>
-                      <LinearGradient
-                        colors={[C.primary, C.accent]}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                        style={[g.trackFill, { width: `${progress * 100}%` as any }]}
-                      />
-                      <View style={[g.trackThumb, { left: `${Math.min(100, progress * 100)}%` as any }]} />
+                      {/* Phase 2: Reanimated-driven fill — zero re-renders on progress tick */}
+                      <Animated.View style={[g.trackFill, seekFillStyle]}>
+                        <LinearGradient
+                          colors={[C.primary, C.accent]}
+                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </Animated.View>
+                      <Animated.View style={[g.trackThumb, seekThumbStyle]} />
                     </View>
                   </TouchableOpacity>
                   <Text style={g.timeTxt}>{fmt(duration)}</Text>
@@ -1802,19 +1858,26 @@ export default function GlobalVideoPlayer() {
                   <TouchableOpacity
                     style={g.trackWrap}
                     activeOpacity={1}
-                    onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+                    onLayout={(e) => {
+                      const w = e.nativeEvent.layout.width;
+                      trackWidthRef.current = w;
+                      trackWidthSV.value = w;
+                    }}
                     onPress={(e) => {
                       if (!trackWidthRef.current) return;
                       seekToFrac(e.nativeEvent.locationX / trackWidthRef.current);
                     }}
                   >
                     <View style={g.trackBg}>
-                      <LinearGradient
-                        colors={[C.primary, C.accent]}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                        style={[g.trackFill, { width: `${progress * 100}%` as any }]}
-                      />
-                      <View style={[g.trackThumb, { left: `${Math.min(100, progress * 100)}%` as any }]} />
+                      {/* Phase 2: Reanimated-driven fill — zero re-renders on progress tick */}
+                      <Animated.View style={[g.trackFill, seekFillStyle]}>
+                        <LinearGradient
+                          colors={[C.primary, C.accent]}
+                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </Animated.View>
+                      <Animated.View style={[g.trackThumb, seekThumbStyle]} />
                     </View>
                   </TouchableOpacity>
                   <Text style={g.timeTxt}>{fmt(duration)}</Text>
@@ -1891,6 +1954,17 @@ export default function GlobalVideoPlayer() {
           />
         </View>
       )}
+      {/* ══════════════════════════════════════════════════════════════════
+          PHASE 3: NEXT EPISODE OVERLAY
+          Shown when VOD ends and nextEpisode is registered in the store.
+          ══════════════════════════════════════════════════════════════════ */}
+      {(mode === 'fullscreen' || mode === 'top') && (
+        <NextEpisodeOverlay
+          nextEpisode={nextEpisode}
+          visible={ended && !!nextEpisode}
+        />
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════
           STREAM DEBUG PANEL — shown when Debug button is tapped on error
           ══════════════════════════════════════════════════════════════════ */}

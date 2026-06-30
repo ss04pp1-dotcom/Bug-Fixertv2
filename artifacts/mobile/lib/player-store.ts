@@ -9,6 +9,13 @@ export interface PlayerSource {
   cookieExpiresAt?: string | null;
 }
 
+export interface NextEpisodeInfo {
+  title: string;
+  epNumber: number;
+  onPlay: () => void;
+  onDismiss: () => void;
+}
+
 export type PlayerMode = 'hidden' | 'mini' | 'fullscreen' | 'top';
 
 interface OpenParams {
@@ -31,6 +38,7 @@ interface GlobalPlayerState {
   contentType: 'channel' | 'movie' | 'series';
   isLive: boolean;
   isPlaying: boolean;
+  nextEpisode: NextEpisodeInfo | null;
 
   open: (params: OpenParams) => void;
   enterMini: () => void;
@@ -40,6 +48,7 @@ interface GlobalPlayerState {
   setPlaying: (v: boolean) => void;
   setSrcIdx: (i: number) => void;
   setSources: (s: PlayerSource[]) => void;
+  setNextEpisode: (ep: NextEpisodeInfo | null) => void;
 }
 
 export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
@@ -52,6 +61,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
   contentType: 'channel',
   isLive: false,
   isPlaying: true,
+  nextEpisode: null,
 
   open: (p) =>
     set({
@@ -64,6 +74,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       srcIdx: 0,
       isLive: p.isLive ?? false,
       isPlaying: true,
+      nextEpisode: null,
     }),
 
   enterMini: () => set({ mode: 'mini' }),
@@ -78,12 +89,14 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       logo: '',
       contentId: '',
       isPlaying: false,
+      nextEpisode: null,
     }),
 
   setPlaying: (v) => set({ isPlaying: v }),
   setSrcIdx: (i) =>
     set((s) => ({ srcIdx: Math.max(0, Math.min(s.sources.length - 1, i)) })),
   setSources: (sources) => set({ sources, srcIdx: 0 }),
+  setNextEpisode: (ep) => set({ nextEpisode: ep }),
 }));
 
 export const usePlayerStore = useGlobalPlayer;

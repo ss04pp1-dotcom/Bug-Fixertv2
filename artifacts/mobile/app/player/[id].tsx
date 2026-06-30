@@ -218,7 +218,8 @@ export default function PlayerScreen() {
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
   // ── Open the singleton player once sources are ready ───────────────────────
-  const openPlayer = useGlobalPlayer((s) => s.open);
+  const openPlayer       = useGlobalPlayer((s) => s.open);
+  const setNextEpisode   = useGlobalPlayer((s) => s.setNextEpisode);
 
   useEffect(() => {
     if (sources.length === 0 || youtubeUrl) return;
@@ -230,7 +231,24 @@ export default function PlayerScreen() {
       sources,
       isLive: false,
     });
-  }, [sources, youtubeUrl, contentTitle, poster, id, cType, openPlayer]);
+
+    // Phase 3: register next episode so the overlay can appear when this one ends
+    if (cType === 'series' && epIdx + 1 < episodes.length) {
+      const nextEp = episodes[epIdx + 1];
+      const nextTitle = nextEp?.title || nextEp?.name || `Episode ${epIdx + 2}`;
+      setNextEpisode({
+        title: nextTitle,
+        epNumber: epIdx + 2,
+        onPlay: () => {
+          setNextEpisode(null);
+          setEpIdx(epIdx + 1);
+        },
+        onDismiss: () => setNextEpisode(null),
+      });
+    } else {
+      setNextEpisode(null);
+    }
+  }, [sources, youtubeUrl, contentTitle, poster, id, cType, openPlayer, episodes, epIdx, setNextEpisode]);
 
   // ── When episode changes, reload stream (the open effect will fire again) ──
   // epIdx already in loadStream deps, so it auto-reloads.

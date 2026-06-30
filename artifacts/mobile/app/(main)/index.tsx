@@ -28,6 +28,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { AdBanner } from '@/components/AdBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
+import { SkeletonHeroCard, SkeletonChannelRow, SkeletonCard } from '@/components/ui/Skeleton';
 
 const { width: W } = Dimensions.get('window');
 
@@ -235,9 +236,22 @@ export default function HomeScreen() {
 
   if (isLoading) {
     return (
-      <View style={[s.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={C.primary} />
-        <Text style={{ color: C.textSec, marginTop: 12, fontFamily: 'Inter' }}>Loading...</Text>
+      <View style={s.screen}>
+        <View style={[{ paddingTop: insets.top + 56, paddingHorizontal: 16, gap: 24 }]}>
+          <SkeletonHeroCard />
+          <View style={{ gap: 10 }}>
+            <View style={{ width: 140, height: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 7 }} />
+            <SkeletonChannelRow />
+          </View>
+          <View style={{ gap: 10 }}>
+            <View style={{ width: 120, height: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 7 }} />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} width={120} height={180} />
+              ))}
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
