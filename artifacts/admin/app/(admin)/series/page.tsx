@@ -52,7 +52,7 @@ export default function SeriesPage() {
   const eTitleRef   = useRef<HTMLInputElement>(null);
   const eYearRef    = useRef<HTMLInputElement>(null);
 
-  const params = new URLSearchParams({ page: String(page), limit: "20" });
+  const params = new URLSearchParams({ page: String(page), limit: "20", isActive: "all" });
   if (debouncedSearch) params.set("search", debouncedSearch);
 
   const { data, isLoading: loading, error, refetch } = useApi<SeriesResponse>(`/v1/series?${params}`);

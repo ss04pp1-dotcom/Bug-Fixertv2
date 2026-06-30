@@ -65,7 +65,7 @@ export default function Movies() {
   const eYearRef    = useRef<HTMLInputElement>(null);
   const eVideoRef   = useRef<HTMLInputElement>(null);
 
-  const params = new URLSearchParams({ page: String(page), limit: "20" });
+  const params = new URLSearchParams({ page: String(page), limit: "20", isActive: "all" });
   if (debouncedSearch) params.set("search", debouncedSearch);
 
   const { data, isLoading: loading, error, refetch } = useApi<MoviesResponse>(`/v1/movies?${params}`);

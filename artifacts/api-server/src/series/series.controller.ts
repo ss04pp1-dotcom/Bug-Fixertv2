@@ -27,9 +27,9 @@ export class SeriesController {
   }
 
   @Public() @Get() @ApiOperation({ summary: 'Get all series' })
-  async findAll(@Query() query: PaginationDto, @Req() req: Request) {
+  async findAll(@Query() query: PaginationDto & { genre?: string; categoryId?: string; isActive?: 'true' | 'false' | 'all' }, @Req() req: Request) {
     await this.enforceGeoBlock(req);
-    return this.seriesService.findAll(query);
+    return this.seriesService.findAll(query as any);
   }
 
   @Public() @Get('featured') @ApiOperation({ summary: 'Get featured series' })

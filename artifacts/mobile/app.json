@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "StreamPro",
-    "slug": "streampro",
+    "name": "SOL TV",
+    "slug": "sol-tv",
     "version": "2.4.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "streampro",
+    "scheme": "sol-tv",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.streampro.app",
+      "bundleIdentifier": "com.sol-tv.app",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
@@ -85,7 +85,7 @@
     ],
     "updates": {
       "enabled": true,
-      "url": "https://u.expo.dev/63455f05-97aa-406d-b0fd-8f86b2187fc9",
+      "url": "https://u.expo.dev/41ae0d59-922c-4851-8b9a-8b5d8c657d13",
       "fallbackToCacheTimeout": 30000,
       "checkAutomatically": "NEVER"
     },
@@ -101,9 +101,9 @@
       "imageUrl": "https://bug-fixertv2.onrender.com",
       "cdnUrl": "",
       "eas": {
-        "projectId": "63455f05-97aa-406d-b0fd-8f86b2187fc9"
+        "projectId": "41ae0d59-922c-4851-8b9a-8b5d8c657d13"
       },
-      "easProjectId": "63455f05-97aa-406d-b0fd-8f86b2187fc9",
+      "easProjectId": "41ae0d59-922c-4851-8b9a-8b5d8c657d13",
       "note": "Verify this EAS project ID matches an active project via 'eas project:info'. If placeholder, set updates.enabled=false."
     }
   }

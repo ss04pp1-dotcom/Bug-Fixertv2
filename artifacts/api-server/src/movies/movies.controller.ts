@@ -29,9 +29,9 @@ export class MoviesController {
   }
 
   @Public() @Get() @ApiOperation({ summary: 'Get all movies' })
-  async findAll(@Query() query: PaginationDto, @Req() req: Request) {
+  async findAll(@Query() query: PaginationDto & { categoryId?: string; isPremium?: string; genre?: string; isActive?: 'true' | 'false' | 'all' }, @Req() req: Request) {
     await this.enforceGeoBlock(req);
-    return this.moviesService.findAll(query);
+    return this.moviesService.findAll(query as any);
   }
 
   @Public() @Get('featured') @ApiOperation({ summary: 'Get featured movies' })

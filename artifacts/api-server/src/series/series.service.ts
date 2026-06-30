@@ -8,9 +8,14 @@ import { CreateSeriesDto, CreateSeasonDto, CreateEpisodeDto } from './dto/create
 export class SeriesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query: PaginationDto & { genre?: string; categoryId?: string }) {
+  async findAll(query: PaginationDto & { genre?: string; categoryId?: string; isActive?: string }) {
     const { skip, limit = 20, page = 1, search } = query;
+    // isActive=true → only active (default for mobile/public callers)
+    // isActive=false → only inactive (admin filter)
+    // isActive=all → no filter (admin listing all content)
+    const isActiveRaw = query.isActive !== undefined ? String(query.isActive) : 'true';
     const where: Prisma.SeriesWhereInput = { deletedAt: null };
+    if (isActiveRaw !== 'all') where.isActive = isActiveRaw === 'true';
     if (search) where.title = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.genre) where.category = { name: { contains: query.genre, mode: 'insensitive' } };
@@ -31,7 +36,7 @@ export class SeriesService {
 
   async findOne(id: string) {
     const series = await this.prisma.series.findFirst({
-      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       include: {
         category: true,
         seasons: {
@@ -47,6 +52,15 @@ export class SeriesService {
     return series;
   }
 
+  /** Internal admin lookup — does NOT filter by isActive so inactive series can be updated/deleted. */
+  private async findOneAdmin(id: string) {
+    const series = await this.prisma.series.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+    });
+    if (!series) throw new NotFoundException('Series not found');
+    return series;
+  }
+
   async create(dto: CreateSeriesDto) {
     const existing = await this.prisma.series.findUnique({ where: { slug: dto.slug } });
     if (existing) throw new ConflictException('Slug already exists');
@@ -54,13 +68,13 @@ export class SeriesService {
   }
 
   async update(id: string, dto: Partial<CreateSeriesDto>) {
-    await this.findOne(id);
-    return this.prisma.series.update({ where: { id }, data: dto as Prisma.SeriesUpdateInput });
+    const series = await this.findOneAdmin(id);
+    return this.prisma.series.update({ where: { id: series.id }, data: dto as Prisma.SeriesUpdateInput });
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    await this.prisma.series.update({ where: { id }, data: { deletedAt: new Date() } });
+    const series = await this.findOneAdmin(id);
+    await this.prisma.series.update({ where: { id: series.id }, data: { deletedAt: new Date() } });
     return { message: 'Series deleted' };
   }
 

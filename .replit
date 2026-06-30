@@ -55,7 +55,3 @@ NEXT_PUBLIC_WS_URL = "wss://bug-fixertv2.onrender.com"
 [nix]
 channel = "stable-25_05"
 packages = ["zip"]
-
-[[ports]]
-localPort = 5000
-externalPort = 80

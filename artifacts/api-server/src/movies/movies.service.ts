@@ -9,9 +9,14 @@ import { AuthenticatedUser } from '../common/interfaces';
 export class MoviesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; genre?: string }) {
+  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; genre?: string; isActive?: string }) {
     const { skip, limit = 20, page = 1, search } = query;
+    // isActive=true → only active (default for mobile/public callers)
+    // isActive=false → only inactive (admin filter)
+    // isActive=all or omitted → admin can omit filter; default for safety is active-only
+    const isActiveRaw = query.isActive !== undefined ? String(query.isActive) : 'true';
     const where: Prisma.MovieWhereInput = { deletedAt: null };
+    if (isActiveRaw !== 'all') where.isActive = isActiveRaw === 'true';
     if (search) where.title = { contains: search, mode: 'insensitive' };
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.genre) where.category = { name: { contains: query.genre, mode: 'insensitive' } };
@@ -31,8 +36,17 @@ export class MoviesService {
 
   async findOne(id: string) {
     const movie = await this.prisma.movie.findFirst({
-      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       include: { category: true },
+    });
+    if (!movie) throw new NotFoundException('Movie not found');
+    return movie;
+  }
+
+  /** Internal admin lookup — does NOT filter by isActive so inactive movies can be updated/deleted. */
+  private async findOneAdmin(id: string) {
+    const movie = await this.prisma.movie.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
     });
     if (!movie) throw new NotFoundException('Movie not found');
     return movie;
@@ -45,17 +59,17 @@ export class MoviesService {
   }
 
   async update(id: string, dto: Partial<CreateMovieDto>) {
-    await this.findOne(id);
+    const movie = await this.findOneAdmin(id);
     if (dto.slug) {
-      const conflict = await this.prisma.movie.findFirst({ where: { slug: dto.slug, deletedAt: null, NOT: { id } } });
+      const conflict = await this.prisma.movie.findFirst({ where: { slug: dto.slug, deletedAt: null, NOT: { id: movie.id } } });
       if (conflict) throw new ConflictException('Slug already exists');
     }
-    return this.prisma.movie.update({ where: { id }, data: dto as Prisma.MovieUpdateInput });
+    return this.prisma.movie.update({ where: { id: movie.id }, data: dto as Prisma.MovieUpdateInput });
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    await this.prisma.movie.update({ where: { id }, data: { deletedAt: new Date() } });
+    const movie = await this.findOneAdmin(id);
+    await this.prisma.movie.update({ where: { id: movie.id }, data: { deletedAt: new Date() } });
     return { message: 'Movie deleted' };
   }
 
@@ -78,7 +92,7 @@ export class MoviesService {
 
   async getStreamUrl(id: string, user?: AuthenticatedUser) {
     const movie = await this.prisma.movie.findFirst({
-      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       select: { id: true, title: true, streamUrl: true, isPremium: true, isActive: true },
     });
     if (!movie) throw new NotFoundException('Movie not found');
