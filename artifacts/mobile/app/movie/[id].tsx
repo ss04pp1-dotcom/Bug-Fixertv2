@@ -50,13 +50,16 @@ export default function MovieDetailsScreen() {
       rating: m.rating || m.imdbRating || 8.7,
       year: (m.year || '2023').toString(),
       duration: m.duration || m.runtime || '2h 15m',
-      certification: m.certification || m.ratingLabel || 'PG-13',
-      quality: m.quality || '4K',
-      genres: m.genres || m.genre || ['Action', 'Sci-Fi'],
-      description: m.description || m.synopsis || m.overview || 'A breathtaking cinematic experience exploring the depths of the human spirit in an unforgettable visual journey across the cosmos and beyond.',
+      // API field: ageRating (schema.prisma). certification/ratingLabel are legacy fallbacks.
+      certification: m.ageRating || m.certification || m.ratingLabel || '',
+      // API does not have a quality field — omit default claim.
+      quality: m.quality || '',
+      genres: m.genres || m.genre || [],
+      description: m.description || m.synopsis || m.overview || '',
       cast: m.cast || [],
       similar: m.similar || m.similarMovies || [],
-      poster: m.posterUrl || m.poster || m.thumbnail || m.backdropUrl || m.cover || '',
+      // API field: poster. posterUrl/thumbnail are legacy fallbacks.
+      poster: m.poster || m.posterUrl || m.thumbnail || m.backdropUrl || m.cover || '',
     };
   }, [movieData, id]);
 

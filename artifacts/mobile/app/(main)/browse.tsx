@@ -84,7 +84,8 @@ export default function BrowseScreen() {
       title: m.title || m.name || '',
       rating: m.rating || m.imdbRating || 0,
       year: m.year?.toString() || '',
-      poster: m.posterUrl || m.poster || '',
+      // API field: poster. posterUrl is a legacy fallback.
+      poster: m.poster || m.posterUrl || '',
       type: activeTab === 'Movies' ? 'movie' : 'series',
     }));
   }, [moviesData, seriesData, activeTab]);

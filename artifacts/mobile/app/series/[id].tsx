@@ -57,16 +57,19 @@ export default function SeriesDetailsScreen() {
     return {
       id: s.id || id,
       title: s.title || s.name || 'Series Title',
-      rating: s.rating || 8.7,
-      ratingCount: s.ratingCount || s.totalRatings || '1.2k',
-      year: (s.year || '2023').toString(),
-      seasons: s.seasons || s.seasonCount || 3,
-      certification: s.certification || 'TV-MA',
-      description: s.description || s.synopsis || s.overview || 'An epic journey of power and betrayal that spans generations, challenging the very core of what it means to be human in a dark and unforgiving world.',
-      genres: s.genres || s.genre || ['Drama', 'Thriller'],
+      rating: s.rating || 0,
+      ratingCount: s.ratingCount || s.totalRatings || 0,
+      year: (s.year || '').toString(),
+      // API returns _count.seasons (Prisma aggregation), not a flat seasonCount field
+      seasons: s._count?.seasons ?? (Array.isArray(s.seasons) ? s.seasons.length : (s.seasonCount ?? 0)),
+      // API field: ageRating. certification is a legacy fallback.
+      certification: s.ageRating || s.certification || '',
+      description: s.description || s.synopsis || s.overview || '',
+      genres: s.genres || s.genre || [],
       cast: s.cast || [],
       episodes: s.episodes || [],
-      poster: s.posterUrl || s.poster || s.thumbnail || s.backdropUrl || s.cover || '',
+      // API field: poster. posterUrl/thumbnail are legacy fallbacks.
+      poster: s.poster || s.posterUrl || s.thumbnail || s.backdropUrl || s.cover || '',
     };
   }, [seriesData, id]);
 

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/lib/auth-store';
-import { useProfile, useMySubscription } from '@/lib/api-hooks';
+import { useProfile, useMySubscription, useContinueWatching } from '@/lib/api-hooks';
 
 const C = {
   bg: '#0A0A0F',
@@ -71,10 +71,18 @@ export default function ProfileScreen() {
   const { data: profileData, isLoading } = useProfile();
   const { data: subData } = useMySubscription();
 
+  const { data: watchHistory } = useContinueWatching();
+
   const displayName = profileData?.name || user?.name || 'Guest User';
   const displayEmail = profileData?.email || user?.email || '';
-  const planName = subData?.plan?.name || user?.plan || 'Free';
+  const planName = subData?.plan?.name || 'Free';
   const isPremium = planName?.toLowerCase() !== 'free';
+
+  // API does not return watchedCount/daysActive — derive them from available data.
+  const watchedCount = Array.isArray(watchHistory) ? watchHistory.length : 0;
+  const daysActive = profileData?.createdAt
+    ? Math.max(1, Math.floor((Date.now() - new Date(profileData.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   // M-047: filter empty segments so a double-space in the name doesn't produce
   // undefined characters; fall back to 'U' when displayName is empty.
@@ -141,8 +149,8 @@ export default function ProfileScreen() {
         {/* Stats Row */}
         <View style={s.statsRow}>
           {[
-            { label: 'Watched', value: profileData?.watchedCount ?? 0, icon: 'eye-outline' as const },
-            { label: 'Days Active', value: profileData?.daysActive ?? 0, icon: 'calendar-outline' as const },
+            { label: 'Watched', value: watchedCount, icon: 'eye-outline' as const },
+            { label: 'Days Active', value: daysActive, icon: 'calendar-outline' as const },
             { label: isPremium ? 'Plan' : 'Free', value: isPremium ? 'Active' : 'Upgrade', icon: 'trophy-outline' as const, highlight: isPremium },
           ].map((stat) => (
             <View key={stat.label} style={[s.statCard, stat.highlight && s.statCardHighlight]}>
