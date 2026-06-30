@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
@@ -226,6 +226,21 @@ export default function LivePlayerScreen() {
       startInTop: true,
     });
   }, [sources, contentTitle, logoUrl, id, openPlayer]);
+
+  // ── Focus management: top mode only on this screen ─────────────────────────
+  // When user navigates away → shrink to mini player (YouTube-like).
+  // When user navigates back → restore top mode.
+  useFocusEffect(
+    useCallback(() => {
+      const { mode, enterTop } = useGlobalPlayer.getState();
+      if (mode === 'mini') enterTop();
+
+      return () => {
+        const { mode: m, enterMini } = useGlobalPlayer.getState();
+        if (m === 'top' || m === 'fullscreen') enterMini();
+      };
+    }, [])
+  );
 
   // ── Ad gate state ───────────────────────────────────────────────────────────
   const [adVisible, setAdVisible]               = useState(false);

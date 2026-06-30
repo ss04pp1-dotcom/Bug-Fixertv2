@@ -670,9 +670,20 @@ export default function GlobalVideoPlayer() {
   // UI thread (zero re-renders per frame). JS-thread state (setVideoVolume,
   // setSwipeType) is called via runOnJS only at end or on significant change.
   const _fsSingleTap = useCallback(() => {
-    if (showCtrlRef.current) hideCtrlNow();
-    else bumpCtrl();
-  }, [hideCtrlNow, bumpCtrl]);
+    if (showCtrlRef.current) {
+      // Controls are visible — tap on the video area starts a short
+      // delayed hide instead of hiding immediately. This avoids the race
+      // where a button press fires the video-surface single-tap gesture
+      // concurrently and causes controls to vanish right after tapping.
+      if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
+      ctrlTimer.current = setTimeout(() => {
+        ctrlOpacity.value = withTiming(0, { duration: 400 });
+        setTimeout(() => { setShowCtrl(false); showCtrlRef.current = false; }, 400);
+      }, 1800);
+    } else {
+      bumpCtrl();
+    }
+  }, [bumpCtrl, ctrlOpacity]);
 
   const _fsDoubleTap = useCallback((isLeft: boolean) => {
     seek(isLeft ? -10 : 10);
