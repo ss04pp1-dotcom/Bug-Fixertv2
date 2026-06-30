@@ -11,8 +11,9 @@ import {
   Users, Wifi, Film, Library, DollarSign, TrendingUp,
   CalendarDays, ChevronDown, Menu, RefreshCw,
   Radio, Smartphone, Activity, WifiOff, Globe,
+  Database, Server, HardDrive, Cpu, RotateCcw, Clock, AlertTriangle,
 } from "lucide-react";
-import { useApi } from "@/lib/use-api";
+import { useApi, useApiQuery } from "@/lib/use-api";
 import { usePresenceStats } from "@/lib/use-presence";
 
 // (D-048) Removed hardcoded `countryData` pie chart — it was illustrative
@@ -33,6 +34,95 @@ interface PaymentItem {
   subscription?: { plan?: { name: string } };
 }
 
+// ── Health types ──────────────────────────────────────────────────────────────
+interface ServiceStatus {
+  status: 'ok' | 'degraded' | 'error';
+  message?: string;
+  responseTimeMs?: number;
+  configured?: boolean;
+  namespace?: string;
+  protocol?: string;
+}
+interface HealthReport {
+  status: 'ok' | 'degraded' | 'error';
+  timestamp: string;
+  version: string;
+  environment: string;
+  uptimeSeconds: number;
+  memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number };
+  services: {
+    database: ServiceStatus;
+    redis: ServiceStatus;
+    storage: ServiceStatus;
+    websocket: ServiceStatus;
+  };
+}
+
+function fmtUptime(s: number): string {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function StatusDot({ status }: { status: 'ok' | 'degraded' | 'error' }) {
+  return (
+    <span className={cn(
+      "inline-block w-2 h-2 rounded-full shrink-0",
+      status === 'ok'       && "bg-green-400 animate-pulse",
+      status === 'degraded' && "bg-yellow-400",
+      status === 'error'    && "bg-red-500",
+    )} />
+  );
+}
+
+function StatusBadge({ status }: { status: 'ok' | 'degraded' | 'error' }) {
+  return (
+    <span className={cn(
+      "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide",
+      status === 'ok'       && "bg-green-500/15 text-green-400",
+      status === 'degraded' && "bg-yellow-500/15 text-yellow-400",
+      status === 'error'    && "bg-red-500/15 text-red-400",
+    )}>
+      {status}
+    </span>
+  );
+}
+
+function ServiceRow({
+  icon: Icon, label, svc,
+}: {
+  icon: React.FC<{ size: number; className?: string }>;
+  label: string;
+  svc: ServiceStatus | undefined;
+}) {
+  if (!svc) return null;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-border last:border-0">
+      <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+        <Icon size={14} className="text-[#8B92A5]" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-white">{label}</span>
+          <StatusBadge status={svc.status} />
+        </div>
+        {svc.message && (
+          <div className="text-[10px] text-[#8B92A5] truncate mt-0.5">{svc.message}</div>
+        )}
+        {svc.responseTimeMs != null && svc.status !== 'error' && (
+          <div className="text-[10px] text-[#8B92A5] mt-0.5">{svc.responseTimeMs} ms</div>
+        )}
+        {svc.namespace && (
+          <div className="text-[10px] text-[#8B92A5] mt-0.5">{svc.namespace} · {svc.protocol}</div>
+        )}
+      </div>
+      <StatusDot status={svc.status} />
+    </div>
+  );
+}
+
+// ── CustomTooltip ─────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: {
   active?: boolean; payload?: { value: number }[]; label?: string
 }) => {
@@ -55,6 +145,20 @@ export default function Dashboard() {
 
   // Real-time WebSocket presence stats
   const { stats: presence, connected: wsConnected } = usePresenceStats();
+
+  // System health — auto-refreshes every 30 s; route is VERSION_NEUTRAL (/health/full)
+  const {
+    data: health,
+    isLoading: healthLoading,
+    isFetching: healthFetching,
+    dataUpdatedAt: healthUpdatedAt,
+    refetch: refetchHealth,
+    isError: healthIsError,
+  } = useApiQuery<HealthReport>(
+    ['health-full'],
+    '/health/full',
+    { refetchInterval: 30_000, retry: 1 },
+  );
 
   const areaData    = (growthRaw ?? []).map(g => ({ date: g.date.slice(5), users: g.count }));
   const topChannels = (topChRaw ?? []).slice(0, 5);
@@ -184,6 +288,118 @@ export default function Dashboard() {
               );
             })}
           </div>
+        </div>
+
+        {/* System Health Card */}
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Server size={13} className={cn(
+                health?.status === 'ok'       ? "text-green-400" :
+                health?.status === 'degraded' ? "text-yellow-400" : "text-red-400",
+                (!health && !healthLoading) || healthIsError ? "text-red-400" : "",
+              )} />
+              <span className="text-xs font-semibold text-white">System Health</span>
+              {health && <StatusBadge status={health.status} />}
+              {healthFetching && !healthLoading && (
+                <RotateCcw size={10} className="text-[#8B92A5] animate-spin" />
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {healthUpdatedAt > 0 && (
+                <span className="text-[10px] text-[#8B92A5] flex items-center gap-1">
+                  <Clock size={9} />
+                  {new Date(healthUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
+              <button
+                onClick={() => refetchHealth()}
+                className="flex items-center gap-1.5 text-[10px] text-[#8B92A5] hover:text-white transition-colors"
+                title="Refresh now"
+              >
+                <RotateCcw size={11} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {healthLoading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-border">
+              {[0,1,2,3].map(i => (
+                <div key={i} className="px-4 py-4 space-y-2">
+                  <div className="h-3 w-20 bg-white/10 rounded animate-pulse" />
+                  <div className="h-4 w-12 bg-white/10 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : healthIsError || !health ? (
+            <div className="flex items-center gap-2 px-4 py-4 text-xs text-red-400">
+              <AlertTriangle size={14} />
+              Could not reach health endpoint — check API server status
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
+              {/* Services */}
+              <div className="lg:col-span-2 px-4 py-1 divide-y divide-border">
+                <ServiceRow icon={Database}  label="Database"  svc={health.services.database}  />
+                <ServiceRow icon={Server}    label="Redis / Queues" svc={health.services.redis}  />
+                <ServiceRow icon={HardDrive} label="Storage (R2)"  svc={health.services.storage} />
+                <ServiceRow icon={Wifi}      label="WebSocket"  svc={health.services.websocket} />
+              </div>
+
+              {/* System info */}
+              <div className="px-4 py-3 space-y-3">
+                <div>
+                  <div className="text-[10px] text-[#8B92A5] mb-1.5 font-medium uppercase tracking-wide">Runtime</div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#8B92A5]">Version</span>
+                      <span className="text-white font-mono">{health.version}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#8B92A5]">Env</span>
+                      <span className={cn(
+                        "font-mono text-xs",
+                        health.environment === 'production' ? "text-green-400" : "text-yellow-400",
+                      )}>{health.environment}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#8B92A5] flex items-center gap-1"><Clock size={10} />Uptime</span>
+                      <span className="text-white font-mono">{fmtUptime(health.uptimeSeconds)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-[#8B92A5] mb-1.5 font-medium uppercase tracking-wide flex items-center gap-1">
+                    <Cpu size={9} /> Memory
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#8B92A5]">Heap used</span>
+                      <span className="text-white font-mono">{health.memory.heapUsedMB} MB</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          health.memory.heapUsedMB / health.memory.heapTotalMB > 0.85 ? "bg-red-500" :
+                          health.memory.heapUsedMB / health.memory.heapTotalMB > 0.65 ? "bg-yellow-400" : "bg-green-400",
+                        )}
+                        style={{ width: `${Math.min(100, Math.round((health.memory.heapUsedMB / health.memory.heapTotalMB) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[#8B92A5]">
+                      <span>{Math.round((health.memory.heapUsedMB / health.memory.heapTotalMB) * 100)}% of {health.memory.heapTotalMB} MB</span>
+                      <span>RSS {health.memory.rssMB} MB</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-[#8B92A5]">
+                  Auto-refreshes every 30 s
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Charts Row */}
