@@ -1256,6 +1256,13 @@ export default function GlobalVideoPlayer() {
         {/* Full controls overlay */}
         {showCtrl && !pipActive && !playerError && (
           <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
+            {/* Subtle gradient — visible at top/bottom edges only, transparent in the middle */}
+            <LinearGradient
+              colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.40)']}
+              locations={[0, 0.3, 0.65, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
 
             {/* Top bar */}
             <View style={[g.topBar, { paddingTop: 10 }]}>
@@ -1789,7 +1796,7 @@ const g = StyleSheet.create({
   overlayCenter: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'transparent',
   },
   bufferingTxt: { color: C.dim, fontSize: 13, marginTop: 6 },
   errorTxt:  { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 8, textAlign: 'center' },
@@ -1822,7 +1829,7 @@ const g = StyleSheet.create({
   livePingTxt:{ color: C.green, fontSize: 10, fontWeight: '600' },
 
   centerPanel: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  glassRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(5,5,16,0.72)', borderRadius: 30, borderWidth: 1, borderColor: C.border, paddingHorizontal: 16, paddingVertical: 12 },
+  glassRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent', borderRadius: 30, paddingHorizontal: 16, paddingVertical: 12 },
   ctrlBtn:   { alignItems: 'center', justifyContent: 'center', width: 54, height: 48, gap: 2 },
   seekLabel: { color: '#fff', fontSize: 9, fontWeight: '700', opacity: 0.8 },
   playBtn:   { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center', marginHorizontal: 6 },
