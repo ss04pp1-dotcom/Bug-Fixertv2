@@ -23,10 +23,54 @@ function validateEnvironment(logger: Logger): void {
   // Env vars are still supported as an override if preferred.
 }
 
+async function diagnoseBoot(logger: Logger): Promise<void> {
+  // Run connectivity checks BEFORE NestJS initialises modules so we can log
+  // the exact failing service in Render's deployment logs.
+  logger.log('=== Boot diagnostics ===');
+
+  // --- Database ---
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient({
+      datasources: { db: { url: process.env['DATABASE_URL'] } },
+    });
+    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$disconnect();
+    logger.log('[BOOT] Database ✓ connected');
+  } catch (err) {
+    logger.error('[BOOT] Database ✗ FAILED — ' + (err instanceof Error ? err.message : String(err)));
+    logger.error('[BOOT] Check DATABASE_URL — expected: postgresql://user:pass@host:6543/postgres');
+  }
+
+  // --- Redis ---
+  const redisUrl = process.env['REDIS_URL'];
+  if (redisUrl) {
+    try {
+      const { Redis } = await import('ioredis');
+      const client = new Redis(redisUrl, { connectTimeout: 4000, lazyConnect: true, maxRetriesPerRequest: 0 });
+      await client.connect();
+      await client.ping();
+      await client.quit();
+      logger.log('[BOOT] Redis ✓ connected');
+    } catch (err) {
+      logger.warn('[BOOT] Redis ✗ FAILED (queues disabled) — ' + (err instanceof Error ? err.message : String(err)));
+      logger.warn('[BOOT] Fix: Render Dashboard → Redis service → Info → copy "Internal URL" → set as REDIS_URL');
+      logger.warn('[BOOT] Expected format: redis://default:PASSWORD@red-xxxxx:6379');
+    }
+  } else {
+    logger.warn('[BOOT] Redis — REDIS_URL not set (queues disabled)');
+  }
+
+  logger.log('=== Boot diagnostics complete ===');
+}
+
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
 
   validateEnvironment(logger);
+
+  await diagnoseBoot(logger);
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 

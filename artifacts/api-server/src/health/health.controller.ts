@@ -22,6 +22,31 @@ export class HealthController {
     private readonly storage: StorageService,
   ) {}
 
+  private async checkRedis(): Promise<HealthStatus> {
+    const url = process.env['REDIS_URL'];
+    if (!url) return { status: 'degraded', message: 'REDIS_URL not set — queues disabled' };
+    const start = Date.now();
+    try {
+      const { Redis } = await import('ioredis');
+      const client = new Redis(url, {
+        connectTimeout: 4000,
+        lazyConnect: true,
+        maxRetriesPerRequest: 0,
+      });
+      await client.connect();
+      await client.ping();
+      await client.quit();
+      return { status: 'ok', responseTimeMs: Date.now() - start };
+    } catch (err) {
+      return {
+        status: 'error',
+        message: (err as Error).message,
+        hint: 'Check REDIS_URL — Render Redis internal URL format: redis://default:PASSWORD@red-xxx:6379',
+        responseTimeMs: Date.now() - start,
+      };
+    }
+  }
+
   private async checkDatabase(): Promise<HealthStatus> {
     const start = Date.now();
     try {
@@ -107,6 +132,20 @@ export class HealthController {
   }
 
   @Public()
+  @Get('health/redis')
+  @ApiOperation({ summary: 'Redis connectivity check — 503 if unreachable' })
+  async healthRedis() {
+    const result = await this.checkRedis();
+    if (result.status === 'error') {
+      throw new HttpException(
+        { ...result, timestamp: new Date().toISOString() },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    return { ...result, timestamp: new Date().toISOString() };
+  }
+
+  @Public()
   @Get('health/websocket')
   @ApiOperation({ summary: 'WebSocket gateway health check' })
   healthWebSocket() {
@@ -119,20 +158,22 @@ export class HealthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Full system health report — 503 if any critical service is down (admin only)' })
   async healthFull() {
-    const [db, storage, websocket] = await Promise.all([
+    const [db, redis, storage, websocket] = await Promise.all([
       this.checkDatabase(),
+      this.checkRedis(),
       this.checkStorage(),
       Promise.resolve(this.checkWebSocket()),
     ]);
 
     const critical = db.status === 'error';
-    const overallStatus = critical ? 'error' : (storage.status === 'degraded' ? 'degraded' : 'ok');
+    const degraded = redis.status === 'error' || storage.status === 'degraded';
+    const overallStatus = critical ? 'error' : (degraded ? 'degraded' : 'ok');
 
     const result = {
       status: overallStatus,
       timestamp: new Date().toISOString(),
       ...this.systemInfo(),
-      services: { database: db, storage, websocket },
+      services: { database: db, redis, storage, websocket },
     };
 
     if (critical) throw new HttpException(result, HttpStatus.SERVICE_UNAVAILABLE);
