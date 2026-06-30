@@ -12,10 +12,21 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 const REDIS_URL = process.env['REDIS_URL'];
 
-// Same defensive ioredis options as jobs.module.ts — prevents startup crash when
-// Redis is temporarily unreachable or the URL has an SSL mismatch.
-const bullImports = REDIS_URL
+// M3uImportModule is self-contained: it registers its own BullModule.forRoot
+// so it never races against JobsModule's global forRoot during NestJS module
+// initialisation. Both forRoot calls share the same ioredis options.
+const bullConnection = REDIS_URL
+  ? {
+      url: REDIS_URL,
+      maxRetriesPerRequest: null as unknown as number,
+      enableReadyCheck: false,
+      lazyConnect: true,
+    }
+  : undefined;
+
+const bullImports = bullConnection
   ? [
+      BullModule.forRoot({ connection: bullConnection }),
       BullModule.registerQueue(
         { name: QUEUE_M3U_IMPORT },
         { name: QUEUE_HEALTH_CHECK },
@@ -23,7 +34,7 @@ const bullImports = REDIS_URL
     ]
   : [];
 
-const bullProviders = REDIS_URL
+const bullProviders = bullConnection
   ? [M3uImportConsumer, HealthCheckConsumer]
   : [];
 

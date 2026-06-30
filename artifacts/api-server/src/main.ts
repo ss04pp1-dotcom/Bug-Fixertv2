@@ -72,7 +72,7 @@ async function bootstrap(): Promise<void> {
 
   await diagnoseBoot(logger);
 
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule);
 
   // Security
   app.use(helmet({
@@ -201,7 +201,9 @@ process.on('uncaughtException', (err: Error) => {
 });
 
 bootstrap().catch((err: unknown) => {
-  const logger = new Logger('Bootstrap');
-  logger.error('Fatal startup error', err instanceof Error ? err.stack : String(err));
+  // Use console.error directly — a Nest Logger may not be available if
+  // NestFactory.create() itself threw, and bufferLogs would hide the message.
+  console.error('[Bootstrap] FATAL startup error:');
+  console.error(err instanceof Error ? err.stack : String(err));
   process.exit(1);
 });

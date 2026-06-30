@@ -57,13 +57,5 @@ channel = "stable-25_05"
 packages = ["zip"]
 
 [[ports]]
-localPort = 3000
-externalPort = 3000
-
-[[ports]]
-localPort = 8081
+localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 18115
-externalPort = 3001
