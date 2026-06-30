@@ -18,18 +18,9 @@ function validateEnvironment(logger: Logger): void {
     process.exit(1);
   }
 
-  // SMTP_HOST and FIREBASE_PROJECT_ID are intentionally excluded here —
-  // both are configurable from Admin → Settings and stored in the database.
-  // Env vars are still supported as an override but are no longer required.
-  const recommended = [
-    'CLOUDFLARE_R2_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID',
-  ];
-  const missingRec = recommended.filter(k => !process.env[k]);
-  if (missingRec.length > 0) {
-    logger.warn(
-      `Missing recommended env vars (file storage limited without them): ${missingRec.join(', ')}`,
-    );
-  }
+  // SMTP, Firebase, and Storage (R2/S3/etc.) are all configurable from
+  // Admin → Settings and stored in the database. No env vars required for them.
+  // Env vars are still supported as an override if preferred.
 }
 
 async function bootstrap(): Promise<void> {
