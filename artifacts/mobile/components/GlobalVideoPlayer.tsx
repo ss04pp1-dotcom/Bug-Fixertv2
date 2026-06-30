@@ -202,6 +202,7 @@ export default function GlobalVideoPlayer() {
   const {
     mode, sources, srcIdx, title, logo, contentId, contentType, isLive,
     isPlaying, enterTop, enterMini, hide, setPlaying, setSrcIdx, nextEpisode, setNextEpisode,
+    playerRoute,
   } = useGlobalPlayer();
 
   // ── Landscape / Orientation ──────────────────────────────────────────────
@@ -1150,7 +1151,12 @@ export default function GlobalVideoPlayer() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={g.miniBtn}
-                      onPress={enterTop}
+                      onPress={() => {
+                        if (playerRoute) {
+                          try { router.navigate(playerRoute as any); } catch {}
+                        }
+                        enterTop();
+                      }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons name="expand-outline" size={18} color="#fff" />
@@ -1654,6 +1660,8 @@ export default function GlobalVideoPlayer() {
         transparent
         animationType="slide"
         onRequestClose={() => setShowDebug(false)}
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        statusBarTranslucent
       >
         <View style={db.backdrop}>
           <View style={db.panel}>

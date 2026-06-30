@@ -224,6 +224,7 @@ export default function LivePlayerScreen() {
       sources,
       isLive: true,
       startInTop: true,
+      playerRoute: `/live-player/${id}`,
     });
   }, [sources, contentTitle, logoUrl, id, openPlayer]);
 

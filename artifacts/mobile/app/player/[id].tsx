@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
@@ -230,6 +230,7 @@ export default function PlayerScreen() {
       contentType: cType,
       sources,
       isLive: false,
+      playerRoute: `/player/${id}?type=${cType}`,
     });
 
     // Phase 3: register next episode so the overlay can appear when this one ends
@@ -249,6 +250,20 @@ export default function PlayerScreen() {
       setNextEpisode(null);
     }
   }, [sources, youtubeUrl, contentTitle, poster, id, cType, openPlayer, episodes, epIdx, setNextEpisode]);
+
+  // ── Focus management: top mode only on this screen (YouTube-like) ──────────
+  // When user navigates away → shrink to mini. When they come back → restore top.
+  useFocusEffect(
+    useCallback(() => {
+      const { mode, enterTop } = useGlobalPlayer.getState();
+      if (mode === 'mini') enterTop();
+
+      return () => {
+        const { mode: m, enterMini } = useGlobalPlayer.getState();
+        if (m === 'top' || m === 'fullscreen') enterMini();
+      };
+    }, [])
+  );
 
   // ── When episode changes, reload stream (the open effect will fire again) ──
   // epIdx already in loadStream deps, so it auto-reloads.

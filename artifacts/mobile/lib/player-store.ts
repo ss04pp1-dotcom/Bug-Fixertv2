@@ -26,6 +26,8 @@ interface OpenParams {
   sources: PlayerSource[];
   isLive?: boolean;
   startInTop?: boolean;
+  /** Route to navigate back to when the mini player is tapped (YouTube-like). */
+  playerRoute?: string;
 }
 
 interface GlobalPlayerState {
@@ -39,6 +41,8 @@ interface GlobalPlayerState {
   isLive: boolean;
   isPlaying: boolean;
   nextEpisode: NextEpisodeInfo | null;
+  /** Route to navigate back to when the mini player expand button is tapped. */
+  playerRoute: string | null;
 
   open: (params: OpenParams) => void;
   enterMini: () => void;
@@ -62,6 +66,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
   isLive: false,
   isPlaying: true,
   nextEpisode: null,
+  playerRoute: null,
 
   open: (p) =>
     set({
@@ -75,6 +80,7 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       isLive: p.isLive ?? false,
       isPlaying: true,
       nextEpisode: null,
+      playerRoute: p.playerRoute ?? null,
     }),
 
   enterMini: () => set({ mode: 'mini' }),
