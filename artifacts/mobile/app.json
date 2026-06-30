@@ -80,7 +80,8 @@
       "./plugins/withPipSupport",
       "./plugins/withPipNative",
       "./plugins/withMedia3Gradle",
-      "./plugins/withMedia3ProGuard"
+      "./plugins/withMedia3ProGuard",
+      "./plugins/withNetworkSecurityConfig"
     ],
     "updates": {
       "enabled": true,
