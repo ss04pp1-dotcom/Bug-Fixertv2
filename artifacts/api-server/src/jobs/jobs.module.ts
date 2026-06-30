@@ -10,9 +10,22 @@ export const QUEUE_ANALYTICS = 'analytics';
 
 const REDIS_URL = process.env['REDIS_URL'];
 
-const bullImports = REDIS_URL
+// BullMQ requires maxRetriesPerRequest:null + enableReadyCheck:false to prevent
+// ioredis from emitting uncaught errors that crash the process when Redis is
+// temporarily unreachable. lazyConnect:true defers the TCP handshake until the
+// first command so a bad URL / wrong SSL config does NOT crash startup.
+const bullConnection = REDIS_URL
+  ? {
+      url: REDIS_URL,
+      maxRetriesPerRequest: null as unknown as number,
+      enableReadyCheck: false,
+      lazyConnect: true,
+    }
+  : undefined;
+
+const bullImports = bullConnection
   ? [
-      BullModule.forRoot({ connection: { url: REDIS_URL } }),
+      BullModule.forRoot({ connection: bullConnection }),
       BullModule.registerQueue(
         { name: QUEUE_NOTIFICATIONS },
         { name: QUEUE_EMAIL },
@@ -21,11 +34,11 @@ const bullImports = REDIS_URL
     ]
   : [];
 
-const bullProviders = REDIS_URL
+const bullProviders = bullConnection
   ? [NotificationsQueueConsumer, EmailQueueConsumer, AnalyticsQueueConsumer]
   : [];
 
-const bullExports = REDIS_URL ? [BullModule] : [];
+const bullExports = bullConnection ? [BullModule] : [];
 
 @Module({
   imports: [...bullImports],

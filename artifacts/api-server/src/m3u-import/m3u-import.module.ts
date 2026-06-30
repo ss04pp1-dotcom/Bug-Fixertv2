@@ -12,6 +12,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 const REDIS_URL = process.env['REDIS_URL'];
 
+// Same defensive ioredis options as jobs.module.ts — prevents startup crash when
+// Redis is temporarily unreachable or the URL has an SSL mismatch.
 const bullImports = REDIS_URL
   ? [
       BullModule.registerQueue(

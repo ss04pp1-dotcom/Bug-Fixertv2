@@ -143,6 +143,26 @@ async function bootstrap(): Promise<void> {
   logger.log(`Full health: http://localhost:${port}/health/full`);
 }
 
+// Catch unhandled rejections (e.g. BullMQ / ioredis connection errors emitted
+// asynchronously after bootstrap) so they are logged instead of silently
+// crashing the process with exit code 1.
+process.on('unhandledRejection', (reason: unknown) => {
+  const logger = new Logger('Process');
+  logger.error(
+    'Unhandled promise rejection (non-fatal):',
+    reason instanceof Error ? reason.stack : String(reason),
+  );
+  // Do NOT exit — keep the server running; the offending subsystem (e.g. Redis)
+  // will retry or degrade gracefully.
+});
+
+process.on('uncaughtException', (err: Error) => {
+  const logger = new Logger('Process');
+  logger.error('Uncaught exception — server will continue:', err.stack);
+  // Only truly fatal errors (OOM, SIGKILL) should terminate the process.
+  // Log and continue so Render does not restart the container unnecessarily.
+});
+
 bootstrap().catch((err: unknown) => {
   const logger = new Logger('Bootstrap');
   logger.error('Fatal startup error', err instanceof Error ? err.stack : String(err));
