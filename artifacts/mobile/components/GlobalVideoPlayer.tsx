@@ -363,6 +363,9 @@ export default function GlobalVideoPlayer() {
   const swipeSideSV     = useSharedValue(1);  // 0 = left/brightness, 1 = right/volume
   const modeSV_fs       = useSharedValue(0);  // 0 = fullscreen, 1 = top
   useEffect(() => { modeSV_fs.value = mode === 'top' ? 1 : 0; }, [mode]);
+  // Mirrors isLocked for UI-thread worklet access (gesture blocking when locked)
+  const isLockedSV = useSharedValue(false);
+  useEffect(() => { isLockedSV.value = isLocked; }, [isLocked]);
 
   // ── Controls auto-hide ───────────────────────────────────────────────────
   // FIX: removed runOnJS(setCtrlHidden) from the withTiming callback.
@@ -391,6 +394,15 @@ export default function GlobalVideoPlayer() {
     showCtrlRef.current = true;
     startHide();
   }, [isLocked, ctrlOpacity, startHide]);
+
+  // Like bumpCtrl but bypasses the lock — used when unlocking so controls
+  // immediately become visible after setLocked(false).
+  const forceShowCtrl = useCallback(() => {
+    ctrlOpacity.value = withTiming(1, { duration: 200 });
+    setShowCtrl(true);
+    showCtrlRef.current = true;
+    startHide();
+  }, [ctrlOpacity, startHide]);
 
   const hideCtrlNow = useCallback(() => {
     if (ctrlTimer.current) clearTimeout(ctrlTimer.current);
@@ -671,6 +683,12 @@ export default function GlobalVideoPlayer() {
   // UI thread (zero re-renders per frame). JS-thread state (setVideoVolume,
   // setSwipeType) is called via runOnJS only at end or on significant change.
   const _fsSingleTap = useCallback(() => {
+    if (isLocked) {
+      // Locked: show/flash the "Tap to unlock" badge briefly so the user
+      // can see and tap it, then auto-hide again.
+      forceShowCtrl();
+      return;
+    }
     if (showCtrlRef.current) {
       // Controls are visible — tap on the video area starts a short
       // delayed hide instead of hiding immediately. This avoids the race
@@ -684,7 +702,7 @@ export default function GlobalVideoPlayer() {
     } else {
       bumpCtrl();
     }
-  }, [bumpCtrl, ctrlOpacity]);
+  }, [isLocked, forceShowCtrl, bumpCtrl, ctrlOpacity]);
 
   const _fsDoubleTap = useCallback((isLeft: boolean) => {
     seek(isLeft ? -10 : 10);
@@ -714,6 +732,8 @@ export default function GlobalVideoPlayer() {
       })
       .onUpdate((e) => {
         'worklet';
+        // Block ALL swipe gestures (volume/brightness) when screen is locked
+        if (isLockedSV.value) return;
         if (Math.abs(e.translationY) < 8) return;
         const delta = -e.translationY / 300;
         if (swipeSideSV.value === 1) {
@@ -1271,6 +1291,7 @@ export default function GlobalVideoPlayer() {
             />
 
             {/* Top bar */}
+            {!isLocked && (
             <View style={[g.topBar, { paddingTop: 10 }]}>
               <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
                 <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -1292,9 +1313,10 @@ export default function GlobalVideoPlayer() {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
             {/* Server pills */}
-            {sources.length > 1 && (
+            {!isLocked && sources.length > 1 && (
               <View style={g.pillRow}>
                 {sources.map((s, i) => (
                   <TouchableOpacity
@@ -1311,7 +1333,7 @@ export default function GlobalVideoPlayer() {
             )}
 
             {/* LIVE badge */}
-            {isLive && (
+            {isLive && !isLocked && (
               <View style={g.liveRow}>
                 <View style={g.liveBadge}>
                   <View style={g.liveDot} />
@@ -1331,6 +1353,7 @@ export default function GlobalVideoPlayer() {
             )}
 
             {/* Center controls */}
+            {!isLocked && (
             <View style={g.centerPanel} pointerEvents="box-none">
               <View style={g.glassRow}>
                 <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
@@ -1349,8 +1372,10 @@ export default function GlobalVideoPlayer() {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
             {/* Bottom tool row */}
+            {!isLocked && (
             <View style={[g.bottomBar, { paddingBottom: 10 }]}>
               {!isLive && duration > 0 && (
                 <SeekBar
@@ -1382,9 +1407,24 @@ export default function GlobalVideoPlayer() {
                 <TouchableOpacity onPress={toggleLandscape} style={g.toolBtn} hitSlop={8}>
                   <MaterialIcons name="screen-rotation" size={20} color="#fff" />
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setLocked(v => !v); bumpCtrl(); }} style={g.toolBtn}>
+                  <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={20} color="#fff" />
+                </TouchableOpacity>
               </View>
             </View>
+            )}
           </Animated.View>
+        )}
+
+        {/* Lock badge — OUTSIDE showCtrl so it stays visible after auto-hide */}
+        {isLocked && !pipActive && !playerError && (
+          <TouchableOpacity
+            onPress={() => { setLocked(false); forceShowCtrl(); }}
+            style={g.lockBadge}
+          >
+            <Ionicons name="lock-closed" size={18} color="#fff" />
+            <Text style={g.lockTxt}>Tap to unlock</Text>
+          </TouchableOpacity>
         )}
 
         {/* Seek feedback + swipe indicator */}
@@ -1602,15 +1642,20 @@ export default function GlobalVideoPlayer() {
             </View>
           )}
 
-          {/* Locked badge */}
-          {isLocked && (
-            <TouchableOpacity onPress={() => { setLocked(false); bumpCtrl(); }} style={g.lockBadge}>
+        </Animated.View>
+      )}
+
+          {/* Lock badge — OUTSIDE showCtrl block so it stays visible even after
+              controls auto-hide. Tapping unlocks and re-shows controls. */}
+          {isLocked && !pipActive && !playerError && (
+            <TouchableOpacity
+              onPress={() => { setLocked(false); forceShowCtrl(); }}
+              style={g.lockBadge}
+            >
               <Ionicons name="lock-closed" size={18} color="#fff" />
               <Text style={g.lockTxt}>Tap to unlock</Text>
             </TouchableOpacity>
           )}
-        </Animated.View>
-      )}
 
           {/* Seek feedback + swipe indicator */}
           {!pipActive && seekSide && (
