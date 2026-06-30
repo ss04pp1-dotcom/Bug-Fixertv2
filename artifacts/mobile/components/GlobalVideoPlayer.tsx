@@ -1445,7 +1445,12 @@ export default function GlobalVideoPlayer() {
         </View>
       )}
 
-      {/* ── Gesture layer handled by GestureDetector wrapper above ── */}
+      {/* ── Gesture layer — tap/double-tap/swipe for controls, brightness, volume ── */}
+      {!pipActive && !playerError && (
+        <GestureDetector gesture={fsGesture}>
+          <View style={StyleSheet.absoluteFill} />
+        </GestureDetector>
+      )}
 
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       {showCtrl && !pipActive && !playerError && (
