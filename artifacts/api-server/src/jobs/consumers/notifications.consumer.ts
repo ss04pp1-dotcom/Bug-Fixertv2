@@ -49,6 +49,17 @@ async function getFirebaseApp(): Promise<FirebaseAdmin | null> {
 export class NotificationsQueueConsumer extends WorkerHost {
   private readonly logger = new Logger(NotificationsQueueConsumer.name);
 
+  async onModuleInit() {
+    try {
+      await super.onModuleInit();
+    } catch (err) {
+      this.logger.warn(
+        'Redis unavailable — notifications queue worker disabled. ' +
+        (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
+
   async process(job: Job<SendNotificationJob>): Promise<void> {
     this.logger.log(`Processing notification job ${job.id} for user ${job.data.userId}`);
     await this.sendPushNotification(job.data);

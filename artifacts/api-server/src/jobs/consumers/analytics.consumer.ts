@@ -23,6 +23,17 @@ export interface TrackEventJob {
 export class AnalyticsQueueConsumer extends WorkerHost {
   private readonly logger = new Logger(AnalyticsQueueConsumer.name);
 
+  async onModuleInit() {
+    try {
+      await super.onModuleInit();
+    } catch (err) {
+      this.logger.warn(
+        'Redis unavailable — analytics queue worker disabled. ' +
+        (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
+
   async process(job: Job<TrackEventJob>): Promise<void> {
     this.logger.debug(`Processing analytics event ${job.id}: ${job.data.event}`);
     await this.processEvent(job.data);

@@ -35,6 +35,17 @@ export class EmailQueueConsumer extends WorkerHost {
     }
   }
 
+  async onModuleInit() {
+    try {
+      await super.onModuleInit();
+    } catch (err) {
+      this.logger.warn(
+        'Redis unavailable — email queue worker disabled. ' +
+        (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
+
   async process(job: Job<SendEmailJob>): Promise<void> {
     this.logger.log(`Processing email job ${job.id} to ${job.data.to}`);
     await this.sendEmail(job.data);
