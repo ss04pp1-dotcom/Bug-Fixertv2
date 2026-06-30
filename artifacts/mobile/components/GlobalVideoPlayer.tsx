@@ -23,15 +23,16 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Platform, BackHandler, StatusBar, ActivityIndicator,
-  PanResponder, Modal, useWindowDimensions, ScrollView, Image,
+  Modal, useWindowDimensions, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  FadeIn, FadeOut,
+  FadeIn, FadeOut, runOnJS,
 } from 'react-native-reanimated';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -264,13 +265,14 @@ interface NativePlayerProps {
   onAudioTracks: (t: any[]) => void;
   onTextTracks: (t: any[]) => void;
   onPipChange: (active: boolean) => void;
+  metadata?: { title: string; artist: string; imageUri?: string };
 }
 
 const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
   source, paused, rate, volume, resizeMode, pip, isLive, videoRef,
   selectedVideoTrack, selectedAudioTrack, selectedTextTrack,
   onLoad, onLoadStart, onReadyForDisplay, onProgress, onBuffer,
-  onError, onEnd, onVideoTracks, onAudioTracks, onTextTracks, onPipChange,
+  onError, onEnd, onVideoTracks, onAudioTracks, onTextTracks, onPipChange, metadata,
 }: NativePlayerProps) {
   if (IS_EXPO_GO || IS_WEB) {
     return (
@@ -334,6 +336,12 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         selectedAudioTrack={selectedAudioTrack}
         selectedTextTrack={selectedTextTrack}
 
+        // ── MediaSession / lock-screen metadata (T3.4) ───────────────────────
+        // react-native-video v6 + Media3 automatically creates a
+        // MediaSessionConnector. The metadata prop pushes title, artist,
+        // and artwork to the system notification shade and lock screen.
+        {...(metadata ? { metadata } : {})}
+
         // ── Callbacks ────────────────────────────────────────────────────────
         onLoadStart={onLoadStart}
         onLoad={onLoad}
@@ -374,17 +382,25 @@ const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// SETTINGS SHEET
+// SETTINGS SHEET — @gorhom/bottom-sheet v5 (T2.3)
+// Gesture-driven, spring-physics dismiss. No separate Modal window.
 // ════════════════════════════════════════════════════════════════════════════
 const SPEED_OPTS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 const ASPECT_CYCLE = ['contain', 'cover', 'stretch'] as const;
 type AspectMode = typeof ASPECT_CYCLE[number];
 type SheetType = 'none' | 'speed' | 'quality' | 'audio' | 'subtitle';
 
-function SettingsSheet({ visible, sheet, onClose, onSelect, speed,
+function SettingsSheet({ sheet, onClose, onSelect, speed,
   videoTracks, audioTracks, textTracks,
   selectedVidIdx, selectedAudIdx, selectedSubIdx }: any) {
-  if (!visible || sheet === 'none') return null;
+  const sheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['45%'], []);
+
+  useEffect(() => {
+    if (sheet !== 'none') sheetRef.current?.expand();
+    else sheetRef.current?.close();
+  }, [sheet]);
+
   let items: { label: string; value: any; isActive: boolean }[] = [];
   let title = '';
   if (sheet === 'speed') {
@@ -418,31 +434,50 @@ function SettingsSheet({ visible, sheet, onClose, onSelect, speed,
       ...textTracks.map((t: any, i: number) => ({ label: t.language || t.title || `Track ${i+1}`, value: i, isActive: i === selectedSubIdx })),
     ];
   }
+
   return (
-    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={ss.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} onPress={(e: any) => e.stopPropagation()}>
-          <View style={ss.sheet}>
-            <View style={ss.handle} />
+    <BottomSheet
+      ref={sheetRef}
+      index={-1}
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      onClose={onClose}
+      backdropComponent={(props: any) => (
+        <BottomSheetBackdrop
+          {...props}
+          appearsOnIndex={0}
+          disappearsOnIndex={-1}
+          pressBehavior="close"
+        />
+      )}
+      backgroundStyle={{ backgroundColor: '#111827' }}
+      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.25)', width: 40 }}
+      style={{ zIndex: 10001, elevation: 62 }}
+    >
+      <BottomSheetView style={ss.sheetView}>
+        {sheet !== 'none' && (
+          <>
             <Text style={ss.title}>{title}</Text>
             {items.map((item, i) => (
-              <TouchableOpacity key={i} onPress={() => { onSelect(sheet, item.value); onClose(); }} style={ss.row}>
+              <TouchableOpacity
+                key={i}
+                onPress={() => { onSelect(sheet, item.value); onClose(); }}
+                style={ss.row}
+              >
                 <Text style={[ss.rowTxt, item.isActive && ss.rowActive]}>{item.label}</Text>
                 {item.isActive && <Ionicons name="checkmark-circle" size={20} color={C.primary} />}
               </TouchableOpacity>
             ))}
-            <View style={{ height: 24 }} />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+          </>
+        )}
+        <View style={{ height: 32 }} />
+      </BottomSheetView>
+    </BottomSheet>
   );
 }
 
 const ss = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#111827', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 20, paddingTop: 12, minHeight: 160 },
-  handle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetView: { paddingHorizontal: 20, paddingTop: 4 },
   title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   rowTxt: { color: '#d1d5db', fontSize: 15 },
@@ -669,6 +704,15 @@ export default function GlobalVideoPlayer() {
     // insets.bottom is already handled by Math.max so we use the raw value here.
     clampMaxY.value = SH - MINI_H - MINI_TITLE_H - TAB_BAR_BASE_H - Math.max(insets.bottom || 0, 8) - MINI_MARGIN;
   }, [insets.top, insets.bottom, SH]);
+
+  // ── Fullscreen gesture SharedValues (T1.2 — UI-thread volume/brightness) ─
+  // These drive the volume/brightness gesture math entirely on the UI thread.
+  // No JS-thread re-renders during swipe — only runOnJS for final setState.
+  const swipeStartVolSV = useSharedValue(1.0);
+  const swipeStartBriSV = useSharedValue(1.0);
+  const swipeSideSV     = useSharedValue(1);  // 0 = left/brightness, 1 = right/volume
+  const modeSV_fs       = useSharedValue(0);  // 0 = fullscreen, 1 = top
+  useEffect(() => { modeSV_fs.value = mode === 'top' ? 1 : 0; }, [mode]);
 
   // ── Controls auto-hide ───────────────────────────────────────────────────
   // FIX: removed runOnJS(setCtrlHidden) from the withTiming callback.
@@ -972,88 +1016,88 @@ export default function GlobalVideoPlayer() {
   }, [srcIdx, setSrcIdx, refreshStream, bumpCtrl]);
 
   // ═════════════════════════════════════════════════════════════════════════
-  // SMOOTH BRIGHTNESS + VOLUME — PanResponder
-  // ═════════════════════════════════════════════════════════════════════════
-  // FIX: old code had [vidW, videoVolume, brightness, ...] in deps →
-  // PanResponder was rebuilt 60×/sec during swipe → gesture "stuck" / jittery.
-  // New: deps = [seek, bumpCtrl, hideCtrlNow] only — built ONCE.
-  // Volume/brightness read from refs, written to shared values (instant UI).
-  // setState for the <Video volume> prop is throttled to 10×/sec.
-  const vidW = SW; // fullscreen always uses full width
+  // ── Fullscreen surface gesture — UI-thread volume/brightness (T1.2) ─────
+  // Replaces PanResponder. Volume/brightness SharedValue updates run on the
+  // UI thread (zero re-renders per frame). JS-thread state (setVideoVolume,
+  // setSwipeType) is called via runOnJS only at end or on significant change.
+  const _fsSingleTap = useCallback(() => {
+    if (showCtrlRef.current) hideCtrlNow();
+    else bumpCtrl();
+  }, [hideCtrlNow, bumpCtrl]);
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, gs) =>
-      Math.abs(gs.dy) > 8 && Math.abs(gs.dy) > Math.abs(gs.dx),
-    onPanResponderGrant: (evt) => {
-      swipeStartV.current = videoVolumeRef.current;
-      swipeStartB.current = brightnessRef.current;
-      swipeSide.current = evt.nativeEvent.locationX < vidW / 2 ? 'left' : 'right';
-    },
-    onPanResponderMove: (_, gs) => {
-      if (Math.abs(gs.dy) < 8) return;
-      // Continuous (no snapping) — smooth as butter
-      const delta = -gs.dy / 300;
-      const sideType = swipeSide.current === 'left' ? 'brightness' : 'volume';
+  const _fsDoubleTap = useCallback((isLeft: boolean) => {
+    seek(isLeft ? -10 : 10);
+    setSeekSide({ side: isLeft ? 'left' : 'right', secs: 10 });
+  }, [seek]);
 
-      if (sideType === 'volume') {
-        const newVol = Math.max(0, Math.min(1, swipeStartV.current + delta));
-        // Update shared value instantly (drives SwipeIndicator — no re-render)
-        volumeSV.value = newVol;
-        // Throttled setState for the <Video volume> prop (10×/sec max)
-        const now = Date.now();
-        if (now - lastVolUpdate.current > 100) {
-          lastVolUpdate.current = now;
-          setVideoVolume(newVol);
-        }
-        setSwipeType('volume');
-        setSwipeValue(newVol);
-      } else {
-        const newBri = Math.max(0, Math.min(1, swipeStartB.current + delta));
-        // Shared value drives the overlay opacity directly — ZERO re-renders
-        brightnessSV.value = newBri;
-        setBrightness(newBri);
-        setSwipeType('brightness');
-        setSwipeValue(newBri);
-      }
-    },
-    onPanResponderRelease: (evt, gs) => {
-      // ── Swipe DOWN in TOP mode → minimize to mini player ──────────────────
-      // Threshold: dy > 80px downward + velocity > 0.2 (feel natural, not accidental)
-      if (modeRef.current === 'top' && gs.dy > 80 && gs.vy > 0.2) {
-        useGlobalPlayer.getState().enterMini();
-        router.back();
-        return;
-      }
+  const _fsSwipeDown = useCallback(() => {
+    useGlobalPlayer.getState().enterMini();
+    router.back();
+  }, []);
 
-      if (Math.abs(gs.dy) < 8 && Math.abs(gs.dx) < 8) {
-        // Tap (not swipe) — handle double-tap seek + toggle controls
-        const now = Date.now();
-        const tapX = evt.nativeEvent.locationX;
-        if (lastTapRef.current && now - lastTapRef.current.time < 350) {
-          const side = tapX < vidW / 2 ? 'left' : 'right';
-          const secs = side === 'left' ? -10 : 10;
-          lastTapRef.current = null;
-          seek(secs);
-          setSeekSide({ side, secs: Math.abs(secs) });
+  const _fsFinalizeSwipe = useCallback(() => {
+    setVideoVolume(volumeSV.value);
+    setBrightness(brightnessSV.value);
+    setTimeout(() => setSwipeType(null), 1200);
+  }, [volumeSV, brightnessSV]);
+
+  const fsGesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .minDistance(8)
+      .onBegin((e) => {
+        'worklet';
+        swipeStartVolSV.value = volumeSV.value;
+        swipeStartBriSV.value = brightnessSV.value;
+        swipeSideSV.value = e.x < SW / 2 ? 0 : 1; // 0 = brightness (left), 1 = volume (right)
+      })
+      .onUpdate((e) => {
+        'worklet';
+        if (Math.abs(e.translationY) < 8) return;
+        const delta = -e.translationY / 300;
+        if (swipeSideSV.value === 1) {
+          const v = Math.max(0, Math.min(1, swipeStartVolSV.value + delta));
+          volumeSV.value = v; // UI thread — instant SwipeIndicator update
+          runOnJS(setVideoVolume)(v);
+          runOnJS(setSwipeType)('volume');
+          runOnJS(setSwipeValue)(v);
         } else {
-          lastTapRef.current = { time: now, x: tapX };
-          setTimeout(() => {
-            if (lastTapRef.current && Date.now() - lastTapRef.current.time >= 340) {
-              lastTapRef.current = null;
-              if (showCtrlRef.current) hideCtrlNow();
-              else bumpCtrl();
-            }
-          }, 360);
+          const b = Math.max(0, Math.min(1, swipeStartBriSV.value + delta));
+          brightnessSV.value = b; // UI thread — instant brightness overlay update
+          runOnJS(setBrightness)(b);
+          runOnJS(setSwipeType)('brightness');
+          runOnJS(setSwipeValue)(b);
         }
-        return;
-      }
-      // Apply final volume value (in case throttled setState missed the last update)
-      setVideoVolume(volumeSV.value);
-      setBrightness(brightnessSV.value);
-      setTimeout(() => setSwipeType(null), 1200);
-    },
-  }), [vidW, seek, bumpCtrl, hideCtrlNow]); // ← stable deps only
+      })
+      .onEnd((e) => {
+        'worklet';
+        // Swipe DOWN in TOP mode → minimize to mini player
+        if (modeSV_fs.value === 1 && e.translationY > 80 && e.velocityY > 0.2) {
+          runOnJS(_fsSwipeDown)();
+          return;
+        }
+        if (Math.abs(e.translationY) >= 8) {
+          runOnJS(_fsFinalizeSwipe)();
+        }
+      });
+
+    const dTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDuration(300)
+      .onEnd((e, success) => {
+        'worklet';
+        if (success) runOnJS(_fsDoubleTap)(e.x < SW / 2);
+      });
+
+    const sTap = Gesture.Tap()
+      .requireExternalGestureToFail(dTap)
+      .onEnd((_e, success) => {
+        'worklet';
+        if (success) runOnJS(_fsSingleTap)();
+      });
+
+    return Gesture.Simultaneous(pan, Gesture.Exclusive(dTap, sTap));
+  }, [SW, volumeSV, brightnessSV, swipeStartVolSV, swipeStartBriSV, swipeSideSV, modeSV_fs,
+      _fsSingleTap, _fsDoubleTap, _fsSwipeDown, _fsFinalizeSwipe]);
 
   // ── PiP is MANUAL ONLY — no auto-PiP on home/background ────────────────
   // Auto-PiP was removed: it triggered unintentionally when the user
@@ -1328,6 +1372,8 @@ export default function GlobalVideoPlayer() {
             selectedVideoTrack={selectedVideoTrack}
             selectedAudioTrack={selectedAudioTrack}
             selectedTextTrack={selectedTextTrack}
+            // T3.4: MediaSession / lock-screen notification metadata
+            metadata={{ title: title || 'StreamPro', artist: isLive ? 'Live TV' : 'StreamPro', imageUri: logo || undefined }}
             onLoadStart={() => { setBuffering(true); setReady(false); }}
             onLoad={handleLoad}
             onReadyForDisplay={() => {
@@ -1524,8 +1570,11 @@ export default function GlobalVideoPlayer() {
         )}
 
         {/* Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
+        {/* T1.2: GestureDetector (UI thread) replaces PanResponder (JS thread) */}
         {!pipActive && !playerError && (
-          <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
+          <GestureDetector gesture={fsGesture}>
+            <View style={StyleSheet.absoluteFill} />
+          </GestureDetector>
         )}
 
         {/* Full controls overlay */}
@@ -1686,14 +1735,6 @@ export default function GlobalVideoPlayer() {
           />
         )}
         {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
-
-        {/* Settings sheet */}
-        <SettingsSheet
-          visible={sheet !== 'none'} sheet={sheet}
-          onClose={() => setSheet('none')} onSelect={handleSheetSelect}
-          speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
-          selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
-        />
         </View>
       )}
 
@@ -1945,13 +1986,6 @@ export default function GlobalVideoPlayer() {
           )}
           {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
 
-          {/* Settings sheet */}
-          <SettingsSheet
-            visible={sheet !== 'none'} sheet={sheet}
-            onClose={() => setSheet('none')} onSelect={handleSheetSelect}
-            speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
-            selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
-          />
         </View>
       )}
       {/* ══════════════════════════════════════════════════════════════════
@@ -1962,6 +1996,22 @@ export default function GlobalVideoPlayer() {
         <NextEpisodeOverlay
           nextEpisode={nextEpisode}
           visible={ended && !!nextEpisode}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SETTINGS BOTTOM SHEET — T2.3
+          Rendered at root level (sibling to all overlays) so @gorhom's
+          BottomSheet with style={{ zIndex: 10001 }} floats above the
+          fullscreen overlay (zIndex 9999). One instance shared by both
+          'top' and 'fullscreen' modes.
+          ══════════════════════════════════════════════════════════════════ */}
+      {(mode === 'fullscreen' || mode === 'top') && (
+        <SettingsSheet
+          sheet={sheet}
+          onClose={() => setSheet('none')} onSelect={handleSheetSelect}
+          speed={speed} videoTracks={videoTracks} audioTracks={audioTracks} textTracks={textTracks}
+          selectedVidIdx={selectedVidIdx} selectedAudIdx={selectedAudIdx} selectedSubIdx={selectedSubIdx}
         />
       )}
 
