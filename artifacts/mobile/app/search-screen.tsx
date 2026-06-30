@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, Pressable,
-  StyleSheet, Image, ActivityIndicator, StatusBar,
+  StyleSheet, Image, ActivityIndicator, StatusBar, Animated,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,42 +83,88 @@ async function searchAll(query: string): Promise<ResultItem[]> {
   }
 }
 
+const TYPE_ICON: Record<string, any> = {
+  movie: 'film-outline', series: 'tv-outline', channel: 'radio-outline',
+};
+const TYPE_COLOR: Record<string, string> = {
+  movie: C.primary, series: C.accent, channel: '#EF4444',
+};
+
+function AnimatedRow({ item, index, onPress }: {
+  item: ResultItem; index: number; onPress: () => void;
+}) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1, duration: 240,
+        delay: Math.min(index * 35, 280),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0, duration: 240,
+        delay: Math.min(index * 35, 280),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const color = TYPE_COLOR[item.type] || C.dim;
+  const icon  = TYPE_ICON[item.type] || 'film-outline';
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Pressable style={s.row} onPress={onPress} android_ripple={{ color: 'rgba(139,92,246,0.15)' }}>
+        {item.poster ? (
+          <Image source={{ uri: Config.imageUrl(item.poster) }} style={s.thumb} resizeMode="cover" />
+        ) : (
+          <View style={[s.thumb, s.thumbFallback, { backgroundColor: color + '18' }]}>
+            <Ionicons name={icon} size={22} color={color} />
+          </View>
+        )}
+        <View style={s.info}>
+          <Text style={s.title} numberOfLines={1}>{item.title}</Text>
+          <View style={s.meta}>
+            <View style={[s.typeBadge, { backgroundColor: color + '22' }]}>
+              <Text style={[s.typeTxt, { color }]}>{item.category}</Text>
+            </View>
+            {item.year ? <Text style={s.year}>{item.year}</Text> : null}
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={C.dim} />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleChange = useCallback((text: string) => {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedQuery(text), 400);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(text), 300);
   }, []);
 
   const { data = [], isFetching } = useQuery({
     queryKey: ['search', debouncedQuery],
     queryFn: () => searchAll(debouncedQuery),
-    enabled: debouncedQuery.trim().length > 1,
+    enabled: debouncedQuery.trim().length > 0,
   });
 
   const handleSelect = useCallback((item: ResultItem) => {
     if (item.type === 'movie') router.push(`/movie/${item.id}`);
     else if (item.type === 'series') router.push(`/series/${item.id}`);
-    else if (item.type === 'channel') {
-      router.push({ pathname: `/live-player/${item.id}` as any, params: { title: item.title } });
-    }
+    else router.push({ pathname: `/live-player/${item.id}` as any, params: { title: item.title } });
   }, []);
 
-  const typeIcon: Record<string, any> = {
-    movie: 'film-outline',
-    series: 'tv-outline',
-    channel: 'radio-outline',
-  };
-  const typeColor: Record<string, string> = {
-    movie: C.primary,
-    series: C.accent,
-    channel: '#EF4444',
-  };
+  const showPlaceholder = !isFetching && debouncedQuery.length === 0;
+  const showEmpty = !isFetching && debouncedQuery.length > 0 && data.length === 0;
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -149,50 +195,38 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {/* Results */}
+      {/* Results area */}
       {isFetching ? (
-        <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} />
-      ) : debouncedQuery.length < 2 ? (
+        <View style={s.centered}>
+          <ActivityIndicator color={C.primary} size="large" />
+          <Text style={s.searchingTxt}>Searching…</Text>
+        </View>
+      ) : showPlaceholder ? (
         <View style={s.placeholder}>
-          <Ionicons name="search" size={48} color="rgba(139,92,246,0.3)" />
+          <Ionicons name="search" size={52} color="rgba(139,92,246,0.3)" />
           <Text style={s.placeholderTxt}>Search for anything</Text>
           <Text style={s.placeholderSub}>Movies, series, live TV channels</Text>
         </View>
-      ) : data.length === 0 ? (
+      ) : showEmpty ? (
         <View style={s.placeholder}>
-          <Ionicons name="sad-outline" size={48} color={C.dim} />
+          <Ionicons name="sad-outline" size={52} color={C.dim} />
           <Text style={s.placeholderTxt}>No results found</Text>
           <Text style={s.placeholderSub}>Try different keywords</Text>
         </View>
       ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(item, i) => `${item.type}-${item.id}-${i}`}
-          contentContainerStyle={s.list}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <Pressable style={s.row} onPress={() => handleSelect(item)}>
-              {item.poster ? (
-                <Image source={{ uri: Config.imageUrl(item.poster) }} style={s.thumb} resizeMode="cover" />
-              ) : (
-                <View style={[s.thumb, s.thumbFallback]}>
-                  <Ionicons name={typeIcon[item.type] || 'film-outline'} size={22} color={typeColor[item.type] || C.dim} />
-                </View>
-              )}
-              <View style={s.info}>
-                <Text style={s.title} numberOfLines={1}>{item.title}</Text>
-                <View style={s.meta}>
-                  <View style={[s.typeBadge, { backgroundColor: typeColor[item.type] + '22' }]}>
-                    <Text style={[s.typeTxt, { color: typeColor[item.type] }]}>{item.category}</Text>
-                  </View>
-                  {item.year ? <Text style={s.year}>{item.year}</Text> : null}
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={C.dim} />
-            </Pressable>
-          )}
-          ItemSeparatorComponent={() => <View style={s.sep} />}
-        />
+        <>
+          <Text style={s.countTxt}>{data.length} result{data.length !== 1 ? 's' : ''}</Text>
+          <FlatList
+            data={data}
+            keyExtractor={(item, i) => `${item.type}-${item.id}-${i}`}
+            contentContainerStyle={s.list}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item, index }) => (
+              <AnimatedRow item={item} index={index} onPress={() => handleSelect(item)} />
+            )}
+            ItemSeparatorComponent={() => <View style={s.sep} />}
+          />
+        </>
       )}
     </View>
   );
@@ -216,17 +250,18 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.border,
   },
   input: { flex: 1, color: C.text, fontSize: 15 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, paddingBottom: 80 },
+  searchingTxt: { color: C.dim, fontSize: 14 },
   placeholder: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12,
-    paddingBottom: 80,
+    flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, paddingBottom: 80,
   },
   placeholderTxt: { color: C.text, fontSize: 18, fontWeight: '600' },
   placeholderSub: { color: C.dim, fontSize: 13 },
-  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 10,
+  countTxt: {
+    color: C.dim, fontSize: 12, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2,
   },
+  list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 100 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10 },
   thumb: { width: 56, height: 56, borderRadius: 10, backgroundColor: C.card, overflow: 'hidden' },
   thumbFallback: { justifyContent: 'center', alignItems: 'center' },
   info: { flex: 1 },

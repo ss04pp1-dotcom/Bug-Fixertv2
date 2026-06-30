@@ -36,6 +36,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useGlobalPlayer, type PlayerSource, type PlayerMode } from '@/lib/player-store';
+import { router } from 'expo-router';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
@@ -552,6 +553,10 @@ export default function GlobalVideoPlayer() {
   const [pip, setPip]               = useState(false);
   const [pipActive, setPipActive]   = useState(false);
 
+  // ── Mode ref — lets panResponder read current mode without stale closure ──
+  const modeRef = useRef(mode);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+
   // ── Controls state ───────────────────────────────────────────────────────
   const [showCtrl, setShowCtrl]     = useState(true);
   const showCtrlRef                 = useRef(true);
@@ -984,6 +989,14 @@ export default function GlobalVideoPlayer() {
       }
     },
     onPanResponderRelease: (evt, gs) => {
+      // ── Swipe DOWN in TOP mode → minimize to mini player ──────────────────
+      // Threshold: dy > 80px downward + velocity > 0.2 (feel natural, not accidental)
+      if (modeRef.current === 'top' && gs.dy > 80 && gs.vy > 0.2) {
+        useGlobalPlayer.getState().enterMini();
+        router.back();
+        return;
+      }
+
       if (Math.abs(gs.dy) < 8 && Math.abs(gs.dx) < 8) {
         // Tap (not swipe) — handle double-tap seek + toggle controls
         const now = Date.now();
@@ -1031,8 +1044,10 @@ export default function GlobalVideoPlayer() {
         return true;
       }
       if (mode === 'top') {
-        // Top mode → shrink to in-app mini player, let nav go back
+        // Top mode → shrink to mini player AND navigate back so the user
+        // returns to the previous screen (live-tv list) immediately.
         enterMini();
+        router.back();
         return true;
       }
       return false;
@@ -1452,6 +1467,13 @@ export default function GlobalVideoPlayer() {
           </View>
         )}
 
+        {/* Swipe-down hint — pill handle at bottom edge (YouTube-style) */}
+        {!pipActive && !playerError && (
+          <View style={g.swipeHandle} pointerEvents="none">
+            <View style={g.swipeHandlePill} />
+          </View>
+        )}
+
         {/* Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
         {!pipActive && !playerError && (
           <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
@@ -1463,7 +1485,7 @@ export default function GlobalVideoPlayer() {
 
             {/* Top bar */}
             <View style={[g.topBar, { paddingTop: 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
+              <TouchableOpacity style={g.iconBtn} onPress={() => { enterMini(); router.back(); }}>
                 <Ionicons name="arrow-back" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
@@ -2075,6 +2097,16 @@ const g = StyleSheet.create({
 
   lockBadge: { position: 'absolute', alignSelf: 'center', top: '46%', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: C.border },
   lockTxt:   { color: '#fff', fontSize: 13 },
+
+  // Swipe-down pill handle (YouTube-style) — shown at bottom edge of TOP mode video
+  swipeHandle: {
+    position: 'absolute', bottom: 4, left: 0, right: 0,
+    alignItems: 'center', paddingBottom: 2,
+  },
+  swipeHandlePill: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
 
   // Top mode (video at top, related channels visible below)
   topRoot: {
