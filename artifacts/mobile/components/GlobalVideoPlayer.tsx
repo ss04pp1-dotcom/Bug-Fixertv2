@@ -691,8 +691,9 @@ export default function GlobalVideoPlayer() {
   }, [seek]);
 
   const _fsSwipeDown = useCallback(() => {
-    useGlobalPlayer.getState().enterMini();
-    router.back();
+    // Swipe-down in fullscreen → go back to top (portrait inline) mode,
+    // not mini, so the user can still see the player in the screen.
+    useGlobalPlayer.getState().enterTop();
   }, []);
 
   const _fsFinalizeSwipe = useCallback(() => {
@@ -776,22 +777,24 @@ export default function GlobalVideoPlayer() {
     if (mode === 'hidden') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (mode === 'fullscreen') {
-        // Landscape fullscreen → back to top mode (portrait)
+        // Landscape fullscreen → exit landscape, go back to top (portrait).
         unlockOrientation();
         enterTop();
-        return true;
+        return true; // consumed — no navigation
       }
       if (mode === 'top') {
-        // Top mode → shrink to mini player AND navigate back so the user
-        // returns to the previous screen (live-tv list) immediately.
+        // Top mode → shrink to mini.
+        // Return FALSE so Expo Router's default back navigation also fires:
+        // the screen navigates back to where the user came from, and the
+        // useFocusEffect cleanup in the player screen calls enterMini() too.
+        // Calling router.back() here as well would double-navigate.
         enterMini();
-        router.back();
-        return true;
+        return false;
       }
-      return false;
+      return false; // mini: let default back action handle it
     });
     return () => sub.remove();
-  }, [mode, enterTop, hide, unlockOrientation]);
+  }, [mode, enterTop, enterMini, unlockOrientation]);
 
   // ── Keep awake ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1256,7 +1259,7 @@ export default function GlobalVideoPlayer() {
 
             {/* Top bar */}
             <View style={[g.topBar, { paddingTop: 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={() => { enterMini(); router.back(); }}>
+              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
                 <Ionicons name="arrow-back" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
@@ -1369,11 +1372,6 @@ export default function GlobalVideoPlayer() {
               </View>
             </View>
           </Animated.View>
-        )}
-
-        {/* Tap to show controls when hidden */}
-        {!showCtrl && !pipActive && !playerError && (
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={bumpCtrl} />
         )}
 
         {/* Seek feedback + swipe indicator */}
@@ -1595,11 +1593,6 @@ export default function GlobalVideoPlayer() {
           )}
         </Animated.View>
       )}
-
-          {/* Tap to show controls when hidden */}
-          {!showCtrl && !pipActive && !playerError && (
-            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={bumpCtrl} />
-          )}
 
           {/* Seek feedback + swipe indicator */}
           {!pipActive && seekSide && (
