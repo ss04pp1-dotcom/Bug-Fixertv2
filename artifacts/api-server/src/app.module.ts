@@ -44,6 +44,7 @@ import { M3uImportModule } from './m3u-import/m3u-import.module';
 import { PlaybackEventsModule } from './playback-events/playback-events.module';
 import { GitHubSourcesModule } from './github-sources/github-sources.module';
 import { GitHubSyncModule } from './github-sync/github-sync.module';
+import { YoutubeModule } from './youtube/youtube.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 
@@ -95,6 +96,7 @@ import configuration from './config/configuration';
     AppCacheModule,
     GitHubSyncModule,
     GitHubSourcesModule,
+    YoutubeModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

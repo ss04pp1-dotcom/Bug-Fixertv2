@@ -22,7 +22,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
-import { YouTubeVideoBox, isYouTubeUrl } from '@/components/YouTubePlayer';
+import { YouTubeVideoBox, isYouTubeUrl, extractYouTubeStream } from '@/components/YouTubePlayer';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 
 const C = {
@@ -159,7 +159,17 @@ export default function PlayerScreen() {
         const d   = res.data?.data || res.data;
         const url = d?.streamUrl || d?.stream_url || d?.videoUrl || d?.video_url || d?.url || '';
         if (!url) { setSrcErrMsg('No stream URL configured for this content.'); setSrcError(true); return; }
-        if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
+        if (isYouTubeUrl(url)) {
+          // Try server-side extraction first (bypasses embed restrictions)
+          const extracted = await extractYouTubeStream(url);
+          if (extracted?.streamUrl) {
+            const srcs: PlayerSource[] = [buildStreamSource(extracted.streamUrl, 'YouTube', 'HD', {})];
+            setSources(srcs);
+          } else {
+            setYoutubeUrl(url); // fallback: WebView embed
+          }
+          return;
+        }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         const headerData = { cookie: d?.cookie, userAgent: d?.userAgent || d?.user_agent, referer: d?.referer, origin: d?.origin };
@@ -180,7 +190,16 @@ export default function PlayerScreen() {
         const ep  = allEps[epIdx] || allEps[0];
         const url = ep?.streamUrl || ep?.stream_url || ep?.videoUrl || ep?.url || '';
         if (!url) { setSrcErrMsg('No episode stream URL found.'); setSrcError(true); return; }
-        if (isYouTubeUrl(url)) { setYoutubeUrl(url); return; }
+        if (isYouTubeUrl(url)) {
+          const extracted = await extractYouTubeStream(url);
+          if (extracted?.streamUrl) {
+            const srcs: PlayerSource[] = [buildStreamSource(extracted.streamUrl, 'YouTube', 'HD', {})];
+            setSources(srcs);
+          } else {
+            setYoutubeUrl(url);
+          }
+          return;
+        }
         const reason = getUnsupportedUrlReason(url);
         if (reason) { setSrcErrMsg(reason); setSrcError(true); return; }
         const headerData = { cookie: ep?.cookie, userAgent: ep?.userAgent || ep?.user_agent, referer: ep?.referer, origin: ep?.origin };

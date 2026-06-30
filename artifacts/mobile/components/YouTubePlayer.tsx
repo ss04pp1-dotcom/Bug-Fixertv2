@@ -1,16 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
-  ActivityIndicator, StatusBar, Platform, Alert,
+  ActivityIndicator, StatusBar, Platform, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import apiClient from '@/lib/api';
 
 const { width: W } = Dimensions.get('window');
 
 const C = {
   bg: '#050510', text: '#fff', dim: '#9CA3AF',
-  primary: '#8B5CF6', error: '#EF4444',
+  primary: '#8B5CF6', error: '#EF4444', yt: '#FF0000',
 };
 
 // ── YouTube video ID extraction ──────────────────────────────────────────────
@@ -34,50 +35,51 @@ export function isYouTubeUrl(url: string): boolean {
   return extractYouTubeId(url) !== null;
 }
 
-// ── PiP JS injected into native WebView ──────────────────────────────────────
-const PIP_JS = `(function(){
-  // Try all video elements (YouTube iframe may have nested videos)
-  var videos = document.querySelectorAll('video');
-  var video = null;
-  for (var i = 0; i < videos.length; i++) {
-    if (videos[i].readyState > 0 || videos[i].src) { video = videos[i]; break; }
+// ── API-based stream extraction (bypasses embed restrictions) ─────────────────
+export async function extractYouTubeStream(youtubeUrl: string): Promise<{
+  streamUrl: string;
+  title: string;
+  thumbnail: string;
+  duration: number;
+  isLive: boolean;
+} | null> {
+  try {
+    const res = await apiClient.post('/youtube/extract', { url: youtubeUrl });
+    const d = res.data?.data ?? res.data;
+    if (d?.streamUrl) return d;
+    return null;
+  } catch {
+    return null;
   }
-  if (!video && videos.length > 0) video = videos[0];
-  if (video) {
-    if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
-      video.webkitSetPresentationMode('picture-in-picture');
-    } else if (document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') {
-      video.requestPictureInPicture().catch(function(e){ console.warn('PiP failed:', e); });
-    }
-  } else {
-    // Fallback: post message to YouTube iframe API
-    var iframe = document.querySelector('iframe');
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-    }
-  }
-  true;
-})();`;
+}
 
-// ── YouTubeVideoBox — embeddable player (no header/back) ─────────────────────
+// ── YouTubeVideoBox — embeds player (WebView for native, iframe for web) ──────
 interface YouTubeVideoBoxProps {
   url: string;
   height?: number;
+  title?: string;
 }
 
-export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
+export function YouTubeVideoBox({ url, height, title }: YouTubeVideoBoxProps) {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError]     = useState(false);
   const [embedBlocked, setEmbedBlocked] = useState(false);
   const webViewRef = useRef<any>(null);
-  const iframeRef = useRef<any>(null);
+  const iframeRef  = useRef<any>(null);
 
   const videoId = extractYouTubeId(url);
-  const boxH = height ?? W * (9 / 16);
+  const boxH    = height ?? W * (9 / 16);
 
   const embedUrl = videoId
     ? `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com`
     : null;
+
+  const openInYouTube = useCallback(() => {
+    const ytUrl = videoId
+      ? `https://www.youtube.com/watch?v=${videoId}`
+      : url;
+    Linking.openURL(ytUrl).catch(() => {});
+  }, [videoId, url]);
 
   if (!videoId) {
     return (
@@ -88,100 +90,90 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
     );
   }
 
-  // ── Web platform: use native iframe ────────────────────────────────────────
+  // ── Web: native iframe ────────────────────────────────────────────────────
   if (Platform.OS === 'web') {
-    const handleWebPip = () => {
-      try {
-        const iframe = iframeRef.current as HTMLIFrameElement | null;
-        if (!iframe) return;
-        if ((document as any).pictureInPictureEnabled) {
-          (iframe as any).requestPictureInPicture?.().catch(() => {
-            Alert.alert('PiP', 'Use the browser\'s built-in PiP (right-click the video → Picture in Picture).');
-          });
-        } else {
-          Alert.alert('PiP', 'Right-click the video and select "Picture in Picture" from the context menu.');
-        }
-      } catch {
-        Alert.alert('PiP', 'Use the browser\'s built-in PiP controls on the video.');
-      }
-    };
-
     return (
       <View style={[s.playerBox, { height: boxH }]}>
         {loading && (
           <View style={[StyleSheet.absoluteFill, s.loadingOverlay]}>
-            <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+            <Ionicons name="logo-youtube" size={48} color={C.yt} />
             <ActivityIndicator color={C.primary} style={{ marginTop: 12 }} />
-            <Text style={s.loadingTxt}>Loading YouTube video…</Text>
+            <Text style={s.loadingTxt}>Loading YouTube…</Text>
           </View>
         )}
-        {/* @ts-ignore — iframe is valid in react-native-web */}
+        {/* @ts-ignore */}
         <iframe
           ref={iframeRef}
           src={embedUrl!}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            backgroundColor: '#000',
-          } as any}
+          style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#000' } as any}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           allowFullScreen
           onLoad={() => setLoading(false)}
           onError={() => { setLoading(false); setError(true); }}
         />
-        {/* PiP button overlay */}
-        {!loading && (
-          <TouchableOpacity style={s.pipBtn} onPress={handleWebPip}>
-            <MaterialIcons name="picture-in-picture-alt" size={18} color="#fff" />
-          </TouchableOpacity>
-        )}
       </View>
     );
   }
 
-  // ── Native platform: use WebView ────────────────────────────────────────────
+  // ── Native: try react-native-youtube-iframe first ────────────────────────
+  let YoutubeIframe: any = null;
+  try {
+    YoutubeIframe = require('react-native-youtube-iframe').default;
+  } catch { /* not available */ }
+
+  if (YoutubeIframe) {
+    return (
+      <NativeYouTubeIframe
+        videoId={videoId}
+        height={boxH}
+        title={title}
+        onError={() => setEmbedBlocked(true)}
+        embedBlocked={embedBlocked}
+        onOpenYouTube={openInYouTube}
+      />
+    );
+  }
+
+  // ── Native fallback: WebView ──────────────────────────────────────────────
   let WebViewComponent: any = null;
   try {
     WebViewComponent = require('react-native-webview').WebView;
-  } catch {
-    WebViewComponent = null;
-  }
+  } catch { /* not available */ }
 
   if (!WebViewComponent) {
     return (
       <View style={[s.playerBox, { height: boxH }, s.center]}>
-        <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+        <Ionicons name="logo-youtube" size={48} color={C.yt} />
         <Text style={s.errTxt}>YouTube Player</Text>
         <Text style={s.errSub}>Restart the app to load the player.</Text>
       </View>
     );
   }
 
-  const handleNativePip = () => {
-    webViewRef.current?.injectJavaScript(PIP_JS);
-  };
-
   return (
     <View style={[s.playerBox, { height: boxH }]}>
       {loading && !error && (
         <View style={[StyleSheet.absoluteFill, s.loadingOverlay]}>
-          <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+          <Ionicons name="logo-youtube" size={48} color={C.yt} />
           <ActivityIndicator color={C.primary} style={{ marginTop: 12 }} />
-          <Text style={s.loadingTxt}>Loading YouTube video…</Text>
+          <Text style={s.loadingTxt}>Loading YouTube…</Text>
         </View>
       )}
       {error && (
         <View style={[StyleSheet.absoluteFill, s.center]}>
-          <Ionicons name="alert-circle-outline" size={48} color={C.error} />
+          <Ionicons name="logo-youtube" size={48} color={C.yt} />
           <Text style={s.errTxt}>
-            {embedBlocked ? 'Video cannot be embedded' : 'Failed to load video'}
+            {embedBlocked ? 'Embedding disabled' : 'Failed to load video'}
           </Text>
           <Text style={s.errSub}>
             {embedBlocked
-              ? 'The video owner has disabled playback outside YouTube. Try a different stream URL in the admin panel.'
+              ? 'The video owner has disabled embedding outside YouTube.'
               : 'Check your connection and try again.'}
           </Text>
+          <TouchableOpacity style={s.ytBtn} onPress={openInYouTube}>
+            <Ionicons name="logo-youtube" size={16} color="#fff" />
+            <Text style={s.ytBtnTxt}>  Open in YouTube</Text>
+          </TouchableOpacity>
           {!embedBlocked && (
             <TouchableOpacity style={s.retryBtn} onPress={() => { setError(false); setEmbedBlocked(false); }}>
               <Ionicons name="refresh" size={16} color="#fff" />
@@ -201,31 +193,20 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
           allowsPictureInPictureMediaPlayback
           javaScriptEnabled
           domStorageEnabled
-          startInLoadingState={false}
           setSupportMultipleWindows={false}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
           onError={() => { setLoading(false); setError(true); }}
-          onHttpError={(e: any) => {
-            // Error 153 = embedding disabled — show in-app error instead of redirecting
-            setLoading(false);
-            setEmbedBlocked(true);
-            setError(true);
-          }}
-          onShouldStartLoadWithRequest={(request: any) => {
-            const url: string = request.url || '';
-            // Allow only: the embed URL itself, YouTube consent pages, Google APIs
-            if (
-              url.includes('youtube.com/embed') ||
-              url.includes('google.com/accounts') ||
-              url.includes('accounts.google.com') ||
-              url.includes('about:blank') ||
-              url.startsWith('data:')
-            ) {
-              return true;
-            }
-            // Block ALL other navigation — especially youtube.com, youtu.be app links
-            return false;
+          onHttpError={() => { setLoading(false); setEmbedBlocked(true); setError(true); }}
+          onShouldStartLoadWithRequest={(req: any) => {
+            const u: string = req.url || '';
+            return (
+              u.includes('youtube.com/embed') ||
+              u.includes('google.com/accounts') ||
+              u.includes('accounts.google.com') ||
+              u.includes('about:blank') ||
+              u.startsWith('data:')
+            );
           }}
           userAgent={
             Platform.OS === 'android'
@@ -234,12 +215,59 @@ export function YouTubeVideoBox({ url, height }: YouTubeVideoBoxProps) {
           }
         />
       )}
-      {/* PiP button overlay (native only) */}
-      {!loading && !error && (
-        <TouchableOpacity style={s.pipBtn} onPress={handleNativePip}>
-          <MaterialIcons name="picture-in-picture-alt" size={18} color="#fff" />
+    </View>
+  );
+}
+
+// ── NativeYouTubeIframe — react-native-youtube-iframe wrapper ─────────────────
+interface NativeYouTubeIframeProps {
+  videoId: string;
+  height: number;
+  title?: string;
+  onError: () => void;
+  embedBlocked: boolean;
+  onOpenYouTube: () => void;
+}
+
+function NativeYouTubeIframe({
+  videoId, height, title, onError, embedBlocked, onOpenYouTube,
+}: NativeYouTubeIframeProps) {
+  const [playing, setPlaying] = useState(true);
+  const YoutubeIframe = require('react-native-youtube-iframe').default;
+
+  const onStateChange = useCallback((state: string) => {
+    if (state === 'ended') setPlaying(false);
+  }, []);
+
+  if (embedBlocked) {
+    return (
+      <View style={[s.playerBox, { height }, s.center]}>
+        <Ionicons name="logo-youtube" size={48} color={C.yt} />
+        <Text style={s.errTxt}>Embedding disabled</Text>
+        <Text style={s.errSub}>The video owner has restricted embedding outside YouTube.</Text>
+        <TouchableOpacity style={s.ytBtn} onPress={onOpenYouTube}>
+          <Ionicons name="logo-youtube" size={16} color="#fff" />
+          <Text style={s.ytBtnTxt}>  Open in YouTube</Text>
         </TouchableOpacity>
-      )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[s.playerBox, { height }]}>
+      <YoutubeIframe
+        height={height}
+        width={W}
+        play={playing}
+        videoId={videoId}
+        onChangeState={onStateChange}
+        onError={onError}
+        webViewProps={{
+          allowsInlineMediaPlayback: true,
+          mediaPlaybackRequiresUserAction: false,
+          allowsFullscreenVideo: true,
+        }}
+      />
     </View>
   );
 }
@@ -252,7 +280,7 @@ interface YouTubePlayerProps {
 }
 
 export default function YouTubePlayer({ url, title = '', onBack }: YouTubePlayerProps) {
-  const insets = useSafeAreaInsets();
+  const insets  = useSafeAreaInsets();
   const videoId = extractYouTubeId(url);
 
   if (!videoId) {
@@ -283,7 +311,7 @@ export default function YouTubePlayer({ url, title = '', onBack }: YouTubePlayer
         <Text style={s.headerTitle} numberOfLines={1}>{title || 'YouTube'}</Text>
         <View style={{ width: 40 }} />
       </View>
-      <YouTubeVideoBox url={url} />
+      <YouTubeVideoBox url={url} title={title} />
     </View>
   );
 }
@@ -315,9 +343,10 @@ const s = StyleSheet.create({
     paddingVertical: 10, borderRadius: 22, marginTop: 8,
   },
   retryTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  pipBtn: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8, padding: 6,
+  ytBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.yt, paddingHorizontal: 24,
+    paddingVertical: 10, borderRadius: 22, marginTop: 8,
   },
+  ytBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
