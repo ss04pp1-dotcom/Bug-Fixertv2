@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLiveMatches, useUpcomingMatches, useMyTeams } from '@/lib/api-hooks';
 import { AdBanner } from '@/components/AdBanner';
+import { SocketService } from '@/services/socket.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -223,9 +225,32 @@ function UpcomingRow({ item }: { item: UpcomingMatch }) {
 
 export default function SportsScreen() {
   const [activeCategory, setActiveCategory] = useState<Category>('All');
+  const queryClient = useQueryClient();
 
   const sportId = activeCategory !== 'All' ? activeCategory.toLowerCase() : undefined;
   const { data: liveData, isLoading: liveLoading, isError: liveError, refetch: refetchLive } = useLiveMatches(sportId);
+
+  // T3.8: Socket → React Query — match_update events patch the live matches
+  // cache in-place so the UI reflects score changes without a full refetch.
+  useEffect(() => {
+    const unsub = SocketService.onMatchUpdate((update) => {
+      queryClient.setQueryData(
+        ['sports', 'live', sportId],
+        (old: any) => {
+          if (!old) return old;
+          const list: any[] = Array.isArray(old) ? old : old?.data ?? [];
+          const patched = list.map((m: any) =>
+            m.id === update.matchId
+              ? { ...m, ...(update.score as object), status: update.event ?? m.status }
+              : m,
+          );
+          return Array.isArray(old) ? patched : { ...old, data: patched };
+        },
+      );
+    });
+    return unsub;
+  }, [queryClient, sportId]);
+
   const { data: upcomingData, isLoading: upcomingLoading, isError: upcomingError, refetch: refetchUpcoming } = useUpcomingMatches({ sportId, limit: 20 });
   const { data: myTeamsData, isLoading: teamsLoading, isError: teamsError, refetch: refetchTeams } = useMyTeams();
 

@@ -592,7 +592,7 @@ export default function GlobalVideoPlayer() {
   const [pip, setPip]               = useState(false);
   const [pipActive, setPipActive]   = useState(false);
 
-  // ── Mode ref — lets panResponder read current mode without stale closure ──
+  // ── Mode ref — lets gesture worklets read current mode without stale closure ──
   const modeRef = useRef(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -606,14 +606,14 @@ export default function GlobalVideoPlayer() {
   const [showDebug, setShowDebug]   = useState(false);
 
   // ── Volume / Brightness ──────────────────────────────────────────────────
-  // FIX: old code used setState on every PanResponder move (60×/sec) → jank.
+  // FIX: old code used setState on every gesture move (60×/sec) → jank.
   // New approach: shared values drive the UI instantly (no re-render),
   // setState is throttled to 10×/sec for the <Video volume> prop.
   const [videoVolume, setVideoVolume] = useState(1.0);
   const [brightness, setBrightness]   = useState(1.0);
   const volumeSV    = useSharedValue(1.0);   // drives SwipeIndicator (instant)
   const brightnessSV = useSharedValue(1.0);  // drives overlay opacity (instant)
-  // Refs that stay in sync with state — used by PanResponder (memoized, can't
+  // Refs that stay in sync with state — used by gesture worklets (memoized, can't
   // read state variables without stale closure).
   const videoVolumeRef = useRef(1.0);
   const brightnessRef  = useRef(1.0);
@@ -641,7 +641,7 @@ export default function GlobalVideoPlayer() {
   const miniCtrlTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTapRef     = useRef<{ time: number; x: number } | null>(null);
-  // Keep refs in sync with state so PanResponder (memoized) reads correct values
+  // Keep refs in sync with state so gesture worklets read correct values
   useEffect(() => { videoVolumeRef.current = videoVolume; }, [videoVolume]);
   useEffect(() => { brightnessRef.current  = brightness;  }, [brightness]);
 
@@ -1789,10 +1789,7 @@ export default function GlobalVideoPlayer() {
         </View>
       )}
 
-      {/* ── Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
-      {!pipActive && !playerError && (
-        <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
-      )}
+      {/* ── Gesture layer handled by GestureDetector wrapper above ── */}
 
       {/* ── Controls ──────────────────────────────────────────────────────── */}
       {showCtrl && !pipActive && !playerError && (
