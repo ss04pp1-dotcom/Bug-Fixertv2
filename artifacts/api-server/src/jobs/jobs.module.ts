@@ -4,9 +4,11 @@ import { NotificationsQueueConsumer } from './consumers/notifications.consumer';
 import { EmailQueueConsumer } from './consumers/email.consumer';
 import { AnalyticsQueueConsumer } from './consumers/analytics.consumer';
 
-export const QUEUE_NOTIFICATIONS = 'notifications';
-export const QUEUE_EMAIL = 'email';
-export const QUEUE_ANALYTICS = 'analytics';
+// Re-export from the dedicated constants file so existing importers of
+// jobs.module.ts still resolve correctly, while the consumers themselves
+// import directly from jobs.constants.ts (breaking the circular dependency).
+export { QUEUE_NOTIFICATIONS, QUEUE_EMAIL, QUEUE_ANALYTICS } from './jobs.constants';
+import { QUEUE_NOTIFICATIONS, QUEUE_EMAIL, QUEUE_ANALYTICS } from './jobs.constants';
 
 const REDIS_URL = process.env['REDIS_URL'];
 

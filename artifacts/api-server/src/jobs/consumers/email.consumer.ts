@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
-import { QUEUE_EMAIL } from '../jobs.module';
+import { QUEUE_EMAIL } from '../jobs.constants';
 
 export interface SendEmailJob {
   to: string;

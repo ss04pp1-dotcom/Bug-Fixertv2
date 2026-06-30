@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { QUEUE_ANALYTICS } from '../jobs.module';
+import { QUEUE_ANALYTICS } from '../jobs.constants';
 
 export interface TrackEventJob {
   event: string;
