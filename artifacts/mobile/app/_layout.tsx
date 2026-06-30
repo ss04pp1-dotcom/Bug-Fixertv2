@@ -71,17 +71,17 @@ function AppGuards({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    if (forceUpdate?.required && Platform.OS !== 'web') {
+    if (forceUpdate?.needsUpdate) {
       import('react-native').then(({ Alert }) => {
         Alert.alert(
           'Update Required',
-          'A new version of StreamPro is available. Please update to continue.',
+          forceUpdate.message || 'A new version is available. Please update to continue.',
           [{ text: 'Update Now', onPress: () => Linking.openURL(forceUpdate.storeUrl || 'https://streampro.app') }],
           { cancelable: false }
         );
       });
     }
-  }, [forceUpdate?.required]);
+  }, [forceUpdate?.needsUpdate]);
 
   const flags: FeatureFlags = React.useMemo(() => {
     if (!Array.isArray(flagsData)) return {};

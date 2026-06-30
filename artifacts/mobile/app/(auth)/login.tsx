@@ -10,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -17,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient, { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { usePublicSettings } from '@/lib/api-hooks';
+import { Config } from '@/constants/config';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -27,6 +30,20 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const { data: settings } = usePublicSettings();
+
+  const appName: string = settings?.['app_name'] ?? 'StreamPro';
+  const appLogo: string | null = settings?.['app_logo'] ?? null;
+  const googleEnabled: boolean = Boolean(settings?.['google_auth_enabled']);
+  const facebookEnabled: boolean = Boolean(settings?.['facebook_auth_enabled']);
+  const appleEnabled: boolean = Boolean(settings?.['apple_auth_enabled']);
+
+  const socialProviders = [
+    { icon: 'logo-google' as const,   label: 'Google',   enabled: googleEnabled },
+    { icon: 'logo-facebook' as const, label: 'Facebook', enabled: facebookEnabled },
+    { icon: 'logo-apple' as const,    label: 'Apple',    enabled: appleEnabled },
+  ].filter((p) => p.enabled);
 
   const handleLogin = async () => {
     setError('');
@@ -43,7 +60,6 @@ export default function LoginScreen() {
       });
       const { accessToken, refreshToken, user } = data.data;
       await tokenStorage.setTokens(accessToken, refreshToken);
-      // FIX 10: API user কে auth-store User type এ map করো (plan field যোগ করো)
       setUser({
         id: user.id,
         name: user.name,
@@ -62,18 +78,33 @@ export default function LoginScreen() {
     }
   };
 
+  const handleSocialLogin = (label: string) => {
+    Alert.alert(
+      `${label} Sign-In`,
+      `${label} sign-in is coming soon. Please use your email and password to log in.`,
+    );
+  };
+
+  const logoUrl = appLogo ? Config.imageUrl(appLogo) : null;
+
   return (
     <View style={s.screen}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]} keyboardShouldPersistTaps="handled">
-          
+        <ScrollView
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={s.header}>
             <View style={s.logoGlow} />
-            <LinearGradient colors={['#8B5CF6', '#EC4899']} style={s.logoSquare}>
-              <Text style={s.logoTxt}>S</Text>
-            </LinearGradient>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={s.logoImage} resizeMode="contain" />
+            ) : (
+              <LinearGradient colors={['#8B5CF6', '#EC4899']} style={s.logoSquare}>
+                <Text style={s.logoTxt}>{appName.charAt(0).toUpperCase()}</Text>
+              </LinearGradient>
+            )}
             <Text style={s.title}>Welcome Back!</Text>
-            <Text style={s.subtitle}>Login to continue</Text>
+            <Text style={s.subtitle}>Login to {appName}</Text>
           </View>
 
           <View style={s.form}>
@@ -116,28 +147,32 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleLogin} disabled={isLoading} style={s.btn}>
-              <LinearGradient colors={['#8B5CF6', '#EC4899']} start={{x:0,y:0}} end={{x:1,y:0}} style={s.btnGrad}>
+              <LinearGradient colors={['#8B5CF6', '#EC4899']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.btnGrad}>
                 {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnTxt}>Login</Text>}
               </LinearGradient>
             </TouchableOpacity>
 
-            <View style={s.divider}>
-              <View style={s.line} />
-              <Text style={s.dividerTxt}>or continue with</Text>
-              <View style={s.line} />
-            </View>
+            {socialProviders.length > 0 && (
+              <>
+                <View style={s.divider}>
+                  <View style={s.line} />
+                  <Text style={s.dividerTxt}>or continue with</Text>
+                  <View style={s.line} />
+                </View>
 
-            <View style={s.social}>
-              {[
-                { icon: 'logo-google',   label: 'Google'   },
-                { icon: 'logo-facebook', label: 'Facebook' },
-                { icon: 'logo-apple',    label: 'Apple'    },
-              ].map(({ icon, label }, i) => (
-                <TouchableOpacity key={i} style={s.socialBtn} onPress={() => Alert.alert(`${label} Sign-In`, `${label} sign-in is not configured yet. Please use your email and password to log in.`)}>
-                  <Ionicons name={icon as any} size={24} color="#fff" />
-                </TouchableOpacity>
-              ))}
-            </View>
+                <View style={s.social}>
+                  {socialProviders.map(({ icon, label }) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={s.socialBtn}
+                      onPress={() => handleSocialLogin(label)}
+                    >
+                      <Ionicons name={icon} size={24} color="#fff" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <View style={s.bottom}>
               <Text style={s.bottomTxt}>Don't have an account? </Text>
@@ -158,6 +193,7 @@ const s = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 40, position: 'relative' },
   logoGlow: { position: 'absolute', top: 0, width: 80, height: 80, backgroundColor: '#8B5CF6', borderRadius: 40, opacity: 0.3, blurRadius: 20 } as any,
   logoSquare: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  logoImage: { width: 64, height: 64, borderRadius: 16, marginBottom: 24 },
   logoTxt: { fontSize: 32, fontWeight: 'bold', color: '#fff', fontFamily: 'Outfit' },
   title: { fontSize: 28, fontWeight: 'bold', color: '#fff', fontFamily: 'Outfit', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#A1A1AA', fontFamily: 'Inter' },

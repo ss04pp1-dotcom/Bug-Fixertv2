@@ -334,3 +334,20 @@ export const useUpdateParentalControl = () => {
 export const useVerifyParentalPin = () => useMutation({
   mutationFn: (pin: string) => apiClient.post('/parental-control/verify-pin', { pin }),
 });
+
+// ─── Public Settings ──────────────────────────────────────────────────────────
+// Fetches all settings marked isPublic=true — no auth required.
+// Returns a key→value map for easy lookup.
+export const usePublicSettings = () => useQuery({
+  queryKey: ['public-settings'],
+  queryFn: async () => {
+    const r = await apiClient.get('/settings/public');
+    const list: { key: string; value: any }[] = r.data?.data ?? [];
+    return list.reduce((acc: Record<string, any>, item) => {
+      acc[item.key] = item.value;
+      return acc;
+    }, {} as Record<string, any>);
+  },
+  staleTime: 1000 * 60 * 10,
+  retry: false,
+});
