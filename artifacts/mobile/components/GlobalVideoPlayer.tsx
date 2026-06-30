@@ -1150,16 +1150,24 @@ export default function GlobalVideoPlayer() {
           {/* ── Title bar ─────────────────────────────────────────────────── */}
           <View style={g.miniTitle}>
             <Text style={g.miniTitleTxt} numberOfLines={1}>{title}</Text>
-            <TouchableOpacity
-              onPress={() => setPlaying(!isPlaying)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={14}
-                color="rgba(255,255,255,0.78)"
-              />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setPlaying(!isPlaying)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={14}
+                  color="rgba(255,255,255,0.78)"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={hide}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={16} color="rgba(255,255,255,0.78)" />
+              </TouchableOpacity>
+            </View>
           </View>
 
         </Animated.View>

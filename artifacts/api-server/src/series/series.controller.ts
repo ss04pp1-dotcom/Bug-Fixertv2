@@ -5,6 +5,7 @@ import { SeriesService } from './series.service';
 import { GeoBlockService } from '../geo-block/geo-block.service';
 import { CreateSeriesDto, CreateSeasonDto, CreateEpisodeDto } from './dto/create-series.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { SeriesQueryDto } from './dto/series-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -27,7 +28,7 @@ export class SeriesController {
   }
 
   @Public() @Get() @ApiOperation({ summary: 'Get all series' })
-  async findAll(@Query() query: PaginationDto & { genre?: string; categoryId?: string; isActive?: 'true' | 'false' | 'all' }, @Req() req: Request) {
+  async findAll(@Query() query: SeriesQueryDto, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.seriesService.findAll(query as any);
   }

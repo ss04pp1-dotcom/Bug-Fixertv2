@@ -11,6 +11,7 @@ import { UpdateServerDto } from './dto/update-server.dto';
 import { ReorderServersDto } from './dto/reorder-servers.dto';
 import { Throttle } from '@nestjs/throttler';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { ChannelQueryDto } from './dto/channel-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -45,7 +46,7 @@ export class ChannelsController {
   @Public()
   @Get()
   @ApiOperation({ summary: 'Get all channels' })
-  async findAll(@Query() query: PaginationDto & { categoryId?: string; isPremium?: string; isFeatured?: string; isActive?: string }, @Req() req: Request) {
+  async findAll(@Query() query: ChannelQueryDto, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.channelsService.findAll(query as any);
   }

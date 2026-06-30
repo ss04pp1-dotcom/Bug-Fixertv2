@@ -5,6 +5,7 @@ import { MoviesService } from './movies.service';
 import { GeoBlockService } from '../geo-block/geo-block.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { MovieQueryDto } from './dto/movie-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -29,7 +30,7 @@ export class MoviesController {
   }
 
   @Public() @Get() @ApiOperation({ summary: 'Get all movies' })
-  async findAll(@Query() query: PaginationDto & { categoryId?: string; isPremium?: string; genre?: string; isActive?: 'true' | 'false' | 'all' }, @Req() req: Request) {
+  async findAll(@Query() query: MovieQueryDto, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.moviesService.findAll(query as any);
   }
