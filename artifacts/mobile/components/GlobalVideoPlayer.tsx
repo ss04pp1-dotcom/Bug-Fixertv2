@@ -23,20 +23,21 @@ import React, {
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Platform, BackHandler, StatusBar, ActivityIndicator,
-  Modal, useWindowDimensions, ScrollView, Image,
+  Modal, useWindowDimensions, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  FadeIn, FadeOut, runOnJS,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
 } from 'react-native-reanimated';
-import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
+import { C, IS_EXPO_GO, IS_WEB, BUFFER_LIVE, BUFFER_VOD } from './player/constants';
+import { NativeIPTVPlayer } from './player/NativeIPTVPlayer';
+import { SettingsSheet, ASPECT_CYCLE, type AspectMode, type SheetType } from './player/SettingsSheet';
+import { SeekFeedback, SwipeIndicator } from './player/SwipeOverlays';
 import { PosterFade } from './player/PosterFade';
 import { NextEpisodeOverlay } from './player/NextEpisodeOverlay';
 import { SeekBar } from './player/SeekBar';
@@ -44,17 +45,7 @@ import { router } from 'expo-router';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const IS_EXPO_GO =
-  Constants.appOwnership === 'expo' ||
-  (Constants as any).executionEnvironment === 'storeClient';
-const IS_WEB = Platform.OS === 'web';
-
-const C = {
-  bg: '#050510', card: '#0D0D1A', primary: '#8B5CF6', accent: '#EC4899',
-  live: '#EF4444', text: '#FFFFFF', dim: '#9CA3AF',
-  border: 'rgba(255,255,255,0.1)', green: '#10B981',
-};
+// ─── Constants (C, IS_EXPO_GO, IS_WEB, BUFFER_LIVE, BUFFER_VOD) imported from ./player/constants ──
 
 // ─── Mini layout constants ────────────────────────────────────────────────────
 const MINI_W = 220;
@@ -64,39 +55,6 @@ const MINI_MARGIN = 12;
 // Tab bar base height (without bottom safe-area inset — that is subtracted separately)
 const TAB_BAR_BASE_H = 60;
 
-// ─── Buffer configs (Media3 / ExoPlayer) ─────────────────────────────────────
-//
-// The #1 factor for "fast channel start" is bufferForPlaybackMs — how much data
-// ExoPlayer needs before it starts rendering the first frame.
-//
-// Mini Player (Media3 1.8.0) observed behaviour:
-//   bufferForPlaybackMs           ≈ 300 ms   (starts almost instantly)
-//   bufferForPlaybackAfterRebufferMs ≈ 1 000 ms
-//   minBufferMs                   ≈ 10 000 ms  (not over-buffering at start)
-//   maxBufferMs                   ≈ 30 000 ms
-//
-// LIVE — balanced start: fast enough for a good UX yet long enough for audio/video
-// sync.  300 ms was too aggressive — many IPTV servers deliver audio and video in
-// separate bursts; at 300 ms ExoPlayer often starts before the audio codec is
-// initialised, producing video-only playback or an immediate stall/rebuffer.
-// 1 500 ms gives both tracks time to arrive and be parsed together.
-const BUFFER_LIVE = {
-  minBufferMs:                    15_000,  // keep 15 s ahead
-  maxBufferMs:                    30_000,  // cap at 30 s
-  bufferForPlaybackMs:             1_500,  // play after 1.5 s — audio+video in sync
-  bufferForPlaybackAfterRebufferMs: 2_000, // resume after 2 s stall
-  backBufferDurationMs:           10_000,  // 10 s back-buffer
-  cacheSizeMB: 0,                          // no disk cache for live
-};
-// VOD — a bit more buffer for smooth seeking; disk-cache for instant re-seek.
-const BUFFER_VOD = {
-  minBufferMs:                    15_000,  // (was 30 s)
-  maxBufferMs:                    50_000,  // (was 90 s)
-  bufferForPlaybackMs:               500,  // (was 2 000 ms)
-  bufferForPlaybackAfterRebufferMs: 1_500, // (was 4 s)
-  backBufferDurationMs:           30_000,  // 30 s for seek-back
-  cacheSizeMB: 200,                        // disk-cache chunks for instant seek
-};
 
 // ─── Stream type detection ────────────────────────────────────────────────────
 type StreamFormat = 'HLS' | 'DASH' | 'MPEGTS' | 'MP4' | 'MKV' | 'UNKNOWN';
@@ -196,16 +154,6 @@ function getVideoType(url: string, fmt: StreamFormat): string | undefined {
   return undefined;
 }
 
-// ─── Time format ──────────────────────────────────────────────────────────────
-function fmt(s: number): string {
-  if (!s || isNaN(s) || !isFinite(s)) return '0:00';
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = Math.floor(s % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-  return `${m}:${String(ss).padStart(2, '0')}`;
-}
-
 // ─── Watch history ────────────────────────────────────────────────────────────
 const WH_KEY = 'streampro_watch_history_v2';
 
@@ -240,302 +188,10 @@ async function loadWatchPosition(contentId: string): Promise<number> {
   } catch { return 0; }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO COMPONENT — the singleton ExoPlayer/AVPlayer instance
-// ════════════════════════════════════════════════════════════════════════════
-interface NativePlayerProps {
-  source: { uri: string; headers: Record<string, string>; type?: string };
-  paused: boolean;
-  rate: number;
-  volume: number;
-  resizeMode: 'contain' | 'cover' | 'stretch';
-  pip: boolean;
-  isLive: boolean;
-  videoRef: React.MutableRefObject<any>;
-  selectedVideoTrack: any;
-  selectedAudioTrack: any;
-  selectedTextTrack: any;
-  onLoad: (d: any) => void;
-  onLoadStart: () => void;
-  onReadyForDisplay: () => void;
-  onProgress: (d: any) => void;
-  onBuffer: (b: boolean) => void;
-  onError: (e: any) => void;
-  onEnd: () => void;
-  onVideoTracks: (t: any[]) => void;
-  onAudioTracks: (t: any[]) => void;
-  onTextTracks: (t: any[]) => void;
-  onPipChange: (active: boolean) => void;
-  metadata?: { title: string; artist: string; imageUri?: string };
-}
+// NativeIPTVPlayer    → ./player/NativeIPTVPlayer.tsx
+// SettingsSheet       → ./player/SettingsSheet.tsx  (ASPECT_CYCLE, AspectMode, SheetType also exported)
+// SeekFeedback / SwipeIndicator → ./player/SwipeOverlays.tsx
 
-const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
-  source, paused, rate, volume, resizeMode, pip, isLive, videoRef,
-  selectedVideoTrack, selectedAudioTrack, selectedTextTrack,
-  onLoad, onLoadStart, onReadyForDisplay, onProgress, onBuffer,
-  onError, onEnd, onVideoTracks, onAudioTracks, onTextTracks, onPipChange, metadata,
-}: NativePlayerProps) {
-  if (IS_EXPO_GO || IS_WEB) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', gap: 10 }]}>
-        <Ionicons name="phone-portrait-outline" size={42} color={C.primary} />
-        <Text style={{ color: '#fff', fontSize: 12, textAlign: 'center' }}>
-          Development Build Required{'\n'}(react-native-video needs a dev build)
-        </Text>
-      </View>
-    );
-  }
-  try {
-    const Video = require('react-native-video').default;
-    return (
-      <Video
-        ref={videoRef}
-        source={source}
-        style={StyleSheet.absoluteFill}
-
-        // ── Playback ─────────────────────────────────────────────────────────
-        paused={paused}
-        rate={rate}
-        volume={volume}
-        muted={false}
-        resizeMode={resizeMode}
-        controls={false}
-        ignoreSilentSwitch="ignore"
-        playInBackground={true}
-        playWhenInactive={true}
-
-        // ── Media3 / ExoPlayer core ──────────────────────────────────────────
-        // useTextureView CRITICAL: TextureView (vs SurfaceView) allows the
-        // native surface to survive PiP transitions and layout changes without
-        // re-creating the ExoPlayer instance → no rebuffer on PiP or resize.
-        useTextureView={true}
-        hideShutterView={true}
-
-        // Media3 buffer configuration (Live vs VOD differ significantly).
-        bufferConfig={isLive ? BUFFER_LIVE : BUFFER_VOD}
-
-        // maxBitRate=0 → Media3 adaptive bitrate selection is unlimited;
-        // ExoPlayer picks the highest quality the bandwidth supports.
-        maxBitRate={0}
-
-        // minLoadRetryCount: how many times Media3 retries a failed segment
-        // before surfacing an error. IPTV servers often hiccup — 5 retries
-        // prevents false "Network problem" errors on temporary packet loss.
-        minLoadRetryCount={5}
-
-        // reportBandwidth: Media3 fires this with the measured download speed.
-        // Useful for debugging adaptive stream quality issues in production.
-        reportBandwidth={(bandwidth: number) => {
-          // Uncomment for debugging: console.log(`[Media3] bandwidth ${(bandwidth / 1e6).toFixed(2)} Mbps`);
-        }}
-
-        // ── PiP ──────────────────────────────────────────────────────────────
-        pictureInPicture={pip}
-
-        // ── Track selection (Media3 TrackSelector) ───────────────────────────
-        selectedVideoTrack={selectedVideoTrack}
-        selectedAudioTrack={selectedAudioTrack}
-        selectedTextTrack={selectedTextTrack}
-
-        // ── MediaSession / lock-screen metadata (T3.4) ───────────────────────
-        // react-native-video v6 + Media3 automatically creates a
-        // MediaSessionConnector. The metadata prop pushes title, artist,
-        // and artwork to the system notification shade and lock screen.
-        {...(metadata ? { metadata } : {})}
-
-        // ── Callbacks ────────────────────────────────────────────────────────
-        onLoadStart={onLoadStart}
-        onLoad={onLoad}
-        onReadyForDisplay={onReadyForDisplay}
-        onProgress={onProgress}
-        onBuffer={(d: any) => onBuffer(d?.isBuffering ?? false)}
-        onError={onError}
-        onEnd={onEnd}
-        onVideoTracks={(data: any) => {
-          const tracks = Array.isArray(data) ? data : data?.videoTracks ?? [];
-          if (tracks.length) onVideoTracks(tracks);
-        }}
-        onAudioTracks={(data: any) => {
-          const tracks = Array.isArray(data) ? data : data?.audioTracks ?? [];
-          if (tracks.length) onAudioTracks(tracks);
-        }}
-        onTextTracks={(data: any) => {
-          const tracks = Array.isArray(data) ? data : data?.textTracks ?? [];
-          if (tracks.length) onTextTracks(tracks);
-        }}
-        onBandwidthUpdate={(d: any) => {
-          // Media3 onBandwidthUpdate fires alongside reportBandwidth.
-          // No-op here; hook into if you need adaptive quality UI.
-        }}
-        onPictureInPictureStatusChanged={(d: any) => onPipChange(d?.isActive ?? false)}
-      />
-    );
-  } catch (e: any) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Ionicons name="alert-circle-outline" size={42} color={C.accent} />
-        <Text style={{ color: '#fff', marginTop: 6, fontSize: 11, textAlign: 'center' }}>
-          Player load failed{'\n'}{e?.message}
-        </Text>
-      </View>
-    );
-  }
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// SETTINGS SHEET — @gorhom/bottom-sheet v5 (T2.3)
-// Gesture-driven, spring-physics dismiss. No separate Modal window.
-// ════════════════════════════════════════════════════════════════════════════
-const SPEED_OPTS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-const ASPECT_CYCLE = ['contain', 'cover', 'stretch'] as const;
-type AspectMode = typeof ASPECT_CYCLE[number];
-type SheetType = 'none' | 'speed' | 'quality' | 'audio' | 'subtitle';
-
-function SettingsSheet({ sheet, onClose, onSelect, speed,
-  videoTracks, audioTracks, textTracks,
-  selectedVidIdx, selectedAudIdx, selectedSubIdx }: any) {
-  const sheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['45%'], []);
-
-  useEffect(() => {
-    if (sheet !== 'none') sheetRef.current?.expand();
-    else sheetRef.current?.close();
-  }, [sheet]);
-
-  let items: { label: string; value: any; isActive: boolean }[] = [];
-  let title = '';
-  if (sheet === 'speed') {
-    title = 'Playback Speed';
-    items = SPEED_OPTS.map(s => ({ label: s === 1 ? 'Normal' : `${s}×`, value: s, isActive: s === speed }));
-  } else if (sheet === 'quality' && videoTracks.length > 0) {
-    title = 'Video Quality';
-    const seen = new Map<number, { idx: number; bitrate: number }>();
-    videoTracks.forEach((t: any, i: number) => {
-      const h = t.height || 0; const br = t.bitrate || 0;
-      if (h > 0) {
-        const ex = seen.get(h);
-        if (!ex || br > ex.bitrate) seen.set(h, { idx: i, bitrate: br });
-      }
-    });
-    const unique = Array.from(seen.entries()).sort((a, b) => b[0] - a[0])
-      .map(([h, { idx, bitrate }]) => ({
-        label: `${h}p${bitrate > 0 ? ` · ${Math.round(bitrate / 1000)}kbps` : ''}`,
-        value: idx, isActive: idx === selectedVidIdx,
-      }));
-    items = [{ label: 'Auto', value: -1, isActive: selectedVidIdx === -1 }, ...unique];
-  } else if (sheet === 'audio') {
-    title = 'Audio Track';
-    items = audioTracks.length
-      ? audioTracks.map((t: any, i: number) => ({ label: t.language || t.title || `Track ${i+1}`, value: i, isActive: i === selectedAudIdx }))
-      : [{ label: 'Default', value: -1, isActive: true }];
-  } else if (sheet === 'subtitle') {
-    title = 'Subtitles';
-    items = [
-      { label: 'Off', value: -1, isActive: selectedSubIdx === -1 },
-      ...textTracks.map((t: any, i: number) => ({ label: t.language || t.title || `Track ${i+1}`, value: i, isActive: i === selectedSubIdx })),
-    ];
-  }
-
-  return (
-    <BottomSheet
-      ref={sheetRef}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      onClose={onClose}
-      backdropComponent={(props: any) => (
-        <BottomSheetBackdrop
-          {...props}
-          appearsOnIndex={0}
-          disappearsOnIndex={-1}
-          pressBehavior="close"
-        />
-      )}
-      backgroundStyle={{ backgroundColor: '#111827' }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.25)', width: 40 }}
-      style={{ zIndex: 10001, elevation: 62 }}
-    >
-      <BottomSheetView style={ss.sheetView}>
-        {sheet !== 'none' && (
-          <>
-            <Text style={ss.title}>{title}</Text>
-            {items.map((item, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => { onSelect(sheet, item.value); onClose(); }}
-                style={ss.row}
-              >
-                <Text style={[ss.rowTxt, item.isActive && ss.rowActive]}>{item.label}</Text>
-                {item.isActive && <Ionicons name="checkmark-circle" size={20} color={C.primary} />}
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
-        <View style={{ height: 32 }} />
-      </BottomSheetView>
-    </BottomSheet>
-  );
-}
-
-const ss = StyleSheet.create({
-  sheetView: { paddingHorizontal: 20, paddingTop: 4 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  rowTxt: { color: '#d1d5db', fontSize: 15 },
-  rowActive: { color: C.primary, fontWeight: '700' },
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// SEEK FEEDBACK + SWIPE INDICATOR
-// ════════════════════════════════════════════════════════════════════════════
-function SeekFeedback({ side, seconds, onDone }: { side: 'left'|'right'; seconds: number; onDone: ()=>void }) {
-  useEffect(() => { const t = setTimeout(onDone, 800); return () => clearTimeout(t); }, []);
-  return (
-    <Animated.View entering={FadeIn.duration(80)} exiting={FadeOut.duration(400)}
-      style={[sf.wrap, side === 'left' ? { left: 30 } : { right: 30 }]}>
-      <View style={sf.inner}>
-        <Ionicons name={side === 'left' ? 'play-back' : 'play-forward'} size={28} color="#fff" />
-        <Text style={sf.txt}>{seconds}s</Text>
-      </View>
-    </Animated.View>
-  );
-}
-const sf = StyleSheet.create({
-  wrap: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center' },
-  inner: { backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', gap: 4 },
-  txt: { color: '#fff', fontSize: 13, fontWeight: '700' },
-});
-
-function volIcon(step: number): any {
-  if (step === 0) return 'volume-mute';
-  if (step <= 3) return 'volume-low';
-  if (step <= 6) return 'volume-medium';
-  return 'volume-high';
-}
-
-function SwipeIndicator({ type, value }: { type: 'volume'|'brightness'; value: number }) {
-  const step = Math.round(value * 10);
-  const side = type === 'brightness' ? { left: 16 } : { right: 16 };
-  const icon = type === 'volume' ? volIcon(step) : (step <= 3 ? 'moon' : 'sunny');
-  const color = type === 'volume' ? C.primary : '#FBBF24';
-  return (
-    <View style={[sw.wrap, side]}>
-      <Ionicons name={icon} size={20} color={color} />
-      <View style={sw.track}>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <View key={i} style={[sw.block, { backgroundColor: i < step ? color : 'rgba(255,255,255,0.12)' }]} />
-        ))}
-      </View>
-      <Text style={sw.val}>{step}</Text>
-    </View>
-  );
-}
-const sw = StyleSheet.create({
-  wrap: { position: 'absolute', top: '20%', backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: 16, padding: 12, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', width: 58 },
-  track: { width: 8, height: 100, gap: 2, flexDirection: 'column-reverse', alignItems: 'center' },
-  block: { width: 8, height: 7, borderRadius: 2 },
-  val: { color: '#fff', fontSize: 13, fontWeight: '800' },
-});
 
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN GLOBAL VIDEO PLAYER
