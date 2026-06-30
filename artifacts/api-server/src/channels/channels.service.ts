@@ -18,7 +18,7 @@ export class ChannelsService {
     private githubSyncService: GitHubSyncService,
   ) {}
 
-  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: boolean; isFeatured?: boolean; isActive?: boolean }) {
+  async findAll(query: PaginationDto & { categoryId?: string; isPremium?: string; isFeatured?: string; isActive?: string }) {
     const { skip, limit = 20, page = 1, search } = query;
     // Default: show only active channels to users.
     // Admin panel can pass isActive=false (or omit to get all) via query param if needed.
