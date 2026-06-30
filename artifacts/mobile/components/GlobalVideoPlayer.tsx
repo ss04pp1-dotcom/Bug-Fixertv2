@@ -39,6 +39,7 @@ import Constants from 'expo-constants';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { PosterFade } from './player/PosterFade';
 import { NextEpisodeOverlay } from './player/NextEpisodeOverlay';
+import { SeekBar } from './player/SeekBar';
 import { router } from 'expo-router';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -654,7 +655,7 @@ export default function GlobalVideoPlayer() {
   const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stallTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourcesRef      = useRef(sources);
-  const lastVolUpdate   = useRef(0);
+  const lastVolUpdateSV = useSharedValue(0); // UI-thread throttle for setVideoVolume
   const reportedRef     = useRef(false);
   const playbackStartRef = useRef(0);
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -665,17 +666,9 @@ export default function GlobalVideoPlayer() {
   const ctrlStyle   = useAnimatedStyle(() => ({ opacity: ctrlOpacity.value }));
 
   // ── SharedValue seek bar (Phase 2 — zero re-renders on every progress tick) ─
+  // progressSV drives SeekBar component (percentage-based, no px needed)
   const progressSV = useSharedValue(0);
   const lastProgressUpdateRef = useRef(0);
-  const trackWidthSV = useSharedValue(200); // measured track width (px)
-
-  // Reanimated-driven fill + thumb — update every frame without React re-renders
-  const seekFillStyle = useAnimatedStyle(() => ({
-    width: progressSV.value * trackWidthSV.value,
-  }));
-  const seekThumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progressSV.value * trackWidthSV.value - 7 }],
-  }));
 
   // ── Poster crossfade (Phase 1) ───────────────────────────────────────────
   const [posterVisible, setPosterVisible] = useState(false);
@@ -1057,9 +1050,14 @@ export default function GlobalVideoPlayer() {
         if (swipeSideSV.value === 1) {
           const v = Math.max(0, Math.min(1, swipeStartVolSV.value + delta));
           volumeSV.value = v; // UI thread — instant SwipeIndicator update
-          runOnJS(setVideoVolume)(v);
           runOnJS(setSwipeType)('volume');
           runOnJS(setSwipeValue)(v);
+          // T1.2: throttle Video volume prop to ≤10×/sec — SharedValue on UI thread
+          const now = Date.now();
+          if (now - lastVolUpdateSV.value > 100) {
+            lastVolUpdateSV.value = now;
+            runOnJS(setVideoVolume)(v);
+          }
         } else {
           const b = Math.max(0, Math.min(1, swipeStartBriSV.value + delta));
           brightnessSV.value = b; // UI thread — instant brightness overlay update
@@ -1097,7 +1095,7 @@ export default function GlobalVideoPlayer() {
 
     return Gesture.Simultaneous(pan, Gesture.Exclusive(dTap, sTap));
   }, [SW, volumeSV, brightnessSV, swipeStartVolSV, swipeStartBriSV, swipeSideSV, modeSV_fs,
-      _fsSingleTap, _fsDoubleTap, _fsSwipeDown, _fsFinalizeSwipe]);
+      lastVolUpdateSV, _fsSingleTap, _fsDoubleTap, _fsSwipeDown, _fsFinalizeSwipe]);
 
   // ── PiP is MANUAL ONLY — no auto-PiP on home/background ────────────────
   // Auto-PiP was removed: it triggered unintentionally when the user
@@ -1664,35 +1662,13 @@ export default function GlobalVideoPlayer() {
             {/* Bottom tool row */}
             <View style={[g.bottomBar, { paddingBottom: 10 }]}>
               {!isLive && duration > 0 && (
-                <View style={g.progressRow}>
-                  <Text style={g.timeTxt}>{fmt(currentTime)}</Text>
-                  <TouchableOpacity
-                    style={g.trackWrap}
-                    activeOpacity={1}
-                    onLayout={(e) => {
-                      const w = e.nativeEvent.layout.width;
-                      trackWidthRef.current = w;
-                      trackWidthSV.value = w;
-                    }}
-                    onPress={(e) => {
-                      if (!trackWidthRef.current) return;
-                      seekToFrac(e.nativeEvent.locationX / trackWidthRef.current);
-                    }}
-                  >
-                    <View style={g.trackBg}>
-                      {/* Phase 2: Reanimated-driven fill — zero re-renders on progress tick */}
-                      <Animated.View style={[g.trackFill, seekFillStyle]}>
-                        <LinearGradient
-                          colors={[C.primary, C.accent]}
-                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </Animated.View>
-                      <Animated.View style={[g.trackThumb, seekThumbStyle]} />
-                    </View>
-                  </TouchableOpacity>
-                  <Text style={g.timeTxt}>{fmt(duration)}</Text>
-                </View>
+                <SeekBar
+                  progressSV={progressSV}
+                  currentTime={currentTime}
+                  duration={duration}
+                  trackWidthRef={trackWidthRef}
+                  onSeekFrac={seekToFrac}
+                />
               )}
               <View style={g.toolRow}>
                 <TouchableOpacity onPress={() => { setSheet('speed'); bumpCtrl(); }} style={g.toolBtn}>
@@ -1891,35 +1867,13 @@ export default function GlobalVideoPlayer() {
           {!isLocked && (
             <View style={[g.bottomBar, { paddingBottom: insets.bottom + 14 }]}>
               {!isLiveNow && (
-                <View style={g.progressRow}>
-                  <Text style={g.timeTxt}>{fmt(currentTime)}</Text>
-                  <TouchableOpacity
-                    style={g.trackWrap}
-                    activeOpacity={1}
-                    onLayout={(e) => {
-                      const w = e.nativeEvent.layout.width;
-                      trackWidthRef.current = w;
-                      trackWidthSV.value = w;
-                    }}
-                    onPress={(e) => {
-                      if (!trackWidthRef.current) return;
-                      seekToFrac(e.nativeEvent.locationX / trackWidthRef.current);
-                    }}
-                  >
-                    <View style={g.trackBg}>
-                      {/* Phase 2: Reanimated-driven fill — zero re-renders on progress tick */}
-                      <Animated.View style={[g.trackFill, seekFillStyle]}>
-                        <LinearGradient
-                          colors={[C.primary, C.accent]}
-                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </Animated.View>
-                      <Animated.View style={[g.trackThumb, seekThumbStyle]} />
-                    </View>
-                  </TouchableOpacity>
-                  <Text style={g.timeTxt}>{fmt(duration)}</Text>
-                </View>
+                <SeekBar
+                  progressSV={progressSV}
+                  currentTime={currentTime}
+                  duration={duration}
+                  trackWidthRef={trackWidthRef}
+                  onSeekFrac={seekToFrac}
+                />
               )}
 
               {/* Tool row */}
@@ -2206,12 +2160,6 @@ const g = StyleSheet.create({
   playBtn:   { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center', marginHorizontal: 6 },
 
   bottomBar:   { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 12, paddingBottom: 14, paddingTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  timeTxt:     { color: '#e5e7eb', fontSize: 11, minWidth: 40, textAlign: 'center' },
-  trackWrap:   { flex: 1, height: 24, justifyContent: 'center' },
-  trackBg:     { height: 3.5, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 2, position: 'relative', overflow: 'visible' },
-  trackFill:   { position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 2 },
-  trackThumb:  { position: 'absolute', top: -5.5, width: 14, height: 14, borderRadius: 7, backgroundColor: '#fff', marginLeft: -7, elevation: 4, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
   toolRow:     { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 2 },
   toolBtn:     { width: 40, height: 36, justifyContent: 'center', alignItems: 'center' },
   speedTxt:    { color: '#e5e7eb', fontSize: 13, fontWeight: '700' },
