@@ -37,6 +37,7 @@ minimumReleaseAgeExclude:
 packages:
   - artifacts/*
   - lib/*
+  - lib/integrations/*
   - scripts
 
 catalog:
@@ -51,6 +52,7 @@ catalog:
   '@vitejs/plugin-react': ^5.0.4
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
+  drizzle-orm: ^0.45.2
   framer-motion: ^12.23.24
   lucide-react: ^0.545.0
   # Must be this exact version because expo requires it
@@ -60,7 +62,6 @@ catalog:
   tailwind-merge: ^3.3.1
   tailwindcss: ^4.1.14
   tsx: ^4.21.0
-  typescript: ~5.9.3
   vite: ^7.3.2
   wouter: ^3.3.5
   zod: ^3.25.76
@@ -68,21 +69,12 @@ catalog:
 autoInstallPeers: false
 
 onlyBuiltDependencies:
-  - '@nestjs/core'
-  - '@prisma/client'
-  - '@prisma/engines'
-  - '@scarf/scarf'
   - '@swc/core'
   - esbuild
-  - msgpackr-extract
   - msw
-  - prisma
-  - sharp
   - unrs-resolver
 
 overrides:
-  # Pin expo-updates to SDK 54 compatible version (29.0.18 is Expo's tag for SDK 54)
-  "expo-updates": "~29.0.18"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
@@ -163,5 +155,6 @@ overrides:
   "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
+  # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"

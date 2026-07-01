@@ -1,7 +1,5 @@
 {
   "compilerOptions": {
-    "composite": true,
-    "declaration": true,
     "incremental": true,
     "isolatedModules": true,
     "lib": ["es2022"],
@@ -15,7 +13,7 @@
     "noImplicitAny": true,
     "noImplicitThis": true,
     "strictNullChecks": true,
-    "strictFunctionTypes": true,
+    "strictFunctionTypes": false,
     "strictBindCallApply": true,
     "strictPropertyInitialization": true,
     "useUnknownInCatchVariables": true,
