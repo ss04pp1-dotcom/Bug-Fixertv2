@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Config } from '@/constants/config';
+import { admobAvailable, AppOpenAd, AdEventType, TestIds, initAdMob } from '@/lib/admob';
+import { useAdConfig, isAdMobActive } from '@/hooks/useAdConfig';
 
-interface AppOpenAd {
+interface HouseAppOpenAd {
   id: string;
   name: string;
   imageUrl?: string;
   clickUrl?: string;
 }
 
-async function fetchAppOpenAd(): Promise<AppOpenAd | null> {
+async function fetchAppOpenAd(): Promise<HouseAppOpenAd | null> {
   try {
     const res = await fetch(
       `${Config.API_BASE}/advertisements/placements/public?slug=app_open`,
@@ -46,7 +48,12 @@ async function trackImpression(adId: string) {
 }
 
 /**
- * useAppOpenAd — shows a full-screen interstitial ad when the app launches.
+ * useAppOpenAd — shows an ad when the app launches.
+ *
+ * Prefers a real Google AdMob "App Open" ad (when AdMob is the active
+ * provider, an App Open ad unit ID is configured, and the native module is
+ * available — i.e. not Expo Go). Falls back to a house ad shown via
+ * <AdInterstitial placement="app_open" /> otherwise.
  *
  * Usage in app root (_layout.tsx or index.tsx):
  *
@@ -59,10 +66,45 @@ async function trackImpression(adId: string) {
  *   );
  */
 export function useAppOpenAd() {
-  const [ad, setAd] = useState<AppOpenAd | null>(null);
+  const [ad, setAd] = useState<HouseAppOpenAd | null>(null);
   const [visible, setVisible] = useState(false);
+  const { data: adConfig } = useAdConfig();
+  const shownRealAd = useRef(false);
+
+  const admobActive = isAdMobActive(adConfig);
+  const appOpenUnitId = adConfig?.activeProvider?.adUnits?.appOpen;
+  const useRealAdMob = admobActive && admobAvailable && !!appOpenUnitId && !!AppOpenAd;
 
   useEffect(() => {
+    if (adConfig === undefined) return; // still loading config
+
+    if (useRealAdMob && appOpenUnitId) {
+      if (shownRealAd.current) return;
+      shownRealAd.current = true;
+
+      initAdMob().then(() => {
+        const resolvedUnitId = adConfig?.activeProvider?.isTestMode
+          ? TestIds.APP_OPEN
+          : appOpenUnitId;
+        const realAd = AppOpenAd.createForAdRequest(resolvedUnitId, {
+          requestNonPersonalizedAdsOnly: false,
+        });
+        const unsubLoaded = realAd.addAdEventListener(AdEventType.LOADED, () => {
+          realAd.show();
+        });
+        const unsubError = realAd.addAdEventListener(AdEventType.ERROR, (e: unknown) => {
+          console.warn('[AdMob] app open ad failed to load', e);
+        });
+        realAd.load();
+        return () => {
+          unsubLoaded();
+          unsubError();
+        };
+      });
+      return;
+    }
+
+    // Fallback: house ad shown through the shared AdInterstitial modal.
     fetchAppOpenAd().then(fetched => {
       if (fetched) {
         setAd(fetched);
@@ -70,7 +112,7 @@ export function useAppOpenAd() {
         trackImpression(fetched.id);
       }
     });
-  }, []);
+  }, [useRealAdMob, appOpenUnitId, adConfig]);
 
   const dismiss = useCallback(() => setVisible(false), []);
 

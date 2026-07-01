@@ -11,8 +11,13 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { Config } from '@/constants/config';
+import { initAdMob } from '@/lib/admob';
 
 SplashScreen.preventAutoHideAsync();
+
+// Initializes the real Google AdMob SDK once at app startup. No-op when the
+// native module isn't available (e.g. running in Expo Go).
+initAdMob();
 
 const queryClient = new QueryClient({
   defaultOptions: {

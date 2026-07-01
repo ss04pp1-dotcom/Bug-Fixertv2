@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
+import { admobAvailable } from '@/lib/admob';
+import { useAdConfig, isAdMobActive } from '@/hooks/useAdConfig';
+import { useAdMobInterstitial } from '@/hooks/useAdMobInterstitial';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -74,7 +77,42 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const { data: adConfig } = useAdConfig();
+  const admobActive = isAdMobActive(adConfig);
+  const interstitialUnitId = adConfig?.activeProvider?.adUnits?.interstitial;
+  const useRealAdMob = admobActive && admobAvailable && !!interstitialUnitId;
+  const admobInterstitial = useAdMobInterstitial(
+    useRealAdMob ? interstitialUnitId : null,
+    !!adConfig?.activeProvider?.isTestMode,
+  );
+  const shownRef = useRef(false);
+
+  // Real AdMob interstitial: shown natively via `.show()`, not the Modal below.
   useEffect(() => {
+    if (!visible || !useRealAdMob) return;
+    shownRef.current = false;
+  }, [visible, useRealAdMob]);
+
+  useEffect(() => {
+    if (!visible || !useRealAdMob) return;
+    if (admobInterstitial.loaded && !shownRef.current) {
+      shownRef.current = true;
+      const didShow = admobInterstitial.show();
+      if (!didShow) onClose();
+    }
+  }, [visible, useRealAdMob, admobInterstitial.loaded]);
+
+  // Real AdMob path never had an ad loaded in time — don't block navigation.
+  useEffect(() => {
+    if (!visible || !useRealAdMob) return;
+    const timeout = setTimeout(() => {
+      if (!shownRef.current) onClose();
+    }, 4000);
+    return () => clearTimeout(timeout);
+  }, [visible, useRealAdMob, onClose]);
+
+  useEffect(() => {
+    if (useRealAdMob) return; // real AdMob path handles itself above
     if (visible) {
       setFetchState('loading');
       impressionTracked.current = false;
@@ -86,14 +124,15 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
       setAd(null);
       setFetchState('idle');
     }
-  }, [visible, placement]);
+  }, [visible, placement, useRealAdMob]);
 
   // If ad fetch finished with no result, auto-close so channel switch proceeds
   useEffect(() => {
+    if (useRealAdMob) return;
     if (visible && fetchState === 'empty') {
       onClose();
     }
-  }, [visible, fetchState, onClose]);
+  }, [visible, fetchState, onClose, useRealAdMob]);
 
   useEffect(() => {
     if (visible && ad && !impressionTracked.current) {
@@ -118,6 +157,9 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [fetchState]);
+
+  // Real AdMob interstitials render themselves natively via `.show()` — no JSX here.
+  if (useRealAdMob) return null;
 
   if (!visible || fetchState !== 'ready' || !ad) return null;
 

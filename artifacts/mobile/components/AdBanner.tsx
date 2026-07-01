@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
+import { admobAvailable, BannerAd, BannerAdSize, TestIds } from '@/lib/admob';
+import { useAdConfig, isAdMobActive } from '@/hooks/useAdConfig';
 
 const { width: W } = Dimensions.get('window');
 
@@ -68,15 +70,44 @@ async function trackEvent(adId: string, event: 'impression' | 'click', placement
   }
 }
 
+/** Real Google AdMob banner — only rendered in a custom dev/production build. */
+function AdMobBanner({ unitId, testMode, style }: { unitId: string; testMode: boolean; style?: object }) {
+  const [failed, setFailed] = useState(false);
+  if (!admobAvailable || !BannerAd || !BannerAdSize || failed) return null;
+
+  const resolvedUnitId = testMode ? TestIds.BANNER : unitId;
+
+  return (
+    <View style={[styles.container, style]}>
+      <View style={styles.adLabel}>
+        <Text style={styles.adLabelText}>AD</Text>
+      </View>
+      <BannerAd
+        unitId={resolvedUnitId}
+        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        requestOptions={{ requestNonPersonalizedAdsOnly: false }}
+        onAdFailedToLoad={() => setFailed(true)}
+      />
+    </View>
+  );
+}
+
 export function AdBanner({ placement, style }: AdBannerProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [imgError, setImgError] = useState(false);
   const impressionTracked = useRef(false);
+  const { data: adConfig } = useAdConfig();
+
+  const admobActive = isAdMobActive(adConfig);
+  const bannerUnitId = adConfig?.activeProvider?.adUnits?.banner;
+  const useRealAdMob = admobActive && admobAvailable && !!bannerUnitId;
 
   useEffect(() => {
+    // House-ad fallback only needs to fetch when we're not using a real AdMob banner.
+    if (useRealAdMob) return;
     fetchAd(placement).then(setAd);
-  }, [placement]);
+  }, [placement, useRealAdMob]);
 
   useEffect(() => {
     if (ad && !impressionTracked.current) {
@@ -84,6 +115,16 @@ export function AdBanner({ placement, style }: AdBannerProps) {
       trackEvent(ad.id, 'impression', placement);
     }
   }, [ad, placement]);
+
+  if (useRealAdMob) {
+    return (
+      <AdMobBanner
+        unitId={bannerUnitId as string}
+        testMode={!!adConfig?.activeProvider?.isTestMode}
+        style={style}
+      />
+    );
+  }
 
   if (!ad || dismissed || (ad.imageUrl && imgError)) return null;
 
