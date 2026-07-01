@@ -31,6 +31,10 @@ import { AdInterstitial } from '@/components/AdInterstitial';
 const AD_EVERY = 3;
 let _switchCount = 0;
 
+// ── Hourly playback ad ─────────────────────────────────────────────────────
+// Show an interstitial every HOURLY_MS of continuous live playback.
+const HOURLY_MS = 60 * 60 * 1000; // 60 minutes
+
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', live: '#EF4444', text: '#fff', dim: '#9CA3AF',
@@ -245,7 +249,28 @@ export default function LivePlayerScreen() {
 
   // ── Ad gate state ───────────────────────────────────────────────────────────
   const [adVisible, setAdVisible]               = useState(false);
-  const pendingChannel = useRef<typeof related[0] | null>(null);
+  const [hourlyAdVisible, setHourlyAdVisible]   = useState(false);
+  const pendingChannel   = useRef<typeof related[0] | null>(null);
+  const hourlyTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleHourlyAd = useCallback(() => {
+    if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
+    hourlyTimerRef.current = setTimeout(() => setHourlyAdVisible(true), HOURLY_MS);
+  }, []);
+
+  // Start hourly timer once the stream is loaded; restart when channel changes
+  useEffect(() => {
+    if (sources.length > 0) scheduleHourlyAd();
+    return () => {
+      if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.length > 0]);
+
+  const handleHourlyAdClose = useCallback(() => {
+    setHourlyAdVisible(false);
+    scheduleHourlyAd(); // restart 60-minute clock after ad closes
+  }, [scheduleHourlyAd]);
 
   const doSwitchChannel = useCallback((ch: typeof related[0]) => {
     router.replace({
@@ -315,11 +340,18 @@ export default function LivePlayerScreen() {
     <View style={s.root}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* Channel-switch interstitial ad */}
+      {/* Channel-switch interstitial ad — fires every 3 channel changes */}
       <AdInterstitial
         placement="channel_switch"
         visible={adVisible}
         onClose={handleAdClose}
+      />
+
+      {/* Hourly playback ad — fires every 60 minutes of continuous live viewing */}
+      <AdInterstitial
+        placement="live_hourly"
+        visible={hourlyAdVisible}
+        onClose={handleHourlyAdClose}
       />
 
       {/* Spacer for the video area — includes status bar height so it matches

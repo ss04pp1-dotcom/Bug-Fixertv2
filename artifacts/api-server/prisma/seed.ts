@@ -164,10 +164,32 @@ async function main() {
       placementData.push({ name: `${s} video`, slug: `${s}-video`, type: adTypeMap.video, screen: s, isEnabled: true, frequency: 1 });
     }
   }
-  for (const ap of placementData) {
+  // Special trigger-based placements used by the live player
+  const specialPlacements = [
+    {
+      name: 'Channel Switch',
+      slug: 'channel_switch',
+      type: AdType.interstitial,
+      screen: 'live',
+      isEnabled: true,
+      frequency: 3,
+      description: 'Shown after every 3rd live channel change',
+    },
+    {
+      name: 'Live Hourly',
+      slug: 'live_hourly',
+      type: AdType.interstitial,
+      screen: 'live',
+      isEnabled: true,
+      frequency: 1,
+      cooldownSeconds: 3600,
+      description: 'Shown every 60 minutes of continuous live playback',
+    },
+  ];
+  for (const ap of [...placementData, ...specialPlacements]) {
     await prisma.adPlacement.upsert({ where: { slug: ap.slug }, update: {}, create: ap });
   }
-  console.log(`  ✓ Ad placements (${placementData.length})`);
+  console.log(`  ✓ Ad placements (${placementData.length + specialPlacements.length})`);
 
   // ─── Coupons ─────────────────────────────────────────────────────────────────
   const coupons = [
