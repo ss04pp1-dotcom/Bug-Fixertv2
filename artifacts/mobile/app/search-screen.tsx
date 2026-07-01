@@ -25,48 +25,55 @@ type ResultItem = {
   category?: string;
 };
 
+// API response shape: { success, data: { data: [...], meta: {...} } }
+// Extract the inner array from a paginated or plain response.
+function extractList(axiosResponse: any): any[] {
+  const envelope = axiosResponse?.data;          // { success, data, ... }
+  const inner    = envelope?.data;               // { data: [...], meta } OR [...]
+  if (Array.isArray(inner)) return inner;        // non-paginated list
+  if (Array.isArray(inner?.data)) return inner.data; // paginated list
+  return [];
+}
+
 async function searchAll(query: string): Promise<ResultItem[]> {
   if (!query.trim()) return [];
   try {
     const [movies, series, channels] = await Promise.allSettled([
-      apiClient.get('/movies', { params: { search: query, limit: 10 } }),
-      apiClient.get('/series', { params: { search: query, limit: 10 } }),
+      apiClient.get('/movies',   { params: { search: query, limit: 10 } }),
+      apiClient.get('/series',   { params: { search: query, limit: 10 } }),
       apiClient.get('/channels', { params: { search: query, limit: 10 } }),
     ]);
 
     const results: ResultItem[] = [];
 
     if (movies.status === 'fulfilled') {
-      const data = movies.value.data?.data || movies.value.data || [];
-      (Array.isArray(data) ? data : []).forEach((m: any) => {
+      extractList(movies.value).forEach((m: any) => {
         results.push({
           id: m.id,
           title: m.title || m.name || '',
           type: 'movie',
           poster: m.posterUrl || m.poster || m.thumbnailUrl || '',
           year: m.year ? String(m.year) : '',
-          category: 'Movie',
+          category: m.category?.name || 'Movie',
         });
       });
     }
 
     if (series.status === 'fulfilled') {
-      const data = series.value.data?.data || series.value.data || [];
-      (Array.isArray(data) ? data : []).forEach((s: any) => {
+      extractList(series.value).forEach((s: any) => {
         results.push({
           id: s.id,
           title: s.title || s.name || '',
           type: 'series',
           poster: s.posterUrl || s.poster || s.thumbnailUrl || '',
           year: s.year ? String(s.year) : '',
-          category: 'Series',
+          category: s.category?.name || 'Series',
         });
       });
     }
 
     if (channels.status === 'fulfilled') {
-      const data = channels.value.data?.data || channels.value.data || [];
-      (Array.isArray(data) ? data : []).forEach((ch: any) => {
+      extractList(channels.value).forEach((ch: any) => {
         results.push({
           id: ch.id,
           title: ch.name || '',
