@@ -11,7 +11,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
 import { admobAvailable, BannerAd, BannerAdSize, TestIds } from '@/lib/admob';
-import { useAdConfig, isAdMobActive } from '@/hooks/useAdConfig';
+import { appLovinAvailable, MaxAdView, AdFormat, AdViewPosition, initAppLovin } from '@/lib/applovin';
+import { useAdConfig, isAdMobActive, isAppLovinActive } from '@/hooks/useAdConfig';
+import Constants from 'expo-constants';
 
 const { width: W } = Dimensions.get('window');
 
@@ -92,6 +94,31 @@ function AdMobBanner({ unitId, testMode, style }: { unitId: string; testMode: bo
   );
 }
 
+/** Real AppLovin MAX banner — only rendered in a custom dev/production build. */
+function AppLovinBanner({ unitId, style }: { unitId: string; style?: object }) {
+  const [failed, setFailed] = useState(false);
+  const sdkKey = (Constants.expoConfig?.extra as any)?.applovinSdkKey;
+  useEffect(() => {
+    initAppLovin(sdkKey);
+  }, [sdkKey]);
+  if (!appLovinAvailable || !MaxAdView || failed) return null;
+
+  return (
+    <View style={[styles.container, style]}>
+      <View style={styles.adLabel}>
+        <Text style={styles.adLabelText}>AD</Text>
+      </View>
+      <MaxAdView
+        adUnitId={unitId}
+        adFormat={AdFormat?.BANNER}
+        adViewPosition={AdViewPosition?.CENTERED}
+        style={{ width: '100%', height: 90 }}
+        onAdLoadFailed={() => setFailed(true)}
+      />
+    </View>
+  );
+}
+
 export function AdBanner({ placement, style }: AdBannerProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -100,14 +127,16 @@ export function AdBanner({ placement, style }: AdBannerProps) {
   const { data: adConfig } = useAdConfig();
 
   const admobActive = isAdMobActive(adConfig);
+  const applovinActive = isAppLovinActive(adConfig);
   const bannerUnitId = adConfig?.activeProvider?.adUnits?.banner;
   const useRealAdMob = admobActive && admobAvailable && !!bannerUnitId;
+  const useRealAppLovin = applovinActive && appLovinAvailable && !!bannerUnitId;
 
   useEffect(() => {
-    // House-ad fallback only needs to fetch when we're not using a real AdMob banner.
-    if (useRealAdMob) return;
+    // House-ad fallback only needs to fetch when we're not using a real network banner.
+    if (useRealAdMob || useRealAppLovin) return;
     fetchAd(placement).then(setAd);
-  }, [placement, useRealAdMob]);
+  }, [placement, useRealAdMob, useRealAppLovin]);
 
   useEffect(() => {
     if (ad && !impressionTracked.current) {
@@ -124,6 +153,10 @@ export function AdBanner({ placement, style }: AdBannerProps) {
         style={style}
       />
     );
+  }
+
+  if (useRealAppLovin) {
+    return <AppLovinBanner unitId={bannerUnitId as string} style={style} />;
   }
 
   if (!ad || dismissed || (ad.imageUrl && imgError)) return null;

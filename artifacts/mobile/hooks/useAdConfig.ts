@@ -54,3 +54,8 @@ export function useAdConfig() {
 export function isAdMobActive(config: AdRemoteConfig | null | undefined): boolean {
   return !!config?.activeProvider && config.activeProvider.slug === 'admob' && !!config.adsEnabled;
 }
+
+/** True when AppLovin MAX is the network selected in the admin panel. */
+export function isAppLovinActive(config: AdRemoteConfig | null | undefined): boolean {
+  return !!config?.activeProvider && config.activeProvider.slug === 'applovin' && !!config.adsEnabled;
+}
