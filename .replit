@@ -18,18 +18,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Keep-Alive: Render Ping"
+args = "Mobile App"
 
 [[workflows.workflow]]
-name = "Keep-Alive: Render Ping"
+name = "Mobile App"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node tools/keep-alive.mjs"
+args = "PORT=5000 pnpm --filter @workspace/mobile run dev"
+waitForPort = 5000
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"

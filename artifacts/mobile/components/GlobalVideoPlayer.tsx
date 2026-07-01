@@ -814,6 +814,23 @@ export default function GlobalVideoPlayer() {
   // PiP now only activates when the user explicitly taps the PiP button.
   const autoPipRef = useRef(false);
 
+  // ── Shared "back" behaviour for TOP mode ─────────────────────────────────
+  // Used by BOTH the Android hardware back button AND the visible on-screen
+  // back arrow in the top bar (iOS has no hardware back button, and the
+  // live-player screen disables the OS edge-swipe gesture while a video is
+  // mounted — so the on-screen arrow is the ONLY way back on iOS and MUST
+  // behave identically to Android's hardware back).
+  // Shrinks to mini player, then navigates back (or falls back to the
+  // live-tv tab if there is no navigation history, e.g. deep-link launch).
+  const goBackFromTop = useCallback(() => {
+    enterMini();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(main)/live-tv' as any);
+    }
+  }, [enterMini]);
+
   // ── Android back button ──────────────────────────────────────────────────
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -826,23 +843,17 @@ export default function GlobalVideoPlayer() {
         return true; // consumed — no navigation
       }
       if (mode === 'top') {
-        // Top mode → shrink to mini, then navigate back.
-        // We call router.back() explicitly (return true = consumed) so that
-        // Expo Router does NOT also fire a second back action.
-        // Fallback: if there is no back history (e.g. deep-link / notification
-        // launch), send the user to the live-tv tab instead of closing the app.
-        enterMini();
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/(main)/live-tv' as any);
-        }
+        // Top mode → shrink to mini, then navigate back (same as the
+        // on-screen back arrow — see goBackFromTop above).
+        // We consume the event (return true) so Expo Router does NOT also
+        // fire a second back action.
+        goBackFromTop();
         return true; // consumed
       }
       return false; // mini: let default back action handle it
     });
     return () => sub.remove();
-  }, [mode, enterTop, enterMini, unlockOrientation]);
+  }, [mode, enterTop, unlockOrientation, goBackFromTop]);
 
   // ── Keep awake ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -916,6 +927,15 @@ export default function GlobalVideoPlayer() {
     setDuration(data?.duration || 0);
     durationRef.current = data?.duration || 0;
     setBuffering(false); setReady(true); setEnded(false); setError(null);
+    // Fade out the poster/logo overlay here too — NOT only in
+    // onReadyForDisplay. Live raw-TS / MPEGTS streams (common on IPTV
+    // panels) frequently never fire onReadyForDisplay on ExoPlayer, which
+    // left the blurred-logo poster + its rgba(0,0,0,0.45) dark layer stuck
+    // over the video for the entire session (looked like a permanent black
+    // tint over live channels). onLoad fires reliably for every format, so
+    // clearing it here guarantees the poster always goes away once metadata
+    // is loaded, even if onReadyForDisplay never comes.
+    setPosterVisible(false);
 
     // Collect tracks — leave selectedVideoTrack as 'auto' so ExoPlayer ABR
     // starts at a quality it can sustain immediately and ramps up as bandwidth
@@ -1383,7 +1403,7 @@ export default function GlobalVideoPlayer() {
             {/* Top bar */}
             {!isLocked && (
             <View style={[g.topBar, { paddingTop: 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={enterMini}>
+              <TouchableOpacity style={g.iconBtn} onPress={goBackFromTop}>
                 <Ionicons name="arrow-back" size={22} color="#fff" />
               </TouchableOpacity>
               <View style={{ flex: 1, marginHorizontal: 8 }}>
