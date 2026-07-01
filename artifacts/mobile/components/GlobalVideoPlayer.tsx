@@ -184,7 +184,10 @@ async function saveWatchHistory(entry: {
     const item = { ...entry, updatedAt: Date.now() };
     if (idx >= 0) list[idx] = item; else list.unshift(item);
     await AsyncStorage.setItem(WH_KEY, JSON.stringify(list.slice(0, 100)));
-    if (entry.contentType !== 'channel' && entry.duration > 0) {
+    if (entry.contentType === 'channel') {
+      // Track channel watch: just record the channel was watched (no position needed for live TV).
+      apiClient.post('/watch-history', { channelId: entry.contentId, position: 0 }).catch(() => {});
+    } else if (entry.duration > 0) {
       const payload: Record<string, unknown> = {
         position: Math.floor(entry.position),
         duration: Math.floor(entry.duration),
@@ -951,6 +954,11 @@ export default function GlobalVideoPlayer() {
       const pos = resumePosRef.current;
       resumePosRef.current = null;
       setTimeout(() => videoRef.current?.seek?.(pos), 200);
+    }
+
+    // Record to watch history when live channel starts
+    if (contentType === 'channel' && contentId) {
+      saveWatchHistory({ contentId, contentType: 'channel', title, position: 0, duration: 0 });
     }
 
     // Report playback start (live)

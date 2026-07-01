@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useBanners,
   useContinueWatching,
+  useRecentChannels,
   useTrending,
   useLiveChannels,
   useLiveMatches,
@@ -97,6 +98,7 @@ export default function HomeScreen() {
 
   const { data: bannersData, isLoading: bannersLoading } = useBanners();
   const { data: continueData } = useContinueWatching();
+  const { data: recentChannelsData } = useRecentChannels(10);
   const { data: trendingData, isLoading: trendingLoading } = useTrending();
   const { data: channelsData, isLoading: channelsLoading } = useLiveChannels({ limit: 10 });
   const { data: liveMatchData, isLoading: matchLoading } = useLiveMatches();
@@ -190,6 +192,20 @@ export default function HomeScreen() {
       cat: ch.category?.name || ch.category || 'Live TV',
     }));
   }, [channelsData]);
+
+  const recentChannelItems = useMemo(() => {
+    if (!recentChannelsData || !Array.isArray(recentChannelsData)) return [];
+    return recentChannelsData
+      .filter((h: any) => h.channel)
+      .map((h: any, i: number) => ({
+        id: h.channel.id,
+        name: h.channel.name,
+        logo: h.channel.logo || '',
+        streamUrl: h.channel.primaryStreamUrl || '',
+        cat: h.channel.category?.name || 'Live TV',
+        letter: (h.channel.name || 'C')[0].toUpperCase(),
+      }));
+  }, [recentChannelsData]);
 
   const upcomingMatches = useMemo(() => {
     if (!upcomingData || !Array.isArray(upcomingData)) return [];
@@ -475,6 +491,48 @@ export default function HomeScreen() {
           </>
         )}
 
+        {/* Recently Watched Channels */}
+        {recentChannelItems.length > 0 && (
+          <>
+            <SectionHeader title="Recently Watched" onSeeAll={() => router.push('/watch-history')} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
+              {recentChannelItems.map((ch) => (
+                <Pressable
+                  key={ch.id}
+                  style={s.recentChCard}
+                  onPress={() => router.push({
+                    pathname: `/live-player/${ch.id}` as any,
+                    params: { title: ch.name, streamUrl: ch.streamUrl || '', logo: ch.logo || '', cat: ch.cat || '' },
+                  })}
+                >
+                  {/* Thumbnail / logo */}
+                  <View style={s.recentChThumb}>
+                    {ch.logo ? (
+                      <Image source={{ uri: Config.imageUrl(ch.logo) }} style={s.recentChLogoImg} resizeMode="contain" />
+                    ) : (
+                      <LinearGradient colors={[C.primary, C.accent]} style={StyleSheet.absoluteFillObject} />
+                    )}
+                    {!ch.logo && (
+                      <Text style={s.recentChLetter}>{ch.letter}</Text>
+                    )}
+                    {/* Live badge */}
+                    <View style={s.recentChLivePill}>
+                      <View style={s.recentChLiveDot} />
+                      <Text style={s.recentChLiveTxt}>LIVE</Text>
+                    </View>
+                    {/* Play overlay */}
+                    <View style={s.recentChPlayOverlay}>
+                      <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.9)" />
+                    </View>
+                  </View>
+                  <Text style={s.recentChName} numberOfLines={2}>{ch.name}</Text>
+                  <Text style={s.recentChCat} numberOfLines={1}>{ch.cat}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         {/* Trending */}
         <SectionHeader title="Trending Movies" onSeeAll={() => router.push('/(main)/browse')} />
         {trendingItems.length > 0 ? (
@@ -651,4 +709,16 @@ const s = StyleSheet.create({
 
   emptySection: { padding: 40, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyLabel: { color: C.textSec, fontSize: 14, fontFamily: 'Inter' },
+
+  // Recently Watched Channels
+  recentChCard: { width: 96, alignItems: 'center', gap: 6 },
+  recentChThumb: { width: 88, height: 72, borderRadius: 16, overflow: 'hidden', backgroundColor: C.card, position: 'relative', justifyContent: 'center', alignItems: 'center' },
+  recentChLogoImg: { width: '100%', height: '100%' },
+  recentChLetter: { color: '#fff', fontSize: 28, fontWeight: '900', fontFamily: 'Outfit', textAlign: 'center' },
+  recentChLivePill: { position: 'absolute', top: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,15,0.75)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,59,48,0.5)' },
+  recentChLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.live },
+  recentChLiveTxt: { color: C.live, fontSize: 9, fontWeight: '800', fontFamily: 'Inter' },
+  recentChPlayOverlay: { position: 'absolute', bottom: 6, right: 6 },
+  recentChName: { color: C.text, fontSize: 11, fontFamily: 'Inter', textAlign: 'center', fontWeight: '600' },
+  recentChCat: { color: C.textSec, fontSize: 10, fontFamily: 'Inter', textAlign: 'center' },
 });

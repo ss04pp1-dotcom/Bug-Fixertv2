@@ -21,6 +21,11 @@ export class WatchHistoryController {
     return this.watchHistoryService.getContinueWatching(userId);
   }
 
+  @Get('recent-channels') @ApiOperation({ summary: 'Recently watched channels' })
+  getRecentChannels(@CurrentUser('id') userId: string, @Query('limit') limit?: number) {
+    return this.watchHistoryService.getRecentChannels(userId, limit);
+  }
+
   @Post() @ApiOperation({ summary: 'Update watch position' })
   upsert(@CurrentUser('id') userId: string, @Body() dto: UpsertWatchHistoryDto) {
     return this.watchHistoryService.upsert(userId, dto);

@@ -99,6 +99,164 @@ export default function Sports() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   MATCHES TAB — helpers
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+interface MatchForm {
+  title: string; sportId: string; tournamentId: string;
+  teamAId: string; teamBId: string; scheduledAt: string;
+  venue: string; streamUrls: { label: string; url: string }[];
+  description: string; status: string; isActive: boolean;
+}
+
+const blankMatchForm = (): MatchForm => ({
+  title: '', sportId: '', tournamentId: '', teamAId: '', teamBId: '',
+  scheduledAt: '', venue: '', streamUrls: [{ label: 'Server 1', url: '' }],
+  description: '', status: 'upcoming', isActive: true,
+});
+
+function matchToForm(m: Match): MatchForm {
+  let urls: { label: string; url: string }[] = [];
+  if ((m as any).streamUrls && Array.isArray((m as any).streamUrls)) {
+    urls = (m as any).streamUrls;
+  } else if (m.streamUrl) {
+    urls = [{ label: 'Server 1', url: m.streamUrl }];
+  }
+  if (urls.length === 0) urls = [{ label: 'Server 1', url: '' }];
+  return {
+    title: m.title ?? '', sportId: m.sportId ?? '', tournamentId: m.tournamentId ?? '',
+    teamAId: m.teamAId ?? '', teamBId: m.teamBId ?? '',
+    scheduledAt: m.scheduledAt ? m.scheduledAt.slice(0, 16) : '',
+    venue: m.venue ?? '', streamUrls: urls,
+    description: m.description ?? '', status: m.status ?? 'upcoming',
+    isActive: m.isActive ?? true,
+  };
+}
+
+/* ─── ChannelSearchPicker ─────────────────────────────────────────────────── */
+function ChannelSearchPicker({
+  channels,
+  onSelect,
+  placeholder = "Search channels to add a stream URL…",
+}: {
+  channels: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[];
+  onSelect: (url: string, channelName: string) => void;
+  placeholder?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = q
+    ? channels.filter(c => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 60)
+    : channels.slice(0, 60);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className={cn(
+        "flex items-center gap-2 bg-background border rounded-lg px-3 py-2.5",
+        open ? "border-primary" : "border-border"
+      )}>
+        <Search size={13} className="text-[#8B92A5] shrink-0" />
+        <input
+          value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1"
+        />
+        {q && (
+          <button type="button" onClick={() => { setQ(""); setOpen(false); }}
+            className="text-[#8B92A5] hover:text-white text-lg leading-none">&times;</button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-[#0d1525] border border-border rounded-xl max-h-52 overflow-y-auto shadow-2xl">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-xs text-[#8B92A5] text-center">
+              {q ? `No channels match "${q}"` : "No channels available"}
+            </p>
+          ) : filtered.map(ch => (
+            <button
+              key={ch.id}
+              type="button"
+              onMouseDown={e => {
+                e.preventDefault();
+                const url = ch.primaryStreamUrl || ch.streamUrl || '';
+                onSelect(url, ch.name);
+                setQ(ch.name);
+                setOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-left hover:bg-white/5 flex items-center gap-3 group"
+            >
+              <Tv size={13} className="text-primary shrink-0" />
+              <span className="text-sm text-white truncate flex-1">{ch.name}</span>
+              <span className="text-[10px] text-[#8B92A5] shrink-0 group-hover:text-primary">+ add</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── StreamUrlsEditor ───────────────────────────────────────────────────── */
+function StreamUrlsEditor({
+  urls,
+  onChange,
+}: {
+  urls: { label: string; url: string }[];
+  onChange: (urls: { label: string; url: string }[]) => void;
+}) {
+  const add = () => onChange([...urls, { label: `Server ${urls.length + 1}`, url: '' }]);
+  const remove = (i: number) => onChange(urls.filter((_, idx) => idx !== i));
+  const update = (i: number, key: 'label' | 'url', val: string) => {
+    const next = [...urls];
+    next[i] = { ...next[i], [key]: val };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      {urls.map((entry, i) => (
+        <div key={i} className="flex gap-2 items-center">
+          <input
+            value={entry.label}
+            onChange={e => update(i, 'label', e.target.value)}
+            placeholder="Label"
+            className={cn(inputClass, "w-28 shrink-0 text-xs")}
+          />
+          <input
+            value={entry.url}
+            onChange={e => update(i, 'url', e.target.value)}
+            placeholder="https://…/stream.m3u8"
+            className={cn(inputClass, "flex-1 text-xs font-mono")}
+          />
+          {urls.length > 1 && (
+            <button type="button" onClick={() => remove(i)}
+              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-500/10">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium">
+        <Plus size={12} /> Add another stream server
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    MATCHES TAB
    ═══════════════════════════════════════════════════════════════════════════════ */
 
@@ -115,30 +273,11 @@ function MatchesTab() {
   const [submitting, setSubmitting] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
-  // Form refs
-  const titleRef = useRef<HTMLInputElement>(null);
-  const sportIdRef = useRef<HTMLSelectElement>(null);
-  const tournamentIdRef = useRef<HTMLSelectElement>(null);
-  const teamAIdRef = useRef<HTMLSelectElement>(null);
-  const teamBIdRef = useRef<HTMLSelectElement>(null);
-  const scheduledAtRef = useRef<HTMLInputElement>(null);
-  const venueRef = useRef<HTMLInputElement>(null);
-  const streamUrlRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
-  const isActiveRef = useRef<HTMLInputElement>(null);
-  const statusRef = useRef<HTMLSelectElement>(null);
-
-  const editTitleRef = useRef<HTMLInputElement>(null);
-  const editSportIdRef = useRef<HTMLSelectElement>(null);
-  const editTournamentIdRef = useRef<HTMLSelectElement>(null);
-  const editTeamAIdRef = useRef<HTMLSelectElement>(null);
-  const editTeamBIdRef = useRef<HTMLSelectElement>(null);
-  const editScheduledAtRef = useRef<HTMLInputElement>(null);
-  const editVenueRef = useRef<HTMLInputElement>(null);
-  const editStreamUrlRef = useRef<HTMLInputElement>(null);
-  const editDescriptionRef = useRef<HTMLTextAreaElement>(null);
-  const editIsActiveRef = useRef<HTMLInputElement>(null);
-  const editStatusRef = useRef<HTMLSelectElement>(null);
+  // Form state — replaces all refs
+  const [form, setForm] = useState<MatchForm>(blankMatchForm());
+  const [editForm, setEditForm] = useState<MatchForm>(blankMatchForm());
+  const pf = <K extends keyof MatchForm>(k: K, v: MatchForm[K]) => setForm(f => ({ ...f, [k]: v }));
+  const pe = <K extends keyof MatchForm>(k: K, v: MatchForm[K]) => setEditForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
@@ -170,101 +309,64 @@ function MatchesTab() {
   const upcomingCount = matches.filter(m => m.status === "upcoming").length;
   const completedCount = matches.filter(m => m.status === "completed").length;
 
-  const openEdit = (m: Match) => {
-    setEditItem(m);
-  };
+  const openEdit = (m: Match) => { setEditForm(matchToForm(m)); setEditItem(m); };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this match?")) return;
-    try {
-      await call("delete", `/v1/sports/${id}`);
-      refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete match";
-      alert(typeof msg === "string" ? msg : "Failed to delete match");
-    }
+    try { await call("delete", `/v1/sports/${id}`); refetch(); }
+    catch (e: any) { alert(e?.response?.data?.message ?? e?.message ?? "Failed to delete match"); }
+  };
+
+  const buildPayload = (f: MatchForm) => {
+    const validUrls = f.streamUrls.filter(u => u.url.trim());
+    return {
+      title: f.title,
+      sportId: f.sportId || undefined,
+      tournamentId: f.tournamentId || undefined,
+      teamAId: f.teamAId || undefined,
+      teamBId: f.teamBId || undefined,
+      scheduledAt: f.scheduledAt || undefined,
+      venue: f.venue || undefined,
+      streamUrl: validUrls[0]?.url || undefined,
+      liveUrl: validUrls[0]?.url || undefined,
+      streamUrls: validUrls.length > 0 ? validUrls : undefined,
+      description: f.description || undefined,
+      status: f.status,
+      isActive: f.isActive,
+    };
   };
 
   const handleSave = async () => {
-    const title = titleRef.current?.value?.trim();
-    if (!title) { setMutationError("Title is required"); return; }
-    const sportId = sportIdRef.current?.value;
-    if (!sportId) { setMutationError("Sport is required"); return; }
-    const teamAId = teamAIdRef.current?.value;
-    const teamBId = teamBIdRef.current?.value;
-    if (!teamAId || !teamBId) { setMutationError("Both Team A and Team B are required"); return; }
-    if (teamAId === teamBId) { setMutationError("Team A and Team B must be different"); return; }
-    const url = streamUrlRef.current?.value?.trim() || undefined;
-    setSubmitting(true);
-    setMutationError(null);
+    if (!form.title.trim()) { setMutationError("Title is required"); return; }
+    if (!form.sportId) { setMutationError("Sport is required"); return; }
+    if (!form.teamAId || !form.teamBId) { setMutationError("Both teams are required"); return; }
+    if (form.teamAId === form.teamBId) { setMutationError("Team A and Team B must be different"); return; }
+    setSubmitting(true); setMutationError(null);
     try {
-      await call("post", "/v1/sports", {
-        title,
-        sportId,
-        tournamentId: tournamentIdRef.current?.value || undefined,
-        teamAId,
-        teamBId,
-        scheduledAt: scheduledAtRef.current?.value || undefined,
-        venue: venueRef.current?.value?.trim() || undefined,
-        streamUrl: url,
-        liveUrl: url,
-        status: statusRef.current?.value || "upcoming",
-        description: descriptionRef.current?.value?.trim() || undefined,
-        isActive: isActiveRef.current?.checked ?? true,
-      });
-      setShowModal(false);
-      refetch();
+      await call("post", "/v1/sports", buildPayload(form));
+      setShowModal(false); setForm(blankMatchForm()); refetch();
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save match";
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save";
       setMutationError(typeof msg === "string" ? msg : Array.isArray(msg) ? msg.join(", ") : "Failed to save match");
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const handleUpdate = async () => {
     if (!editItem) return;
-    const title = editTitleRef.current?.value?.trim();
-    if (!title) { alert("Title is required"); return; }
-    const url = editStreamUrlRef.current?.value?.trim() || undefined;
+    if (!editForm.title.trim()) { alert("Title is required"); return; }
     setSubmitting(true);
     try {
-      await call("put", `/v1/sports/${editItem.id}`, {
-        title,
-        sportId: editSportIdRef.current?.value || undefined,
-        tournamentId: editTournamentIdRef.current?.value || undefined,
-        teamAId: editTeamAIdRef.current?.value || undefined,
-        teamBId: editTeamBIdRef.current?.value || undefined,
-        scheduledAt: editScheduledAtRef.current?.value || undefined,
-        venue: editVenueRef.current?.value?.trim() || undefined,
-        streamUrl: url,
-        liveUrl: url,
-        status: editStatusRef.current?.value || editItem.status || "upcoming",
-        description: editDescriptionRef.current?.value?.trim() || undefined,
-        isActive: editIsActiveRef.current?.checked ?? editItem.isActive,
-      });
-      setEditItem(null);
-      refetch();
+      await call("put", `/v1/sports/${editItem.id}`, buildPayload(editForm));
+      setEditItem(null); refetch();
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update match";
+      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update";
       alert(typeof msg === "string" ? msg : Array.isArray(msg) ? msg.join(", ") : "Failed to update match");
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const handleQuickStatus = async (id: string, status: string) => {
-    try {
-      await call("put", `/v1/sports/${id}`, { status });
-      refetch();
-    } catch (e: any) {
-      alert("Failed to update status");
-    }
-  };
-
-  const toLocalDateTime = (iso?: string) => {
-    if (!iso) return "";
-    return iso.slice(0, 16);
+    try { await call("put", `/v1/sports/${id}`, { status }); refetch(); }
+    catch { alert("Failed to update status"); }
   };
 
   return (
@@ -272,16 +374,14 @@ function MatchesTab() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-5">
         {[
-          { label: "Total Matches", value: total, color: "gradient-primary" },
-          { label: "Live Now", value: liveCount, color: "bg-red-500/15 text-red-400" },
-          { label: "Upcoming", value: upcomingCount, color: "bg-blue-500/15 text-blue-400" },
-          { label: "Completed", value: completedCount, color: "bg-green-500/15 text-green-400" },
+          { label: "Total Matches", value: total, cls: "text-white" },
+          { label: "Live Now", value: liveCount, cls: "text-red-400" },
+          { label: "Upcoming", value: upcomingCount, cls: "text-blue-400" },
+          { label: "Completed", value: completedCount, cls: "text-green-400" },
         ].map(s => (
           <div key={s.label} className="bg-card border border-border rounded-xl p-4">
             <p className="text-xs text-[#8B92A5] mb-1">{s.label}</p>
-            <p className={cn("text-2xl font-bold", s.color.includes("gradient") ? "text-white" : "")}>
-              <span className={cn(s.color.includes("gradient") ? s.color : "", s.color.includes("gradient") ? "bg-clip-text text-transparent" : "")}>{s.value.toLocaleString()}</span>
-            </p>
+            <p className={cn("text-2xl font-bold", s.cls)}>{s.value.toLocaleString()}</p>
           </div>
         ))}
       </div>
@@ -290,59 +390,29 @@ function MatchesTab() {
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2.5">
           <Search size={14} className="text-[#8B92A5] shrink-0" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search matches..."
-            className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1"
-          />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search matches…"
+            className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none flex-1" />
         </div>
-        <div className="relative">
-          <select
-            value={filterSport}
-            onChange={e => { setFilterSport(e.target.value); setPage(1); }}
-            className="bg-card border border-border rounded-lg px-3 py-2.5 pr-8 text-sm text-white outline-none appearance-none cursor-pointer min-w-[140px]"
-          >
-            <option value="">All Sports</option>
-            {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-        </div>
-        <div className="relative">
-          <select
-            value={filterStatus}
-            onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-            className="bg-card border border-border rounded-lg px-3 py-2.5 pr-8 text-sm text-white outline-none appearance-none cursor-pointer min-w-[140px]"
-          >
-            <option value="">All Statuses</option>
-            {["live", "upcoming", "completed", "postponed", "cancelled"].map(s => (
-              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-            ))}
-          </select>
-          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-        </div>
-        <div className="relative">
-          <select
-            value={filterTournament}
-            onChange={e => { setFilterTournament(e.target.value); setPage(1); }}
-            className="bg-card border border-border rounded-lg px-3 py-2.5 pr-8 text-sm text-white outline-none appearance-none cursor-pointer min-w-[160px]"
-          >
-            <option value="">All Tournaments</option>
-            {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-        </div>
-        <button
-          onClick={() => refetch()}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50"
-        >
+        {[
+          { value: filterSport, onChange: (v: string) => { setFilterSport(v); setPage(1); }, placeholder: "All Sports", options: sports.map(s => ({ value: s.id, label: s.name })), min: "140px" },
+          { value: filterStatus, onChange: (v: string) => { setFilterStatus(v); setPage(1); }, placeholder: "All Statuses", options: ["live","upcoming","completed","postponed","cancelled"].map(s => ({ value: s, label: s.charAt(0).toUpperCase()+s.slice(1) })), min: "140px" },
+          { value: filterTournament, onChange: (v: string) => { setFilterTournament(v); setPage(1); }, placeholder: "All Tournaments", options: tournaments.map(t => ({ value: t.id, label: t.name })), min: "160px" },
+        ].map((sel, i) => (
+          <div key={i} className="relative">
+            <select value={sel.value} onChange={e => sel.onChange(e.target.value)}
+              className={`bg-card border border-border rounded-lg px-3 py-2.5 pr-8 text-sm text-white outline-none appearance-none cursor-pointer min-w-[${sel.min}]`}>
+              <option value="">{sel.placeholder}</option>
+              {sel.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+          </div>
+        ))}
+        <button onClick={() => refetch()} disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50">
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
         </button>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90"
-        >
+        <button onClick={() => { setForm(blankMatchForm()); setShowModal(true); }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
           <Plus size={13} /> Add Match
         </button>
       </div>
@@ -362,13 +432,9 @@ function MatchesTab() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-[#0d1525]">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide w-10">#</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Title / Sport</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Teams</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Tournament</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Scheduled At</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">Actions</th>
+                    {["#","Title / Sport","Teams","Tournament","Scheduled At","Status","Actions"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-[#8B92A5] uppercase tracking-wide">{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -376,55 +442,38 @@ function MatchesTab() {
                     <tr><td colSpan={7} className="text-center py-12 text-sm text-[#8B92A5]">No matches found</td></tr>
                   ) : matches.map((m, i) => (
                     <tr key={m.id} className="tbl-row border-b border-border/50 last:border-0">
-                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{(page - 1) * 20 + i + 1}</td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{(page-1)*20+i+1}</td>
                       <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-white">{m.title || "—"}</p>
-                        <p className="text-xs text-[#8B92A5]">{m.sport?.name ?? "—"}</p>
+                        <p className="text-sm font-medium text-white">{m.title||"—"}</p>
+                        <p className="text-xs text-[#8B92A5]">{m.sport?.name??"—"}</p>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-sm text-white">
-                          <span className="font-medium">{m.teamA?.name ?? "TBA"}</span>
+                          <span className="font-medium">{m.teamA?.name??"TBA"}</span>
                           <span className="text-[#8B92A5] text-xs">vs</span>
-                          <span className="font-medium">{m.teamB?.name ?? "TBA"}</span>
+                          <span className="font-medium">{m.teamB?.name??"TBA"}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{m.tournament?.name ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm text-[#8B92A5]">
-                        {m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : "—"}
-                      </td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{m.tournament?.name??"—"}</td>
+                      <td className="px-4 py-3 text-sm text-[#8B92A5]">{m.scheduledAt?new Date(m.scheduledAt).toLocaleString():"—"}</td>
                       <td className="px-4 py-3">
-                        <span className={cn(
-                          "text-xs px-2.5 py-1 rounded-full font-medium capitalize",
-                          STATUS_COLORS[m.status ?? ""] ?? "bg-gray-500/15 text-gray-400"
-                        )}>
-                          {m.status ?? "unknown"}
+                        <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium capitalize", STATUS_COLORS[m.status??""]??"bg-gray-500/15 text-gray-400")}>
+                          {m.status??"unknown"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          {m.status !== "live" ? (
-                            <button
-                              onClick={() => handleQuickStatus(m.id, "live")}
-                              disabled={actionLoading}
-                              title="Mark as Live Now"
-                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40"
-                            >
-                              🔴 Live
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleQuickStatus(m.id, "completed")}
-                              disabled={actionLoading}
-                              title="Mark as Completed"
-                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40"
-                            >
-                              ✓ End
-                            </button>
+                          {m.status!=="live"?(
+                            <button onClick={()=>handleQuickStatus(m.id,"live")} disabled={actionLoading}
+                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40">🔴 Live</button>
+                          ):(
+                            <button onClick={()=>handleQuickStatus(m.id,"completed")} disabled={actionLoading}
+                              className="h-7 px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40">✓ End</button>
                           )}
-                          <button onClick={() => openEdit(m)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
+                          <button onClick={()=>openEdit(m)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
                             <Edit size={13} className="text-[#8B92A5]" />
                           </button>
-                          <button onClick={() => handleDelete(m.id)} disabled={actionLoading} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/10">
+                          <button onClick={()=>handleDelete(m.id)} disabled={actionLoading} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/10">
                             <Trash2 size={13} className="text-red-400" />
                           </button>
                         </div>
@@ -443,202 +492,180 @@ function MatchesTab() {
       {showModal && (
         <Modal title="Add Match" onClose={() => { setShowModal(false); setMutationError(null); }}>
           <ModalField label="Title *">
-            <input ref={titleRef} className={inputClass} placeholder="Match title" />
-          </ModalField>
-          <ModalField label="Sport">
-            <div className="relative">
-              <select ref={sportIdRef} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="">Select sport</option>
-                {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
-          </ModalField>
-          <ModalField label="Tournament">
-            <div className="relative">
-              <select ref={tournamentIdRef} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="">Select tournament</option>
-                {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
+            <input value={form.title} onChange={e=>pf("title",e.target.value)} className={inputClass} placeholder="Match title" />
           </ModalField>
           <div className="grid grid-cols-2 gap-4">
-            <ModalField label="Team A">
+            <ModalField label="Sport *">
               <div className="relative">
-                <select ref={teamAIdRef} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                  <option value="">Select team</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <select value={form.sportId} onChange={e=>pf("sportId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select sport</option>
+                  {sports.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
               </div>
             </ModalField>
-            <ModalField label="Team B">
+            <ModalField label="Tournament">
               <div className="relative">
-                <select ref={teamBIdRef} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                  <option value="">Select team</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <select value={form.tournamentId} onChange={e=>pf("tournamentId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select tournament</option>
+                  {tournaments.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
               </div>
             </ModalField>
           </div>
-          <ModalField label="Scheduled At">
-            <input ref={scheduledAtRef} type="datetime-local" className={inputClass} />
-          </ModalField>
+          <div className="grid grid-cols-2 gap-4">
+            <ModalField label="Team A *">
+              <div className="relative">
+                <select value={form.teamAId} onChange={e=>pf("teamAId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select team</option>
+                  {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+            <ModalField label="Team B *">
+              <div className="relative">
+                <select value={form.teamBId} onChange={e=>pf("teamBId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select team</option>
+                  {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <ModalField label="Scheduled At">
+              <input type="datetime-local" value={form.scheduledAt} onChange={e=>pf("scheduledAt",e.target.value)} className={inputClass}/>
+            </ModalField>
+            <ModalField label="Status">
+              <div className="relative">
+                <select value={form.status} onChange={e=>pf("status",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="live">🔴 Live Now</option>
+                  <option value="completed">Completed</option>
+                  <option value="postponed">Postponed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+          </div>
           <ModalField label="Venue">
-            <input ref={venueRef} className={inputClass} placeholder="Stadium / venue name" />
+            <input value={form.venue} onChange={e=>pf("venue",e.target.value)} className={inputClass} placeholder="Stadium / venue name"/>
           </ModalField>
-          <ModalField label="Pick Channel (auto-fills Stream URL)">
-            <div className="relative">
-              <select
-                className={cn(inputClass, "appearance-none cursor-pointer")}
-                onChange={e => {
-                  const ch = channels.find((c: any) => c.id === e.target.value);
-                  if (ch && streamUrlRef.current) {
-                    streamUrlRef.current.value = ch.primaryStreamUrl || ch.streamUrl || "";
-                  }
-                }}
-              >
-                <option value="">— Select channel (optional) —</option>
-                {channels.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
+          <ModalField label="Search Channel → adds stream URL">
+            <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
+              const empty=form.streamUrls.findIndex(u=>!u.url.trim());
+              if(empty>=0){const next=[...form.streamUrls];next[empty]={label:name,url};pf("streamUrls",next);}
+              else pf("streamUrls",[...form.streamUrls,{label:name,url}]);
+            }}/>
           </ModalField>
-          <ModalField label="Stream URL">
-            <input ref={streamUrlRef} className={inputClass} placeholder="https://example.com/stream.m3u8" />
+          <ModalField label="Stream Servers">
+            <StreamUrlsEditor urls={form.streamUrls} onChange={v=>pf("streamUrls",v)}/>
           </ModalField>
           <ModalField label="Description">
-            <textarea ref={descriptionRef} rows={3} className={cn(inputClass, "resize-none")} placeholder="Match description" />
-          </ModalField>
-          <ModalField label="Status">
-            <div className="relative">
-              <select ref={statusRef} defaultValue="upcoming" className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="upcoming">Upcoming</option>
-                <option value="live">🔴 Live Now</option>
-                <option value="completed">Completed</option>
-                <option value="postponed">Postponed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
+            <textarea value={form.description} onChange={e=>pf("description",e.target.value)} rows={2} className={cn(inputClass,"resize-none")} placeholder="Match description"/>
           </ModalField>
           <ModalField label="Active">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input ref={isActiveRef} type="checkbox" defaultChecked className="accent-primary w-4 h-4" />
+              <input type="checkbox" checked={form.isActive} onChange={e=>pf("isActive",e.target.checked)} className="accent-primary w-4 h-4"/>
               <span className="text-sm text-white">Is Active</span>
             </label>
           </ModalField>
           {mutationError && <p className="px-1 pb-1 text-xs text-red-400">{mutationError}</p>}
-          <ModalFooter
-            cancelLabel="Cancel"
-            submitLabel={submitting ? "Saving..." : "Save Match"}
-            submitting={submitting}
-            onCancel={() => { setShowModal(false); setMutationError(null); }}
-            onSubmit={handleSave}
-          />
+          <ModalFooter cancelLabel="Cancel" submitLabel={submitting?"Saving…":"Save Match"}
+            submitting={submitting} onCancel={()=>{setShowModal(false);setMutationError(null);}} onSubmit={handleSave}/>
         </Modal>
       )}
 
       {/* Edit Match Modal */}
       {editItem && (
-        <Modal title="Edit Match" onClose={() => setEditItem(null)}>
+        <Modal title="Edit Match" onClose={()=>setEditItem(null)}>
           <ModalField label="Title *">
-            <input ref={editTitleRef} defaultValue={editItem.title ?? ""} className={inputClass} />
+            <input value={editForm.title} onChange={e=>pe("title",e.target.value)} className={inputClass}/>
           </ModalField>
-          <ModalField label="Sport">
-            <div className="relative">
-              <select ref={editSportIdRef} defaultValue={editItem.sportId ?? ""} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="">Select sport</option>
-                {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
-          </ModalField>
-          <ModalField label="Tournament">
-            <div className="relative">
-              <select ref={editTournamentIdRef} defaultValue={editItem.tournamentId ?? ""} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="">Select tournament</option>
-                {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
-          </ModalField>
+          <div className="grid grid-cols-2 gap-4">
+            <ModalField label="Sport">
+              <div className="relative">
+                <select value={editForm.sportId} onChange={e=>pe("sportId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select sport</option>
+                  {sports.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+            <ModalField label="Tournament">
+              <div className="relative">
+                <select value={editForm.tournamentId} onChange={e=>pe("tournamentId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="">Select tournament</option>
+                  {tournaments.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <ModalField label="Team A">
               <div className="relative">
-                <select ref={editTeamAIdRef} defaultValue={editItem.teamAId ?? ""} className={cn(inputClass, "appearance-none cursor-pointer")}>
+                <select value={editForm.teamAId} onChange={e=>pe("teamAId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
                   <option value="">Select team</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
               </div>
             </ModalField>
             <ModalField label="Team B">
               <div className="relative">
-                <select ref={editTeamBIdRef} defaultValue={editItem.teamBId ?? ""} className={cn(inputClass, "appearance-none cursor-pointer")}>
+                <select value={editForm.teamBId} onChange={e=>pe("teamBId",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
                   <option value="">Select team</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
               </div>
             </ModalField>
           </div>
-          <ModalField label="Scheduled At">
-            <input ref={editScheduledAtRef} type="datetime-local" defaultValue={toLocalDateTime(editItem.scheduledAt)} className={inputClass} />
-          </ModalField>
+          <div className="grid grid-cols-2 gap-4">
+            <ModalField label="Scheduled At">
+              <input type="datetime-local" value={editForm.scheduledAt} onChange={e=>pe("scheduledAt",e.target.value)} className={inputClass}/>
+            </ModalField>
+            <ModalField label="Status">
+              <div className="relative">
+                <select value={editForm.status} onChange={e=>pe("status",e.target.value)} className={cn(inputClass,"appearance-none cursor-pointer")}>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="live">🔴 Live Now</option>
+                  <option value="completed">Completed</option>
+                  <option value="postponed">Postponed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none"/>
+              </div>
+            </ModalField>
+          </div>
           <ModalField label="Venue">
-            <input ref={editVenueRef} defaultValue={editItem.venue ?? ""} className={inputClass} />
+            <input value={editForm.venue} onChange={e=>pe("venue",e.target.value)} className={inputClass}/>
           </ModalField>
-          <ModalField label="Pick Channel (auto-fills Stream URL)">
-            <div className="relative">
-              <select
-                className={cn(inputClass, "appearance-none cursor-pointer")}
-                onChange={e => {
-                  const ch = channels.find((c: any) => c.id === e.target.value);
-                  if (ch && editStreamUrlRef.current) {
-                    editStreamUrlRef.current.value = ch.primaryStreamUrl || ch.streamUrl || "";
-                  }
-                }}
-              >
-                <option value="">— Select channel (optional) —</option>
-                {channels.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
+          <ModalField label="Search Channel → adds stream URL">
+            <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
+              const empty=editForm.streamUrls.findIndex(u=>!u.url.trim());
+              if(empty>=0){const next=[...editForm.streamUrls];next[empty]={label:name,url};pe("streamUrls",next);}
+              else pe("streamUrls",[...editForm.streamUrls,{label:name,url}]);
+            }}/>
           </ModalField>
-          <ModalField label="Stream URL">
-            <input ref={editStreamUrlRef} defaultValue={editItem.streamUrl ?? ""} className={inputClass} />
+          <ModalField label="Stream Servers">
+            <StreamUrlsEditor urls={editForm.streamUrls} onChange={v=>pe("streamUrls",v)}/>
           </ModalField>
           <ModalField label="Description">
-            <textarea ref={editDescriptionRef} rows={3} defaultValue={editItem.description ?? ""} className={cn(inputClass, "resize-none")} />
-          </ModalField>
-          <ModalField label="Status">
-            <div className="relative">
-              <select ref={editStatusRef} defaultValue={editItem.status ?? "upcoming"} className={cn(inputClass, "appearance-none cursor-pointer")}>
-                <option value="upcoming">Upcoming</option>
-                <option value="live">🔴 Live Now</option>
-                <option value="completed">Completed</option>
-                <option value="postponed">Postponed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
-            </div>
+            <textarea value={editForm.description} onChange={e=>pe("description",e.target.value)} rows={2} className={cn(inputClass,"resize-none")}/>
           </ModalField>
           <ModalField label="Active">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input ref={editIsActiveRef} type="checkbox" defaultChecked={editItem.isActive ?? false} className="accent-primary w-4 h-4" />
+              <input type="checkbox" checked={editForm.isActive} onChange={e=>pe("isActive",e.target.checked)} className="accent-primary w-4 h-4"/>
               <span className="text-sm text-white">Is Active</span>
             </label>
           </ModalField>
-          <ModalFooter
-            cancelLabel="Cancel"
-            submitLabel={submitting ? "Saving..." : "Update Match"}
-            submitting={submitting}
-            onCancel={() => setEditItem(null)}
-            onSubmit={handleUpdate}
-          />
+          <ModalFooter cancelLabel="Cancel" submitLabel={submitting?"Saving…":"Update Match"}
+            submitting={submitting} onCancel={()=>setEditItem(null)} onSubmit={handleUpdate}/>
         </Modal>
       )}
     </>

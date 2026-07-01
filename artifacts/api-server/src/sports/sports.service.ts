@@ -145,6 +145,9 @@ export class SportsService {
     if (!teamA) throw new NotFoundException('Team A not found');
     if (!teamB) throw new NotFoundException('Team B not found');
 
+    // Derive primary streamUrl from streamUrls[0] if not explicitly provided.
+    const primaryUrl = dto.streamUrl ?? dto.streamUrls?.[0]?.url;
+
     return this.prisma.match.create({
       data: {
         title: dto.title,
@@ -153,9 +156,11 @@ export class SportsService {
         teamAId: dto.teamAId,
         teamBId: dto.teamBId,
         scheduledAt: new Date(dto.scheduledAt),
+        status: dto.status ?? MatchStatus.upcoming,
         venue: dto.venue,
-        streamUrl: dto.streamUrl,
-        liveUrl: dto.liveUrl,
+        streamUrl: primaryUrl,
+        liveUrl: dto.liveUrl ?? primaryUrl,
+        streamUrls: dto.streamUrls ? (dto.streamUrls as any) : undefined,
         description: dto.description,
         isActive: dto.isActive ?? true,
       },
@@ -175,6 +180,8 @@ export class SportsService {
     if (dto.venue !== undefined) data.venue = dto.venue;
     if (dto.streamUrl !== undefined) data.streamUrl = dto.streamUrl;
     if (dto.liveUrl !== undefined) data.liveUrl = dto.liveUrl;
+    if (dto.streamUrls !== undefined) data.streamUrls = dto.streamUrls as any;
+    if (dto.status !== undefined) data.status = dto.status;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 

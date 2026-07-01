@@ -25,6 +25,7 @@ export const useProfile = () => useQuery({ queryKey: ['profile'], queryFn: () =>
 // Home
 export const useBanners = () => useQuery({ queryKey: ['banners'], queryFn: () => apiClient.get('/banners/active').then(unwrapList) });
 export const useContinueWatching = () => useQuery({ queryKey: ['continue-watching'], queryFn: () => apiClient.get('/watch-history/continue-watching').then(unwrapList) });
+export const useRecentChannels = (limit = 10) => useQuery({ queryKey: ['recent-channels', limit], queryFn: () => apiClient.get('/watch-history/recent-channels', { params: { limit } }).then(unwrapList) });
 export const useTrending = () => useQuery({ queryKey: ['trending'], queryFn: () => apiClient.get('/movies/trending').then(unwrapList) });
 export const useLiveChannels = (params?: object) => useQuery({ queryKey: ['channels', params], queryFn: () => apiClient.get('/channels', { params: { limit: 200, ...params as any } }).then(unwrapList) });
 

@@ -300,6 +300,7 @@ model Channel {
   favorites       Favorite[]
   playbackEvents  PlaybackEvent[]
   servers         ChannelServer[]
+  watchHistory    WatchHistory[]
 
   @@index([isActive])
   @@index([categoryId])
@@ -962,6 +963,7 @@ model WatchHistory {
   movieId    String?  @map("movie_id") @db.Uuid
   seriesId   String?  @map("series_id") @db.Uuid
   episodeId  String?  @map("episode_id") @db.Uuid
+  channelId  String?  @map("channel_id") @db.Uuid
   position   Int      @default(0)
   duration   Int?
   completed  Boolean  @default(false)
@@ -972,11 +974,13 @@ model WatchHistory {
   movie   Movie?   @relation(fields: [movieId], references: [id], onDelete: Cascade)
   series  Series?  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   // A-072: enforce one-history-row-per-(user,episode) so the `upsert` in
   // WatchHistoryService doesn't have to fall back to findFirst+create (which
   // has a TOCTOU race). Also keeps the table smaller for episodic re-watches.
   @@unique([userId, episodeId])
+  @@unique([userId, channelId])
   @@index([userId])
   @@map("watch_history")
 }
@@ -1235,6 +1239,7 @@ model Match {
   venue         String?
   streamUrl     String?     @map("stream_url")
   liveUrl       String?     @map("live_url")
+  streamUrls    Json?       @map("stream_urls")
   teamAScore    String?     @map("team_a_score")
   teamBScore    String?     @map("team_b_score")
   winnerId      String?     @db.Uuid @map("winner_id")

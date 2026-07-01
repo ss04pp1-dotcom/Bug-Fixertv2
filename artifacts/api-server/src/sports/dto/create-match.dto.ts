@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsBoolean, IsDateString, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsDateString, IsNotEmpty, IsEnum, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { MatchStatus } from '@prisma/client';
 
 export class CreateMatchDto {
   @ApiPropertyOptional()
@@ -47,10 +48,21 @@ export class CreateMatchDto {
   @IsString()
   liveUrl?: string;
 
+  /** Multiple stream URLs — each entry is { label: string; url: string } */
+  @ApiPropertyOptional({ type: 'array', items: { type: 'object' } })
+  @IsOptional()
+  @IsArray()
+  streamUrls?: Array<{ label: string; url: string }>;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ enum: MatchStatus })
+  @IsOptional()
+  @IsEnum(MatchStatus)
+  status?: MatchStatus;
 
   @ApiPropertyOptional()
   @IsOptional()
