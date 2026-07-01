@@ -623,6 +623,13 @@ export default function GlobalVideoPlayer() {
   }, [src?.url]);
 
   // ── Reset srcIdx when sources array changes ──────────────────────────────
+  // NOTE: setVideoKey is intentionally NOT called here.
+  // When open() is called for a new channel, BOTH contentId AND sources change
+  // in the same Zustand set(). React fires both this effect AND the contentId
+  // effect above — if both called setVideoKey++ the player would mount twice
+  // (double startup, double buffering). The contentId effect owns the remount.
+  // For same-content source changes (quality switch, fallback), switchToSource()
+  // and refreshStream() already call setVideoKey explicitly.
   useEffect(() => {
     sourcesRef.current = sources;
     setSrcIdx(0);
@@ -630,7 +637,6 @@ export default function GlobalVideoPlayer() {
     setTime(0); setDuration(0);
     currentTimeRef.current = 0; durationRef.current = 0;
     networkRetryRef.current = 0;
-    setVideoKey(k => k + 1);
   }, [sources]);
 
   // ── Keep sourcesRef in sync ──────────────────────────────────────────────
@@ -820,13 +826,18 @@ export default function GlobalVideoPlayer() {
         return true; // consumed — no navigation
       }
       if (mode === 'top') {
-        // Top mode → shrink to mini.
-        // Return FALSE so Expo Router's default back navigation also fires:
-        // the screen navigates back to where the user came from, and the
-        // useFocusEffect cleanup in the player screen calls enterMini() too.
-        // Calling router.back() here as well would double-navigate.
+        // Top mode → shrink to mini, then navigate back.
+        // We call router.back() explicitly (return true = consumed) so that
+        // Expo Router does NOT also fire a second back action.
+        // Fallback: if there is no back history (e.g. deep-link / notification
+        // launch), send the user to the live-tv tab instead of closing the app.
         enterMini();
-        return false;
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(main)/live-tv' as any);
+        }
+        return true; // consumed
       }
       return false; // mini: let default back action handle it
     });
