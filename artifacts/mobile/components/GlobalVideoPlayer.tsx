@@ -211,6 +211,10 @@ async function loadWatchPosition(contentId: string): Promise<number> {
 // SettingsSheet       → ./player/SettingsSheet.tsx  (ASPECT_CYCLE, AspectMode, SheetType also exported)
 // SeekFeedback / SwipeIndicator → ./player/SwipeOverlays.tsx
 
+// Progressive backoff schedule for same-source network-error retries (ms).
+// Increasing gaps give transient network drops a real chance to clear before
+// we give up on the current server and switch to the next one.
+const NETWORK_RETRY_DELAYS_MS = [1_500, 3_000, 5_000];
 
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN GLOBAL VIDEO PLAYER
@@ -1053,20 +1057,26 @@ export default function GlobalVideoPlayer() {
       return;
     }
 
-    if (isNetworkErr && networkRetryRef.current < 3) {
+    if (isNetworkErr && networkRetryRef.current < NETWORK_RETRY_DELAYS_MS.length) {
+      // Progressive backoff (1.5s → 3s → 5s): most mobile-data / wifi blips
+      // clear up within a few seconds, so we give the SAME server increasing
+      // breathing room before giving up on it. This avoids switching servers
+      // on every tiny hiccup (which itself causes a visible reload/rebuffer)
+      // while still recovering quickly from real drops.
+      const delay = NETWORK_RETRY_DELAYS_MS[networkRetryRef.current];
       networkRetryRef.current += 1;
       setBuffering(true); setError(null);
-      // Retry same source up to 3×; 1 500 ms gap gives the network time to recover
-      // without feeling sluggish. After 3 failures we fall through to next server.
       retryTimerRef.current = setTimeout(() => {
         setVideoKey(k => k + 1); // clean remount, same srcIdx
-      }, 1500);
+      }, delay);
     } else if (srcIdx < sourcesRef.current.length - 1) {
-      // Give the UI a moment before switching so the user sees the buffering spinner
+      // Backoff budget exhausted — the network problem is persistent, not a blip.
+      // Wait a short grace period (so the switch doesn't feel abrupt/instant),
+      // then move on to the next server.
       retryTimerRef.current = setTimeout(() => {
         setSrcIdx(srcIdx + 1);
         setVideoKey(k => k + 1);
-      }, 2000);
+      }, 2500);
       setBuffering(true); setError(null);
     } else {
       setError(desc);
