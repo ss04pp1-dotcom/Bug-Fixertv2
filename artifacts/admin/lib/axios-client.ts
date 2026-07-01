@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { getToken, clearToken } from './auth';
 import { API_CONFIG } from './config/api';
+import { toast } from 'sonner';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -27,13 +28,13 @@ apiClient.interceptors.request.use(
 );
 
 // ───────────────────────────────────────────────────────────────────────────
-// D-002 / D-007 fix: refresh-token logic removed entirely.
-// This app is statically exported (no server runtime for httpOnly refresh
-// cookies), so silently refreshing an expired access token would require
-// storing a long-lived refresh token in sessionStorage — an XSS-escalation
-// risk. Instead, on 401 we clear the token and redirect to /login.
-// Users must re-authenticate when the access token expires.
+// 401 UX fix: instead of an immediate hard redirect that discards unsaved
+// form data, we show a toast and give the user a 4-second grace period.
+// The redirect only fires after that delay, giving the admin time to see
+// the message before losing the current page.
 // ───────────────────────────────────────────────────────────────────────────
+let sessionExpiredPending = false;
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>): AxiosResponse<ApiResponse<unknown>> => {
     return response;
@@ -41,18 +42,26 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       clearToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.pathname.startsWith('/login') &&
+        !sessionExpiredPending
+      ) {
+        sessionExpiredPending = true;
+        toast.error('Session expired — please log in again', {
+          duration: 4000,
+          id: 'session-expired',
+        });
+        setTimeout(() => {
+          sessionExpiredPending = false;
+          window.location.href = '/login';
+        }, 4000);
       }
     }
     return Promise.reject(error);
   },
 );
 
-// D-045 fix: typed `response` parameter (was `any`). The runtime behaviour is
-// unchanged — we still fall back through `data.data → data → response` because
-// some legacy call sites pass already-unwrapped payloads, but the type now
-// mirrors the canonical AxiosResponse<ApiResponse<T>> shape.
 export function extractData<T>(
   response: { data?: { data?: T } | T } | T,
 ): T {

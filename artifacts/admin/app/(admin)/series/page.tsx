@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, Library, Menu, RefreshCw, Layers } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
@@ -36,6 +36,7 @@ export default function SeriesPage() {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
+
   const [showModal, setModal] = useState(false);
   const [submitting, setSub]  = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -47,10 +48,10 @@ export default function SeriesPage() {
   const [editPoster, setEditPoster] = useState("");
   const [editBanner, setEditBanner] = useState("");
 
-  const titleRef    = useRef<HTMLInputElement>(null);
-  const yearRef     = useRef<HTMLInputElement>(null);
-  const eTitleRef   = useRef<HTMLInputElement>(null);
-  const eYearRef    = useRef<HTMLInputElement>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [newYear,  setNewYear]  = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editYear,  setEditYear]  = useState("");
 
   const params = new URLSearchParams({ page: String(page), limit: "20", isActive: "all" });
   if (debouncedSearch) params.set("search", debouncedSearch);
@@ -63,24 +64,37 @@ export default function SeriesPage() {
   const total      = meta?.total ?? 0;
   const pages      = meta?.totalPages ?? 1;
 
+  const openEdit = (s: Series) => {
+    setEditItem(s);
+    setEditTitle(s.title);
+    setEditYear("");
+    setEditPoster(s.poster ?? "");
+    setEditBanner(s.banner ?? "");
+  };
+
+  const closeEdit = () => {
+    setEditItem(null);
+    setEditTitle(""); setEditYear("");
+    setEditPoster(""); setEditBanner("");
+  };
+
   const handleUpdate = async () => {
     if (!editItem) return;
-    const title = eTitleRef.current?.value?.trim();
+    const title = editTitle.trim();
     if (!title) return;
     setSub(true);
     try {
       await call("put", `/v1/series/${editItem.id}`, {
         title,
-        year: eYearRef.current?.value ? Number(eYearRef.current.value) : undefined,
+        year: editYear ? Number(editYear) : undefined,
         poster: editPoster || undefined,
         banner: editBanner || undefined,
       });
-      setEditItem(null);
-      setEditPoster("");
-      setEditBanner("");
+      closeEdit();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update series";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to update series";
       alert(typeof msg === "string" ? msg : "Failed to update series");
     } finally { setSub(false); }
   };
@@ -90,31 +104,44 @@ export default function SeriesPage() {
     try {
       await call("delete", `/v1/series/${id}`);
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete series";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to delete series";
       alert(typeof msg === "string" ? msg : "Failed to delete series");
     }
   };
 
+  const openNew = () => {
+    setNewTitle(""); setNewYear("");
+    setNewPoster(""); setNewBanner("");
+    setMutationError(null);
+    setModal(true);
+  };
+
+  const closeNew = () => {
+    setModal(false);
+    setMutationError(null);
+    setNewTitle(""); setNewYear("");
+    setNewPoster(""); setNewBanner("");
+  };
+
   const handleSave = async () => {
-    const title = titleRef.current?.value?.trim();
+    const title = newTitle.trim();
     if (!title) return;
     setSub(true);
     setMutationError(null);
     try {
-      // D-033 fix: don't send a client-generated slug — server derives it from title.
       await call("post", "/v1/series", {
         title,
-        year: yearRef.current?.value ? Number(yearRef.current.value) : undefined,
+        year: newYear ? Number(newYear) : undefined,
         poster: newPoster || undefined,
         banner: newBanner || undefined,
       });
-      setModal(false);
-      setNewPoster("");
-      setNewBanner("");
+      closeNew();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save series";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to save series";
       setMutationError(typeof msg === "string" ? msg : "Failed to save series");
     } finally { setSub(false); }
   };
@@ -141,7 +168,7 @@ export default function SeriesPage() {
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
           </button>
           <button
-            onClick={() => { setModal(true); setNewPoster(""); setNewBanner(""); }}
+            onClick={openNew}
             className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90"
           >
             <Plus size={13} /> Add Series
@@ -224,7 +251,6 @@ export default function SeriesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          {/* Manage seasons/episodes */}
                           <button
                             onClick={() => setManageItem(s)}
                             className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-semibold transition-colors"
@@ -233,15 +259,13 @@ export default function SeriesPage() {
                             <Layers size={11} />
                             Manage
                           </button>
-                          {/* Edit series */}
                           <button
-                            onClick={() => { setEditItem(s); setEditPoster(s.poster ?? ""); setEditBanner(s.banner ?? ""); }}
+                            onClick={() => openEdit(s)}
                             className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10"
                             title="Edit series"
                           >
                             <Edit size={13} className="text-[#8B92A5]" />
                           </button>
-                          {/* Delete series */}
                           <button
                             onClick={() => handleDelete(s.id)}
                             disabled={actionLoading}
@@ -316,27 +340,25 @@ export default function SeriesPage() {
           <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-bold text-white">Edit Series</h2>
-              <button
-                onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }}
-                className="text-[#8B92A5] hover:text-white text-lg"
-              >×</button>
+              <button onClick={closeEdit} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
                 <input
-                  ref={eTitleRef}
-                  defaultValue={editItem.title}
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
                 />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Release Year</label>
                 <input
-                  ref={eYearRef}
                   type="number"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                  value={editYear}
+                  onChange={e => setEditYear(e.target.value)}
                   placeholder="2024"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
                 />
               </div>
               <ImageUpload
@@ -355,10 +377,7 @@ export default function SeriesPage() {
               />
             </div>
             <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }}
-                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5"
-              >
+              <button onClick={closeEdit} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">
                 Cancel
               </button>
               <button
@@ -384,7 +403,8 @@ export default function SeriesPage() {
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
                 <input
-                  ref={titleRef}
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
                   placeholder="Series title"
                 />
@@ -392,8 +412,9 @@ export default function SeriesPage() {
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Release Year</label>
                 <input
-                  ref={yearRef}
                   type="number"
+                  value={newYear}
+                  onChange={e => setNewYear(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
                   placeholder="2024"
                 />
@@ -417,10 +438,7 @@ export default function SeriesPage() {
               <p className="px-6 pb-2 text-xs text-red-400">{mutationError}</p>
             )}
             <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => { setModal(false); setMutationError(null); setNewPoster(""); setNewBanner(""); }}
-                className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5"
-              >
+              <button onClick={closeNew} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">
                 Cancel
               </button>
               <button

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight, Film, Menu, RefreshCw } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ChevronLeft, ChevronRight, Film, Menu, RefreshCw } from "lucide-react";
 import { useApi, useApiCallState } from "@/lib/use-api";
 import { ImageUpload } from "@/components/ui/image-upload";
 
@@ -44,6 +44,7 @@ export default function Movies() {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
+
   const [showModal, setModal] = useState(false);
   const [submitting, setSub]  = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -56,14 +57,15 @@ export default function Movies() {
   const [newCategoryId, setNewCategoryId]   = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
 
-  const titleRef    = useRef<HTMLInputElement>(null);
-  const durationRef = useRef<HTMLInputElement>(null);
-  const yearRef     = useRef<HTMLInputElement>(null);
-  const videoRef    = useRef<HTMLInputElement>(null);
-  const eTitleRef   = useRef<HTMLInputElement>(null);
-  const eDurRef     = useRef<HTMLInputElement>(null);
-  const eYearRef    = useRef<HTMLInputElement>(null);
-  const eVideoRef   = useRef<HTMLInputElement>(null);
+  const [newTitle, setNewTitle]     = useState("");
+  const [newDuration, setNewDuration] = useState("");
+  const [newYear, setNewYear]       = useState("");
+  const [newVideo, setNewVideo]     = useState("");
+
+  const [editTitle, setEditTitle]     = useState("");
+  const [editDuration, setEditDuration] = useState("");
+  const [editYear, setEditYear]       = useState("");
+  const [editVideo, setEditVideo]     = useState("");
 
   const params = new URLSearchParams({ page: String(page), limit: "20", isActive: "all" });
   if (debouncedSearch) params.set("search", debouncedSearch);
@@ -78,28 +80,43 @@ export default function Movies() {
   const total  = meta?.total ?? 0;
   const pages  = meta?.totalPages ?? 1;
 
+  const openEdit = (m: Movie) => {
+    setEditItem(m);
+    setEditTitle(m.title);
+    setEditDuration(m.duration != null ? String(m.duration) : "");
+    setEditYear(m.year != null ? String(m.year) : "");
+    setEditVideo(m.streamUrl ?? "");
+    setEditPoster(m.poster ?? "");
+    setEditBanner(m.banner ?? "");
+    setEditCategoryId("");
+  };
+
+  const closeEdit = () => {
+    setEditItem(null);
+    setEditTitle(""); setEditDuration(""); setEditYear(""); setEditVideo("");
+    setEditPoster(""); setEditBanner(""); setEditCategoryId("");
+  };
+
   const handleUpdate = async () => {
     if (!editItem) return;
-    const title = eTitleRef.current?.value?.trim();
+    const title = editTitle.trim();
     if (!title) return;
     setSub(true);
     try {
       await call("put", `/v1/movies/${editItem.id}`, {
         title,
-        duration: eDurRef.current?.value ? Number(eDurRef.current.value) : undefined,
-        year: eYearRef.current?.value ? Number(eYearRef.current.value) : undefined,
-        streamUrl: eVideoRef.current?.value || undefined,
+        duration: editDuration ? Number(editDuration) : undefined,
+        year: editYear ? Number(editYear) : undefined,
+        streamUrl: editVideo || undefined,
         poster: editPoster || undefined,
         banner: editBanner || undefined,
         categoryId: editCategoryId || undefined,
       });
-      setEditItem(null);
-      setEditPoster("");
-      setEditBanner("");
-      setEditCategoryId("");
+      closeEdit();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update movie";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to update movie";
       alert(typeof msg === "string" ? msg : "Failed to update movie");
     } finally { setSub(false); }
   };
@@ -109,35 +126,47 @@ export default function Movies() {
     try {
       await call("delete", `/v1/movies/${id}`);
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete movie";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to delete movie";
       alert(typeof msg === "string" ? msg : "Failed to delete movie");
     }
   };
 
+  const openNew = () => {
+    setNewTitle(""); setNewDuration(""); setNewYear(""); setNewVideo("");
+    setNewPoster(""); setNewBanner(""); setNewCategoryId("");
+    setMutationError(null);
+    setModal(true);
+  };
+
+  const closeNew = () => {
+    setModal(false);
+    setMutationError(null);
+    setNewTitle(""); setNewDuration(""); setNewYear(""); setNewVideo("");
+    setNewPoster(""); setNewBanner(""); setNewCategoryId("");
+  };
+
   const handleSave = async () => {
-    const title = titleRef.current?.value?.trim();
+    const title = newTitle.trim();
     if (!title) return;
     setSub(true);
     setMutationError(null);
     try {
-      // D-033 fix: don't send a client-generated slug — server derives it from title.
       await call("post", "/v1/movies", {
         title,
-        duration: durationRef.current?.value ? Number(durationRef.current.value) : undefined,
-        year: yearRef.current?.value ? Number(yearRef.current.value) : undefined,
-        streamUrl: videoRef.current?.value || undefined,
+        duration: newDuration ? Number(newDuration) : undefined,
+        year: newYear ? Number(newYear) : undefined,
+        streamUrl: newVideo || undefined,
         poster: newPoster || undefined,
         banner: newBanner || undefined,
         categoryId: newCategoryId || undefined,
       });
-      setModal(false);
-      setNewPoster("");
-      setNewBanner("");
-      setNewCategoryId("");
+      closeNew();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save movie";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to save movie";
       setMutationError(typeof msg === "string" ? msg : "Failed to save movie");
     } finally {
       setSub(false);
@@ -156,7 +185,7 @@ export default function Movies() {
           <button onClick={() => refetch()} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-[#8B92A5] hover:bg-white/5 disabled:opacity-50">
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
           </button>
-          <button onClick={() => { setModal(true); setNewPoster(""); setNewBanner(""); }} className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
+          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
             <Plus size={13} /> Add Movie
           </button>
         </div>
@@ -222,7 +251,7 @@ export default function Movies() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditItem(m); setEditPoster(m.poster ?? ""); setEditBanner(m.banner ?? ""); setEditCategoryId(""); }} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
+                          <button onClick={() => openEdit(m)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10">
                             <Edit size={13} className="text-[#8B92A5]" />
                           </button>
                           <button
@@ -277,28 +306,52 @@ export default function Movies() {
           <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-bold text-white">Edit Movie</h2>
-              <button onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }} className="text-[#8B92A5] hover:text-white text-lg">×</button>
+              <button onClick={closeEdit} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-4">
-              <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
-                <input ref={eTitleRef} defaultValue={editItem.title} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
+                <input
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                />
               </div>
-              <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Category</label>
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Category</label>
                 <select value={editCategoryId} onChange={e => setEditCategoryId(e.target.value)} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary">
                   <option value="">— None —</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Duration (min)</label>
-                  <input ref={eDurRef} type="number" defaultValue={editItem.duration ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
+                <div>
+                  <label className="text-xs text-[#8B92A5] mb-1.5 block">Duration (min)</label>
+                  <input
+                    type="number"
+                    value={editDuration}
+                    onChange={e => setEditDuration(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                  />
                 </div>
-                <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Year</label>
-                  <input ref={eYearRef} type="number" defaultValue={editItem.year ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary" />
+                <div>
+                  <label className="text-xs text-[#8B92A5] mb-1.5 block">Year</label>
+                  <input
+                    type="number"
+                    value={editYear}
+                    onChange={e => setEditYear(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                  />
                 </div>
               </div>
-              <div><label className="text-xs text-[#8B92A5] mb-1.5 block">Video URL</label>
-                <input ref={eVideoRef} defaultValue={editItem.streamUrl ?? ""} placeholder="https://…/video.mp4" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+              <div>
+                <label className="text-xs text-[#8B92A5] mb-1.5 block">Video URL</label>
+                <input
+                  value={editVideo}
+                  onChange={e => setEditVideo(e.target.value)}
+                  placeholder="https://…/video.mp4"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <ImageUpload
                 value={editPoster}
@@ -316,7 +369,7 @@ export default function Movies() {
               />
             </div>
             <div className="flex gap-3 px-6 pb-6">
-              <button onClick={() => { setEditItem(null); setEditPoster(""); setEditBanner(""); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
+              <button onClick={closeEdit} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleUpdate} disabled={submitting} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                 {submitting ? "Saving…" : "Update Movie"}
               </button>
@@ -336,7 +389,12 @@ export default function Movies() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Title *</label>
-                  <input ref={titleRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Movie title" />
+                  <input
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                    placeholder="Movie title"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Category</label>
@@ -347,15 +405,32 @@ export default function Movies() {
                 </div>
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Duration (min)</label>
-                  <input ref={durationRef} type="number" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="131" />
+                  <input
+                    type="number"
+                    value={newDuration}
+                    onChange={e => setNewDuration(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                    placeholder="131"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Release Year</label>
-                  <input ref={yearRef} type="number" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="2024" />
+                  <input
+                    type="number"
+                    value={newYear}
+                    onChange={e => setNewYear(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                    placeholder="2024"
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Video URL</label>
-                  <input ref={videoRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="https://…" />
+                  <input
+                    value={newVideo}
+                    onChange={e => setNewVideo(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                    placeholder="https://…"
+                  />
                 </div>
               </div>
               <ImageUpload
@@ -377,7 +452,7 @@ export default function Movies() {
               <p className="px-6 pb-2 text-xs text-red-400">{mutationError}</p>
             )}
             <div className="flex gap-3 px-6 pb-6">
-              <button onClick={() => { setModal(false); setMutationError(null); setNewPoster(""); setNewBanner(""); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
+              <button onClick={closeNew} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleSave} disabled={submitting} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                 {submitting ? "Saving…" : "Save Movie"}
               </button>

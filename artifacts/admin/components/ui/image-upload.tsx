@@ -37,15 +37,28 @@ export function ImageUpload({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await apiClient.post<{ data: { url: string } }>(uploadPath, fd, {
+      const res = await apiClient.post(uploadPath, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      const url: string = (res.data as any)?.data?.url ?? (res.data as any)?.url ?? "";
-      if (!url) throw new Error("No URL returned");
+      const raw = res.data as unknown;
+      const url =
+        (raw as { data?: { url?: string } })?.data?.url ??
+        (raw as { url?: string })?.url ??
+        "";
+      if (typeof url !== "string" || !url) {
+        throw new Error(
+          "Upload succeeded but no URL was returned — check your storage configuration."
+        );
+      }
       onChange(url);
       setUrlInput(url);
-    } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? "Upload failed");
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ??
+        (e instanceof Error ? e.message : null) ??
+        "Upload failed";
+      setError(msg);
     } finally {
       setUploading(false);
     }
@@ -139,7 +152,11 @@ export function ImageUpload({
         </div>
       )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && (
+        <p className="text-xs text-red-400 flex items-start gap-1">
+          <span className="shrink-0">⚠</span> {error}
+        </p>
+      )}
 
       {value && (
         <div className={cn("relative group rounded-lg overflow-hidden border border-border bg-black/20", previewClass ?? "h-20 w-full")}>

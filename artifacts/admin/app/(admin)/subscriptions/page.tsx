@@ -173,7 +173,12 @@ export default function Subscriptions() {
       expires: s.endsAt ? new Date(s.endsAt).toLocaleDateString() : '',
     }));
     const headers = "User,Plan,Status,Price,Renewed,Expires";
-    const data = rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const escapeCsv = (val: string | number) => {
+      const s = String(val);
+      const safe = /^[=+\-@]/.test(s) ? `\t${s}` : s;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
+    const data = rows.map(r => Object.values(r).map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([headers + "\n" + data], { type: "text/csv" });
     // D-027/28/29 fix: revoke the object URL so we don't leak blob refs each click
     const a = document.createElement("a");

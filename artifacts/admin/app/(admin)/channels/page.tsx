@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Plus, Search, Edit, Trash2, ChevronDown, ChevronLeft, ChevronRight,
@@ -12,6 +12,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import BulkImportModal from "@/components/channels/bulk-import-modal";
 import { ChannelDetailModal } from "@/components/channels/channel-detail-modal";
 import { MergeDuplicatesModal } from "@/components/channels/merge-duplicates-modal";
+import { toast } from "sonner";
 
 interface Channel {
   id: string;
@@ -57,6 +58,7 @@ export default function Channels() {
   const [manageId,   setManageId]   = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [fixingQuality, setFixingQuality] = useState(false);
@@ -65,15 +67,16 @@ export default function Channels() {
   const [newLogo,  setNewLogo]  = useState("");
   const [editLogo, setEditLogo] = useState("");
 
-  const nameRef      = useRef<HTMLInputElement>(null);
-  const categoryRef  = useRef<HTMLSelectElement>(null);
-  const streamRef    = useRef<HTMLSelectElement>(null);
-  const urlRef       = useRef<HTMLInputElement>(null);
-  const tvgRef       = useRef<HTMLInputElement>(null);
-  const editNameRef  = useRef<HTMLInputElement>(null);
-  const editUrlRef   = useRef<HTMLInputElement>(null);
-  const editStreamRef = useRef<HTMLSelectElement>(null);
-  const editTvgRef   = useRef<HTMLInputElement>(null);
+  const [newName,       setNewName]       = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
+  const [newStream,     setNewStream]     = useState("HLS");
+  const [newUrl,        setNewUrl]        = useState("");
+  const [newTvg,        setNewTvg]        = useState("");
+
+  const [editName,   setEditName]   = useState("");
+  const [editUrl,    setEditUrl]    = useState("");
+  const [editStream, setEditStream] = useState("HLS");
+  const [editTvg,    setEditTvg]    = useState("");
 
   const params = new URLSearchParams({ page: String(page), limit: "100" });
   if (debouncedSearch) params.set("search", debouncedSearch);
@@ -88,13 +91,40 @@ export default function Channels() {
   const total      = meta?.total ?? 0;
   const pages      = meta?.totalPages ?? 1;
 
+  const openEdit = (ch: Channel) => {
+    setEditItem(ch);
+    setEditName(ch.name);
+    setEditUrl(ch.primaryStreamUrl);
+    setEditStream(ch.streamType);
+    setEditTvg(ch.epgChannelId ?? "");
+    setEditLogo(ch.logo ?? "");
+  };
+
+  const closeEdit = () => {
+    setEditItem(null);
+    setEditName(""); setEditUrl(""); setEditStream("HLS"); setEditTvg(""); setEditLogo("");
+  };
+
+  const openNew = () => {
+    setNewName(""); setNewCategoryId(""); setNewStream("HLS"); setNewUrl(""); setNewTvg("");
+    setNewLogo(""); setMutationError(null);
+    setModal(true);
+  };
+
+  const closeNew = () => {
+    setModal(false);
+    setNewName(""); setNewCategoryId(""); setNewStream("HLS"); setNewUrl(""); setNewTvg("");
+    setNewLogo(""); setMutationError(null);
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this channel?")) return;
     try {
       await call("delete", `/v1/channels/${id}`);
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to delete channel";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to delete channel";
       alert(typeof msg === "string" ? msg : "Failed to delete channel");
     }
   };
@@ -115,7 +145,6 @@ export default function Channels() {
     }
   };
 
-
   const handleDeleteAll = async () => {
     const answer = prompt(
       '⚠️ সব চ্যানেল ও সার্ভার একবারে মুছে যাবে!\n\nনিশ্চিত করতে নিচে  DELETE ALL  টাইপ করুন:'
@@ -130,8 +159,9 @@ export default function Channels() {
       const d = res.data;
       alert(`✅ সব মুছে গেছে!\nChannels: ${d?.deletedChannels ?? 0}\nServers: ${d?.deletedServers ?? 0}`);
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? 'Delete failed';
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? 'Delete failed';
       alert('❌ ' + (typeof msg === 'string' ? msg : 'Delete failed'));
     } finally {
       setDeletingAll(false);
@@ -142,12 +172,13 @@ export default function Channels() {
     if (!confirm("এটি image URL-এর মতো ভুল নামের চ্যানেলগুলো ডিলিট করবে। GitHub re-sync করলে সঠিক নামে ফিরে আসবে। চালিয়ে যাবেন?")) return;
     setCleaning(true);
     try {
-      const res = await apiClient.post<any>("/v1/channels/cleanup-bad-names");
+      const res = await apiClient.post<{ data?: { deleted?: number; preserved?: number } }>("/v1/channels/cleanup-bad-names");
       const result = res.data?.data ?? res.data;
-      alert(`Cleaned: ${result?.deleted ?? 0} channels deleted, ${result?.preserved ?? 0} preserved`);
+      alert(`Cleaned: ${(result as { deleted?: number })?.deleted ?? 0} channels deleted, ${(result as { preserved?: number })?.preserved ?? 0} preserved`);
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Cleanup failed";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Cleanup failed";
       alert(typeof msg === "string" ? msg : "Cleanup failed");
     } finally {
       setCleaning(false);
@@ -161,16 +192,17 @@ export default function Channels() {
     )) return;
     setFixingQuality(true);
     try {
-      const res = await apiClient.post<any>("/v1/channels/fix-quality-names");
-      const result = res.data?.data ?? res.data;
-      const examples = (result?.examples ?? []).slice(0, 5).join("\n");
+      const res = await apiClient.post<{ data?: { renamed?: number; merged?: number; unchanged?: number; examples?: string[] } }>("/v1/channels/fix-quality-names");
+      const result = res.data?.data ?? res.data as { renamed?: number; merged?: number; unchanged?: number; examples?: string[] };
+      const examples = ((result as { examples?: string[] })?.examples ?? []).slice(0, 5).join("\n");
       alert(
-        `✅ Done!\nRenamed: ${result?.renamed ?? 0}\nMerged: ${result?.merged ?? 0}\nUnchanged: ${result?.unchanged ?? 0}` +
+        `✅ Done!\nRenamed: ${(result as { renamed?: number })?.renamed ?? 0}\nMerged: ${(result as { merged?: number })?.merged ?? 0}\nUnchanged: ${(result as { unchanged?: number })?.unchanged ?? 0}` +
         (examples ? `\n\nExamples:\n${examples}` : "")
       );
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Fix failed";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Fix failed";
       alert(typeof msg === "string" ? msg : "Fix failed");
     } finally {
       setFixingQuality(false);
@@ -181,10 +213,11 @@ export default function Channels() {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} selected channel(s)? This cannot be undone.`)) return;
     setBulkDeleting(true);
-    // D-010 fix: process in chunks of 5 so we don't fan out hundreds of
-    // simultaneous DELETEs and overload the API or trip rate limits.
     const ids = [...selectedIds];
+    const totalCount = ids.length;
+    setBulkProgress({ done: 0, total: totalCount });
     const failed: string[] = [];
+    let done = 0;
     try {
       while (ids.length > 0) {
         const chunk = ids.splice(0, 5);
@@ -192,36 +225,41 @@ export default function Channels() {
           try { await apiClient.delete(`/v1/channels/${id}`); }
           catch { failed.push(id); }
         }));
+        done += chunk.length;
+        setBulkProgress({ done, total: totalCount });
       }
       if (failed.length > 0) {
-        alert(`Failed to delete ${failed.length} channel(s). They may have already been removed.`);
+        toast.error(`Failed to delete ${failed.length} of ${totalCount} channel(s). They may have already been removed.`);
+      } else {
+        toast.success(`Deleted ${totalCount} channel(s) successfully.`);
       }
       setSelectedIds(new Set());
       refetch();
     } finally {
       setBulkDeleting(false);
+      setBulkProgress(null);
     }
   };
 
   const handleUpdate = async () => {
     if (!editItem) return;
-    const name = editNameRef.current?.value?.trim();
-    const url  = editUrlRef.current?.value?.trim();
+    const name = editName.trim();
+    const url  = editUrl.trim();
     if (!name || !url) return;
     setSub(true);
     try {
       await call("put", `/v1/channels/${editItem.id}`, {
         name,
-        streamType: editStreamRef.current?.value || editItem.streamType,
+        streamType: editStream || editItem.streamType,
         primaryStreamUrl: url,
-        epgChannelId: editTvgRef.current?.value || undefined,
+        epgChannelId: editTvg || undefined,
         logo: editLogo || undefined,
       });
-      setEditItem(null);
-      setEditLogo("");
+      closeEdit();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to update channel";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to update channel";
       alert(typeof msg === "string" ? msg : "Failed to update channel");
     } finally {
       setSub(false);
@@ -229,28 +267,25 @@ export default function Channels() {
   };
 
   const handleSave = async () => {
-    const name = nameRef.current?.value?.trim();
-    const url  = urlRef.current?.value?.trim();
+    const name = newName.trim();
+    const url  = newUrl.trim();
     if (!name || !url) return;
     setSub(true);
     setMutationError(null);
     try {
-      // D-033 fix: don't generate a slug client-side — the server derives it
-      // from the name and guarantees uniqueness. Sending our own slug can
-      // cause collisions and bypass server validation.
       await call("post", "/v1/channels", {
         name,
         logo: newLogo || undefined,
-        categoryId: categoryRef.current?.value || undefined,
-        streamType: streamRef.current?.value || "HLS",
+        categoryId: newCategoryId || undefined,
+        streamType: newStream || "HLS",
         primaryStreamUrl: url,
-        epgChannelId: tvgRef.current?.value || undefined,
+        epgChannelId: newTvg || undefined,
       });
-      setModal(false);
-      setNewLogo("");
+      closeNew();
       refetch();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? "Failed to save channel";
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? (e instanceof Error ? e.message : null) ?? "Failed to save channel";
       setMutationError(typeof msg === "string" ? msg : "Failed to save channel");
     } finally {
       setSub(false);
@@ -331,7 +366,7 @@ export default function Channels() {
           <button onClick={() => setImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20">
             <Upload size={13} /> Bulk Import
           </button>
-          <button onClick={() => { setModal(true); setNewLogo(""); }} className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
+          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90">
             <Plus size={13} /> Add Live Channel
           </button>
           <button
@@ -362,17 +397,36 @@ export default function Channels() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-6 py-3 bg-primary/10 border border-primary/20 rounded-xl mb-3">
+          <div className="flex items-center gap-3 px-4 py-3 bg-primary/10 border border-primary/20 rounded-xl mb-3">
             <CheckSquare size={15} className="text-primary shrink-0" />
-            <span className="text-sm text-white font-medium">{selectedIds.size} channel{selectedIds.size !== 1 ? "s" : ""} selected</span>
+            <span className="text-sm text-white font-medium">
+              {selectedIds.size} channel{selectedIds.size !== 1 ? "s" : ""} selected
+            </span>
             <button
               onClick={handleBulkDelete}
               disabled={bulkDeleting}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-xs font-semibold hover:bg-red-500/25 disabled:opacity-50 transition-colors"
             >
               <Trash2 size={12} />
-              {bulkDeleting ? "Deleting…" : "Delete Selected"}
+              {bulkDeleting && bulkProgress
+                ? `Deleting ${bulkProgress.done}/${bulkProgress.total}…`
+                : bulkDeleting
+                ? "Deleting…"
+                : "Delete Selected"}
             </button>
+            {bulkDeleting && bulkProgress && (
+              <div className="flex items-center gap-2 flex-1 max-w-[160px]">
+                <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-red-400 rounded-full transition-all duration-200"
+                    style={{ width: `${Math.round((bulkProgress.done / bulkProgress.total) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-[#8B92A5] shrink-0">
+                  {Math.round((bulkProgress.done / bulkProgress.total) * 100)}%
+                </span>
+              </div>
+            )}
             <button
               onClick={() => setSelectedIds(new Set())}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-[#8B92A5] text-xs hover:bg-white/10 transition-colors ml-auto"
@@ -442,7 +496,6 @@ export default function Channels() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          {/* Manage (Detail Modal) */}
                           <button
                             onClick={() => setManageId(ch.id)}
                             className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-primary/10 transition-colors"
@@ -450,9 +503,8 @@ export default function Channels() {
                           >
                             <Settings2 size={13} className="text-primary" />
                           </button>
-                          {/* Quick edit */}
                           <button
-                            onClick={() => { setEditItem(ch); setEditLogo(ch.logo ?? ""); }}
+                            onClick={() => openEdit(ch)}
                             className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10"
                             title="Quick edit"
                           >
@@ -504,7 +556,7 @@ export default function Channels() {
         </div>
       </div>
 
-      {/* ── Channel Detail Modal (Manage) ──────────────────────────────── */}
+      {/* ── Channel Detail Modal (Manage) ── */}
       {manageId && (
         <ChannelDetailModal
           channelId={manageId}
@@ -514,23 +566,31 @@ export default function Channels() {
         />
       )}
 
-      {/* ── Quick Edit Modal ───────────────────────────────────────────── */}
+      {/* ── Quick Edit Modal ── */}
       {editItem && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-bold text-white">Quick Edit — {editItem.name}</h2>
-              <button onClick={() => { setEditItem(null); setEditLogo(""); }} className="text-[#8B92A5] hover:text-white text-lg">×</button>
+              <button onClick={closeEdit} className="text-[#8B92A5] hover:text-white text-lg">×</button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Channel Name *</label>
-                <input ref={editNameRef} defaultValue={editItem.name} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Stream Type</label>
                 <div className="relative">
-                  <select ref={editStreamRef} defaultValue={editItem.streamType} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer">
+                  <select
+                    value={editStream}
+                    onChange={e => setEditStream(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer"
+                  >
                     {["HLS","M3U","RTMP","DASH"].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
@@ -538,11 +598,21 @@ export default function Channels() {
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Stream URL *</label>
-                <input ref={editUrlRef} defaultValue={editItem.primaryStreamUrl} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="https://example.com/stream.m3u8" />
+                <input
+                  value={editUrl}
+                  onChange={e => setEditUrl(e.target.value)}
+                  placeholder="https://example.com/stream.m3u8"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">TVG ID (EPG)</label>
-                <input ref={editTvgRef} defaultValue={editItem.epgChannelId ?? ""} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Enter TVG ID (optional)" />
+                <input
+                  value={editTvg}
+                  onChange={e => setEditTvg(e.target.value)}
+                  placeholder="Enter TVG ID (optional)"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <ImageUpload
                 value={editLogo}
@@ -553,7 +623,7 @@ export default function Channels() {
               />
             </div>
             <div className="flex gap-3 px-6 pb-6">
-              <button onClick={() => { setEditItem(null); setEditLogo(""); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
+              <button onClick={closeEdit} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleUpdate} disabled={submitting} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                 {submitting ? "Saving…" : "Update Channel"}
               </button>
@@ -562,7 +632,7 @@ export default function Channels() {
         </div>
       )}
 
-      {/* ── Add Channel Modal ──────────────────────────────────────────── */}
+      {/* ── Add Channel Modal ── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -572,13 +642,22 @@ export default function Channels() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Channel Name *</label>
-                <input ref={nameRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Channel name" />
+                <input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Channel name"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               {categories.length > 0 && (
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Category</label>
                   <div className="relative">
-                    <select ref={categoryRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer">
+                    <select
+                      value={newCategoryId}
+                      onChange={e => setNewCategoryId(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer"
+                    >
                       <option value="">No category</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
@@ -589,7 +668,11 @@ export default function Channels() {
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Stream Type</label>
                 <div className="relative">
-                  <select ref={streamRef} defaultValue="HLS" className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer">
+                  <select
+                    value={newStream}
+                    onChange={e => setNewStream(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary appearance-none cursor-pointer"
+                  >
                     {["HLS","M3U","RTMP","DASH"].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B92A5] pointer-events-none" />
@@ -597,11 +680,21 @@ export default function Channels() {
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Stream URL *</label>
-                <input ref={urlRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="https://example.com/stream.m3u8" />
+                <input
+                  value={newUrl}
+                  onChange={e => setNewUrl(e.target.value)}
+                  placeholder="https://example.com/stream.m3u8"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">TVG ID (EPG)</label>
-                <input ref={tvgRef} className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" placeholder="Enter TVG ID (optional)" />
+                <input
+                  value={newTvg}
+                  onChange={e => setNewTvg(e.target.value)}
+                  placeholder="Enter TVG ID (optional)"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
               </div>
               <ImageUpload
                 value={newLogo}
@@ -615,7 +708,7 @@ export default function Channels() {
               <p className="px-6 pb-2 text-xs text-red-400">{mutationError}</p>
             )}
             <div className="flex gap-3 px-6 pb-6">
-              <button onClick={() => { setModal(false); setNewLogo(""); setMutationError(null); }} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
+              <button onClick={closeNew} className="flex-1 py-2.5 rounded-lg border border-border text-sm text-[#8B92A5] hover:bg-white/5">Cancel</button>
               <button onClick={handleSave} disabled={submitting} className="flex-1 py-2.5 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                 {submitting ? "Saving…" : "Add Channel"}
               </button>
