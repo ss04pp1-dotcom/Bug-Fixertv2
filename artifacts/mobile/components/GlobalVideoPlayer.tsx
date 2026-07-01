@@ -66,6 +66,10 @@ type StreamFormat = 'HLS' | 'DASH' | 'MPEGTS' | 'MP4' | 'MKV' | 'UNKNOWN';
  *   ?output=ts / ?type=ts  → MPEGTS   (raw transport stream)
  *   ?output=m3u8            → HLS
  *
+ * Also scans inside query-parameter VALUES for embedded URLs, e.g.:
+ *   ?url=https://cdn.example.com/stream.m3u8?id=xyz  → HLS
+ *   (Proxy/worker URLs that wrap the real stream URL)
+ *
  * Then falls back to path-based detection for common extensions and
  * Xtream-Codes / MAG / Stalker URL patterns.
  */
@@ -87,6 +91,12 @@ function detectStreamFormat(url: string): StreamFormat {
   if (path.endsWith('.ts')   || path.includes('/ts/'))            return 'MPEGTS';
   if (path.endsWith('.mp4')  || path.includes('.mp4'))            return 'MP4';
   if (path.endsWith('.mkv'))                                       return 'MKV';
+
+  // ── Embedded URL inside query value (e.g. proxy/worker pattern) ──────────
+  // e.g. https://worker.dev/?url=https://cdn.example.com/stream.m3u8?id=...
+  // The .m3u8 appears in the query value, not the outer path or key.
+  if (query.includes('.m3u8'))   return 'HLS';
+  if (query.includes('.mpd'))    return 'DASH';
 
   // ── Xtream Codes / MAG / Stalker URL patterns ─────────────────────────────
   // /live/user/pass/<id>   — live channels: always HLS by default
@@ -136,7 +146,7 @@ function getVideoType(url: string, fmt: StreamFormat): string | undefined {
   if (query.includes('output=m3u8') || query.includes('output=m3u_plus') || query.includes('type=m3u')) return 'm3u8';
   if (query.includes('output=ts')   || query.includes('type=ts'))                                       return undefined; // TS — ExoPlayer auto
 
-  // Explicit file extensions
+  // Explicit file extensions in the path
   if (noQ.endsWith('.m3u8') || noQ.includes('manifest.m3u8')) return 'm3u8';
   if (noQ.endsWith('.mpd')  || noQ.includes('manifest.mpd'))  return 'mpd';
   if (noQ.endsWith('.mp4')  || noQ.endsWith('.mkv') || noQ.endsWith('.ts')) return undefined;
@@ -144,6 +154,12 @@ function getVideoType(url: string, fmt: StreamFormat): string | undefined {
   // Explicit path segments (high confidence — dedicated HLS/DASH origin paths)
   if (noQ.includes('/hls/'))  return 'm3u8';
   if (noQ.includes('/dash/')) return 'mpd';
+
+  // Embedded URL inside query value (proxy/worker pattern).
+  // e.g. https://worker.dev/?url=https://cdn.example.com/stream.m3u8?id=...
+  // The .m3u8 is inside the query value — trust it as a strong HLS signal.
+  if (query.includes('.m3u8')) return 'm3u8';
+  if (query.includes('.mpd'))  return 'mpd';
 
   // DASH format from detectStreamFormat (e.g. .mpd already caught above, but fmt is a safety net)
   if (fmt === 'DASH') return 'mpd';
@@ -927,28 +943,91 @@ export default function GlobalVideoPlayer() {
       || String(code)
       || 'Unknown error';
 
+    // Normalise to lowercase once — all checks below use these
+    const codeStr = String(code).toLowerCase();
+    const descStr = desc.toLowerCase();
+
     const isNetworkErr =
       (typeof code === 'number' && (code === -1009 || code === -1001 || code === -1004))
-      || String(code).includes('IO_NETWORK')
-      || String(code).includes('IO_READ')
-      || desc.includes('NETWORK_CONNECTION')
-      || desc.includes('network')
-      || desc.includes('timed out')
-      || desc.includes('timeout');
+      || codeStr.includes('io_network')
+      || codeStr.includes('io_read')
+      || descStr.includes('network_connection')
+      || descStr.includes('network')
+      || descStr.includes('timed out')
+      || descStr.includes('timeout');
+
+    // Unsupported container/format — skip immediately to next server (no retry on same source).
+    // ExoPlayer: ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+    const isUnsupportedFormat =
+      codeStr.includes('parsing_container_unsupported')
+      || codeStr.includes('error_code_parsing_container')
+      || descStr.includes('parsing_container_unsupported')
+      || descStr.includes('error_code_parsing_container');
+
+    // Behind live window — player fell behind the DVR buffer.
+    // Safe recovery: clean remount on the same source (ExoPlayer re-prepares from live edge).
+    // If remount still fails, the next handleError call will fall through to server switch.
+    const isBehindLiveWindow =
+      codeStr.includes('behind_live_window')
+      || descStr.includes('behind_live_window')
+      || descStr.includes('behind live window');
 
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+
+    if (isBehindLiveWindow) {
+      // Remount the player on the same source — ExoPlayer re-prepares from the live edge.
+      // Do NOT seek(Infinity): react-native-video does not document that as a valid live-edge seek.
+      networkRetryRef.current += 1; // count against retry budget so infinite loops are impossible
+      if (networkRetryRef.current <= 2) {
+        setBuffering(true); setError(null);
+        retryTimerRef.current = setTimeout(() => {
+          setVideoKey(k => k + 1);
+        }, 800);
+      } else {
+        // Too many behind-live-window errors — switch server
+        if (srcIdx < sourcesRef.current.length - 1) {
+          setSrcIdx(srcIdx + 1);
+          setVideoKey(k => k + 1);
+          setBuffering(true); setError(null);
+        } else {
+          setError(desc);
+          setBuffering(false);
+        }
+      }
+      return;
+    }
+
+    if (isUnsupportedFormat) {
+      // This source will never play — skip to next server immediately
+      if (srcIdx < sourcesRef.current.length - 1) {
+        setSrcIdx(srcIdx + 1);
+        setVideoKey(k => k + 1);
+        setBuffering(true); setError(null);
+      } else {
+        setError('Unsupported stream format — no more servers available');
+        setBuffering(false);
+        if (contentType === 'channel' && !reportedRef.current) {
+          reportedRef.current = true;
+          reportPlayback(false);
+        }
+      }
+      return;
+    }
 
     if (isNetworkErr && networkRetryRef.current < 3) {
       networkRetryRef.current += 1;
       setBuffering(true); setError(null);
-      // 500 ms retry (was 1 500 ms) — IPTV servers recover fast; waiting 1.5 s
-      // feels sluggish. If 3 fast retries all fail we fall through to next server.
+      // Retry same source up to 3×; 1 500 ms gap gives the network time to recover
+      // without feeling sluggish. After 3 failures we fall through to next server.
       retryTimerRef.current = setTimeout(() => {
         setVideoKey(k => k + 1); // clean remount, same srcIdx
-      }, 500);
+      }, 1500);
     } else if (srcIdx < sourcesRef.current.length - 1) {
-      setSrcIdx(srcIdx + 1);
-      setVideoKey(k => k + 1);
+      // Give the UI a moment before switching so the user sees the buffering spinner
+      retryTimerRef.current = setTimeout(() => {
+        setSrcIdx(srcIdx + 1);
+        setVideoKey(k => k + 1);
+      }, 2000);
       setBuffering(true); setError(null);
     } else {
       setError(desc);
@@ -1282,10 +1361,10 @@ export default function GlobalVideoPlayer() {
         {/* Full controls overlay */}
         {showCtrl && !pipActive && !playerError && (
           <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
-            {/* Gradient — transparent at top, subtle dark only at bottom for controls readability */}
+            {/* Gradient — transparent at top, very subtle dark only at bottom for controls readability */}
             <LinearGradient
-              colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.50)']}
-              locations={[0, 0.4, 0.6, 1]}
+              colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.30)']}
+              locations={[0, 0.55, 0.78, 1]}
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
             />
@@ -1502,8 +1581,8 @@ export default function GlobalVideoPlayer() {
       {showCtrl && !pipActive && !playerError && (
         <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
           <LinearGradient
-            colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.65)']}
-            locations={[0, 0.4, 0.6, 1]}
+            colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.35)']}
+            locations={[0, 0.55, 0.78, 1]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
