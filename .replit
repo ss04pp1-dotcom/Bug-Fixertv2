@@ -64,5 +64,17 @@ channel = "stable-25_05"
 DIRECT_URL = "postgresql://postgres:password@helium/heliumdb?sslmode=disable"
 
 [[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 18115
+externalPort = 3001
