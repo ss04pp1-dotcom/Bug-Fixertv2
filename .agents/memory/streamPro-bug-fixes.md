@@ -104,6 +104,16 @@ description: All bugs found and fixed across the StreamPro monorepo (API, admin,
 | mobile/lib/api-hooks.ts | `useToggleMatchAlert` — uses `DELETE /sports/matches/:id/alert` for remove | API only has `POST` toggle — always use POST |
 | mobile/lib/api-hooks.ts | `useSettings` → `/auth/profile/preferences` (endpoint does not exist in API) | Changed to `/settings/public` |
 
+## Session 5 — Advertisement system audit
+
+| File | Bug | Fix |
+|------|-----|-----|
+| api-server: `advertisements.service.ts` | `getPublicPlacements()` returned only `AdPlacement` rows with no ads — `AdPlacement` and `Advertisement` have NO DB relation | After fetching placements, query all active `Advertisement` rows and filter by matching `type`; attach as `advertisements[]` on each placement |
+| mobile: `AdBanner`, `AdInterstitial`, `AdNative`, `AdRewarded`, `useAppOpenAd` | Event tracking sent `{ advertisementId, event }` but `AdEventDto` expects `{ adId, eventType }` | Changed to `{ adId, eventType }` in all 5 files |
+| mobile: all 4 ad components + `useAppOpenAd` | `pick.name` (field does not exist) — API model has `title`; `pick.clickUrl` (does not exist) — API has `targetUrl` | `pick.title \|\| pick.name`, `pick.targetUrl \|\| pick.clickUrl` |
+| admin: `advertisements/page.tsx` | `fmtMoney(n)` divides by 100 treating revenue as cents, but API stores/returns revenue in dollars | Removed `/100` division — display dollar value directly |
+| mobile: `AdInterstitial.tsx` | Countdown timer started on `visible=true` (before ad loaded), so 5s partially expired during fetch — ad appeared with almost no wait time | Changed timer effect to depend on `fetchState === 'ready'`; countdown resets to 5 only when ad is fully loaded |
+
 ## Key gotchas discovered
 
 - **ChannelServer schema** does NOT have `healthStatus`, `lastCheckedAt`, `lastSuccessAt`, `lastFailureAt`, `failureReason` — selecting them crashes tsc.

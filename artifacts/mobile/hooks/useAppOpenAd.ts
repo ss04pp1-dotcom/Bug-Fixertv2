@@ -26,9 +26,9 @@ async function fetchAppOpenAd(): Promise<AppOpenAd | null> {
     const pick = ads[Math.floor(Math.random() * ads.length)];
     return {
       id: pick.id,
-      name: pick.name || '',
+      name: pick.title || pick.name || '',
       imageUrl: pick.imageUrl || pick.bannerUrl || '',
-      clickUrl: pick.clickUrl || pick.destinationUrl || '',
+      clickUrl: pick.targetUrl || pick.clickUrl || pick.destinationUrl || '',
     };
   } catch {
     return null;
@@ -40,7 +40,7 @@ async function trackImpression(adId: string) {
     await fetch(`${Config.API_BASE}/advertisements/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ advertisementId: adId, event: 'impression', placement: 'app_open' }),
+      body: JSON.stringify({ adId, eventType: 'impression', placement: 'app_open' }),
     });
   } catch {}
 }

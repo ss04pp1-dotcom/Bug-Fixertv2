@@ -133,7 +133,26 @@ export class AdvertisementsService {
   async getPublicPlacements(slug?: string) {
     const where: Prisma.AdPlacementWhereInput = { isEnabled: true };
     if (slug) where.slug = slug;
-    return this.prisma.adPlacement.findMany({ where });
+
+    const placements = await this.prisma.adPlacement.findMany({ where });
+    if (placements.length === 0) return [];
+
+    const now = new Date();
+    const activeAds = await this.prisma.advertisement.findMany({
+      where: {
+        isActive: true,
+        AND: [
+          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+          { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+        ],
+      },
+      include: { provider: true },
+    });
+
+    return placements.map(pl => ({
+      ...pl,
+      advertisements: activeAds.filter(ad => ad.type === pl.type),
+    }));
   }
 
   async getPlacements() {

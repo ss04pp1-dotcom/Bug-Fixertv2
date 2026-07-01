@@ -36,9 +36,9 @@ async function fetchNativeAd(placement: string): Promise<AdItem | null> {
     const pick = ads[Math.floor(Math.random() * ads.length)];
     return {
       id: pick.id,
-      name: pick.name || '',
+      name: pick.title || pick.name || '',
       imageUrl: pick.imageUrl || pick.bannerUrl || pick.thumbnailUrl || '',
-      clickUrl: pick.clickUrl || pick.destinationUrl || '',
+      clickUrl: pick.targetUrl || pick.clickUrl || pick.destinationUrl || '',
       description: pick.description || pick.subtitle || '',
     };
   } catch {
@@ -51,7 +51,7 @@ async function trackEvent(adId: string, event: 'impression' | 'click', placement
     await fetch(`${Config.API_BASE}/advertisements/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ advertisementId: adId, event, placement }),
+      body: JSON.stringify({ adId, eventType: event, placement }),
     });
   } catch {}
 }

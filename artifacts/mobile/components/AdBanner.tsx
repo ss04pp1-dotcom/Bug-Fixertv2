@@ -47,9 +47,9 @@ async function fetchAd(placement: string): Promise<AdItem | null> {
     const pick = active[Math.floor(Math.random() * active.length)];
     return {
       id: pick.id,
-      name: pick.name || '',
+      name: pick.title || pick.name || '',
       imageUrl: pick.imageUrl || pick.bannerUrl || '',
-      clickUrl: pick.clickUrl || pick.destinationUrl || '',
+      clickUrl: pick.targetUrl || pick.clickUrl || pick.destinationUrl || '',
       type: pick.type || 'house_ad',
     };
   } catch {
@@ -62,7 +62,7 @@ async function trackEvent(adId: string, event: 'impression' | 'click', placement
     await fetch(`${Config.API_BASE}/advertisements/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ advertisementId: adId, event, placement }),
+      body: JSON.stringify({ adId, eventType: event, placement }),
     });
   } catch {
   }
