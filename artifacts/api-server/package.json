@@ -91,6 +91,7 @@
         "prisma": "^6.9.0",
         "ts-jest": "^29.4.0",
         "ts-loader": "^9.5.2",
+        "ts-node": "^10.9.2",
         "typescript": "catalog:"
     }
 }
