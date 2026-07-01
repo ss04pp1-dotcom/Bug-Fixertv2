@@ -11,6 +11,43 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/admin: web"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/mobile: expo"
+
+[[workflows.workflow]]
+name = "artifacts/admin: web"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "NEXT_PUBLIC_BASE_PATH='' pnpm --filter @workspace/admin run dev"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow]]
+name = "artifacts/mobile: expo"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=18115 EXPO_ROUTER_APP_ROOT=app EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN pnpm --filter @workspace/mobile run dev"
+waitForPort = 18115
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
