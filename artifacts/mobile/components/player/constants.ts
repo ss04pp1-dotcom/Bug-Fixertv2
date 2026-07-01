@@ -14,11 +14,11 @@ export const C = {
 };
 
 export const BUFFER_LIVE = {
-  minBufferMs:                    15_000,
-  maxBufferMs:                    30_000,
-  bufferForPlaybackMs:             1_500,
-  bufferForPlaybackAfterRebufferMs: 2_000,
-  backBufferDurationMs:           10_000,
+  minBufferMs:                    20_000,   // keep 20s minimum buffer at all times
+  maxBufferMs:                    60_000,   // buffer up to 60s when network is good
+  bufferForPlaybackMs:             3_000,   // wait for 3s before starting (fewer rebuffers)
+  bufferForPlaybackAfterRebufferMs: 5_000, // wait for 5s after a rebuffer before resuming
+  backBufferDurationMs:           15_000,   // hold 15s of past buffer for seeks
   cacheSizeMB: 0,
 };
 

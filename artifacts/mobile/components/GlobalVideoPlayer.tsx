@@ -384,7 +384,7 @@ export default function GlobalVideoPlayer() {
         setShowCtrl(false);
         showCtrlRef.current = false;
       }, 400);
-    }, 4500);
+    }, 3000);
   }, [ctrlOpacity]);
 
   const bumpCtrl = useCallback(() => {
@@ -1282,10 +1282,10 @@ export default function GlobalVideoPlayer() {
         {/* Full controls overlay */}
         {showCtrl && !pipActive && !playerError && (
           <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
-            {/* Subtle gradient — visible at top/bottom edges only, transparent in the middle */}
+            {/* Gradient — transparent at top, subtle dark only at bottom for controls readability */}
             <LinearGradient
-              colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.40)']}
-              locations={[0, 0.3, 0.65, 1]}
+              colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.50)']}
+              locations={[0, 0.4, 0.6, 1]}
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
             />
@@ -1502,8 +1502,8 @@ export default function GlobalVideoPlayer() {
       {showCtrl && !pipActive && !playerError && (
         <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
           <LinearGradient
-            colors={['rgba(0,0,0,0.52)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.60)']}
-            locations={[0, 0.25, 0.65, 1]}
+            colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.65)']}
+            locations={[0, 0.4, 0.6, 1]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
