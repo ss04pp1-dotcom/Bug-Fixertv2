@@ -72,7 +72,7 @@ const ContentService = {
 
   getCategories: () => apiClient.get('/categories'),
 
-  getBanners: () => apiClient.get('/banners'),
+  getBanners: () => apiClient.get('/banners/active'),
 
   search: (q: string) => apiClient.get('/search', { params: { q } }),
   getSearchHistory: () => apiClient.get('/search/history'),
@@ -86,10 +86,20 @@ const UserService = {
     apiClient.post('/watch-history', data),
 
   getFavorites: () => apiClient.get('/favorites'),
-  toggleFavorite: (data: { type: string; id: string }) =>
-    apiClient.post('/favorites', data),
-  removeFavorite: (type: string, id: string) =>
-    apiClient.delete(`/favorites/${type}/${id}`),
+  toggleFavorite: (data: { type: 'channel' | 'movie' | 'series'; id: string }) => {
+    const body =
+      data.type === 'channel' ? { channelId: data.id } :
+      data.type === 'movie'   ? { movieId: data.id }   :
+                                { seriesId: data.id };
+    return apiClient.post('/favorites', body);
+  },
+  removeFavorite: (type: 'channel' | 'movie' | 'series', id: string) => {
+    const body =
+      type === 'channel' ? { channelId: id } :
+      type === 'movie'   ? { movieId: id }   :
+                           { seriesId: id };
+    return apiClient.delete('/favorites', { data: body });
+  },
 
   getDownloads: () => apiClient.get('/downloads'),
   addDownload: (data: unknown) => apiClient.post('/downloads', data),
@@ -142,7 +152,9 @@ const ReviewService = {
 
 const EpgService = {
   getEPG: (params?: Record<string, unknown>) => apiClient.get('/epg', { params }),
-  getCurrentPrograms: () => apiClient.get('/epg/now'),
+  // API route is /epg/channels/:channelId/now — requires a channelId.
+  // Use getEPG() for a full schedule; call getCurrentAndNext with a channelId for now/next.
+  getCurrentAndNext: (channelId: string) => apiClient.get(`/epg/channels/${channelId}/now`),
 };
 
 export {

@@ -92,6 +92,18 @@ description: All bugs found and fixed across the StreamPro monorepo (API, admin,
 |-----|-----|
 | L-018 | `chmod +x scripts/post-merge.sh scripts/start-api-server.sh` |
 
+## Session 4 bug fixes (post-import audit)
+
+| File | Bug | Fix |
+|------|-----|-----|
+| api-server (all) | Prisma client stale — all Prisma namespace types missing (AdEventType, SubscriptionStatus, UserRole, etc.) | Run `npx prisma generate` — 0 TS errors after |
+| mobile/services/api.service.ts | `getBanners()` → `/banners` (admin-only) | `/banners/active` (public endpoint) |
+| mobile/services/api.service.ts | `toggleFavorite({type, id})` — sends `{type,id}` but API expects `{channelId?,movieId?,seriesId?}` | Map type→field before posting |
+| mobile/services/api.service.ts | `removeFavorite(type, id)` → `DELETE /favorites/${type}/${id}` (path-based, 404s) | `DELETE /favorites` with body `{channelId/movieId/seriesId}` |
+| mobile/services/api.service.ts | `getCurrentPrograms()` → `/epg/now` (route does not exist) | Renamed to `getCurrentAndNext(channelId)` → `/epg/channels/:channelId/now` |
+| mobile/lib/api-hooks.ts | `useToggleMatchAlert` — uses `DELETE /sports/matches/:id/alert` for remove | API only has `POST` toggle — always use POST |
+| mobile/lib/api-hooks.ts | `useSettings` → `/auth/profile/preferences` (endpoint does not exist in API) | Changed to `/settings/public` |
+
 ## Key gotchas discovered
 
 - **ChannelServer schema** does NOT have `healthStatus`, `lastCheckedAt`, `lastSuccessAt`, `lastFailureAt`, `failureReason` — selecting them crashes tsc.

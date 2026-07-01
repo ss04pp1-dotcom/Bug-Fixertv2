@@ -109,13 +109,14 @@ export const useMarkAllNotificationsRead = () => {
 export const useAnnouncements = () => useQuery({ queryKey: ['announcements'], queryFn: () => apiClient.get('/announcements/active').then(unwrapList) });
 
 // Settings
-// M-024: Use the user's own preference endpoint instead of the admin `/settings` route.
-// NOTE: backend may not yet expose `/auth/profile/preferences` — fall back gracefully in UI.
-export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/auth/profile/preferences').then(unwrap) });
+// Use the public settings endpoint — returns all settings marked isPublic:true.
+// /auth/profile/preferences does not exist in the API.
+export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => apiClient.get('/settings/public').then(unwrap) });
 export const useUpdateSetting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { key: string; value: unknown }) => apiClient.put('/auth/profile/preferences', data),
+    // User profile settings (language, country, etc.) go through PUT /auth/profile
+    mutationFn: (data: { key: string; value: unknown }) => apiClient.put('/auth/profile', { [data.key]: data.value }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 };
@@ -200,11 +201,10 @@ export const useMatchAlerts = () => useQuery({
 export const useToggleMatchAlert = () => {
   const qc = useQueryClient();
   return useMutation({
-    // M-007: support both add (POST) and remove (DELETE) actions
-    mutationFn: ({ matchId, action }: { matchId: string; action: 'add' | 'remove' }) =>
-      action === 'remove'
-        ? apiClient.delete(`/sports/matches/${matchId}/alert`)
-        : apiClient.post(`/sports/matches/${matchId}/alert`),
+    // API only exposes POST /sports/matches/:matchId/alert as a toggle endpoint.
+    // There is no DELETE variant — always use POST for both add and remove.
+    mutationFn: ({ matchId }: { matchId: string; action?: 'add' | 'remove' }) =>
+      apiClient.post(`/sports/matches/${matchId}/alert`),
     // M-048: invalidate both the alerts list and the individual match query
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['sports', 'my-alerts'] });
