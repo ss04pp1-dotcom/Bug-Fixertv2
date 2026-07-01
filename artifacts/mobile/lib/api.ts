@@ -85,10 +85,11 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // M-031: Do NOT auto-retry non-idempotent methods (POST/PATCH/DELETE) after 401 —
-      // a refresh between original send and retry could create duplicate resources.
+      // Only exclude POST from auto-retry after 401 — retrying a POST risks creating
+      // duplicate resources (e.g. double-adding a favorite). PATCH, DELETE, PUT, GET
+      // are idempotent and safe to replay after a token refresh.
       const method = (originalRequest.method || 'get').toUpperCase();
-      const isSafeToRetry = ['GET', 'HEAD', 'OPTIONS', 'PUT'].includes(method);
+      const isSafeToRetry = method !== 'POST';
       if (!isSafeToRetry) {
         return Promise.reject(error);
       }

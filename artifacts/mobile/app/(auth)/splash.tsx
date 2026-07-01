@@ -52,12 +52,25 @@ export default function SplashScreenComponent() {
           return;
         }
         // Validate token server-side to avoid re-login loop with expired tokens
-        await checkAuth();
-        const authenticated = useAuthStore.getState().isAuthenticated;
-        if (authenticated) {
-          router.replace('/(main)');
-        } else {
-          router.replace('/(auth)/login');
+        try {
+          await checkAuth();
+          const authenticated = useAuthStore.getState().isAuthenticated;
+          if (authenticated) {
+            router.replace('/(main)');
+          } else {
+            router.replace('/(auth)/login');
+          }
+        } catch (checkErr: unknown) {
+          // Distinguish: network error (device offline) vs auth rejection (bad token)
+          const hasResponse = !!(checkErr as { response?: unknown })?.response;
+          if (!hasResponse) {
+            // No HTTP response → device is offline. Token is still in storage and
+            // could be valid — let the main app handle any subsequent 401.
+            router.replace('/(main)');
+          } else {
+            // Server responded with an error (401/403/etc.) → token is invalid.
+            router.replace('/(auth)/login');
+          }
         }
       } catch {
         router.replace('/(auth)/onboarding');

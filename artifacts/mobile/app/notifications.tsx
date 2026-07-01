@@ -129,7 +129,7 @@ export default function NotificationsScreen() {
     // Basic mock filtering based on text/type for the UI design requirement
     return notifications.filter(n => {
       if (activeTab === 'New Releases') return n.icon === 'tv-outline' || n.icon === 'film-outline';
-      if (activeTab === 'Live Sports') return n.icon === 'radio-outline' || n.title.toLowerCase().includes('match');
+      if (activeTab === 'Live Sports') return n.icon === 'radio-outline';
       if (activeTab === 'Offers') return n.icon === 'gift-outline' || n.icon === 'crown-outline';
       if (activeTab === 'System') return n.icon === 'settings-outline';
       return true;

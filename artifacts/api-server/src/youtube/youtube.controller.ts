@@ -1,7 +1,8 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IsString, IsUrl } from 'class-validator';
 import { YoutubeService } from './youtube.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 class ExtractDto {
   @IsString()
@@ -11,6 +12,7 @@ class ExtractDto {
 
 @ApiTags('youtube')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('youtube')
 export class YoutubeController {
   constructor(private readonly svc: YoutubeService) {}

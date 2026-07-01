@@ -125,7 +125,10 @@ export default function ProfileScreen() {
                 <LinearGradient colors={[C.primary, C.accent]} style={s.avatar}>
                   <Text style={s.avatarTxt}>{initials}</Text>
                 </LinearGradient>
-                <Pressable style={s.editAvatarBtn}>
+                <Pressable
+                  style={s.editAvatarBtn}
+                  onPress={() => router.push('/edit-profile' as any)}
+                >
                   <Ionicons name="camera" size={14} color="#fff" />
                 </Pressable>
               </View>

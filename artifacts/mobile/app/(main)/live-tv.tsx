@@ -127,6 +127,15 @@ export default function LiveTVScreen() {
     setActiveTab(tab);
   }, []);
 
+  // Auto-load more pages when a category tab returns an empty filtered list
+  // but there are still unloaded server pages that might contain matching channels.
+  useEffect(() => {
+    if (activeTab === 'All') return;
+    if (filtered.length > 0) return;
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage();
+  }, [activeTab, filtered.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetchBrowse();

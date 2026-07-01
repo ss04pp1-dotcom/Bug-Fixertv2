@@ -13,7 +13,15 @@ export class M3uImportConsumer extends WorkerHost {
 
   async process(job: Job<{ importJobId: string; filePath: string }>): Promise<void> {
     this.logger.log(`Processing import job ${job.id} → importJobId=${job.data.importJobId}`);
-    await this.importService.processImportJob(job.data.importJobId, job.data.filePath);
-    this.logger.log(`Import job ${job.id} completed`);
+    try {
+      await this.importService.processImportJob(job.data.importJobId, job.data.filePath);
+      this.logger.log(`Import job ${job.id} completed`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      this.logger.error(`Import job ${job.id} failed: ${msg}`, stack);
+      // Re-throw so BullMQ marks the job as failed (enables retry/DLQ)
+      throw err;
+    }
   }
 }

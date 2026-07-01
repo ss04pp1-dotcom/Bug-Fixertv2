@@ -305,6 +305,8 @@ model Channel {
   @@index([categoryId])
   @@index([createdAt])
   @@index([lastActiveAt])
+  @@index([name])
+  @@index([primaryStreamUrl])
   @@unique([normalizedName])
   @@map("channels")
 }
@@ -484,6 +486,7 @@ model Movie {
   @@index([isActive])
   @@index([categoryId])
   @@index([createdAt])
+  @@index([title])
   @@map("movies")
 }
 
@@ -521,6 +524,7 @@ model Series {
   @@index([isActive])
   @@index([categoryId])
   @@index([createdAt])
+  @@index([title])
   @@map("series")
 }
 

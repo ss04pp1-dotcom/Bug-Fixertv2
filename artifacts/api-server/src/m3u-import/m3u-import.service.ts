@@ -614,54 +614,86 @@ export class M3uImportService {
   async processHealthCheck(channelIds: string[]) {
     this.logger.log(`Health check started for ${channelIds.length} channels`);
 
-    for (const channelId of channelIds) {
-      try {
-        const channel = await this.prisma.channel.findUnique({
-          where: { id: channelId },
-          select: {
-            id: true, primaryStreamUrl: true, streamStatus: true,
-            servers: {
-              where: { healthCheckEnabled: true, deletedAt: null, enabled: true },
-              orderBy: { priority: 'asc' },
-              take: 1,
-              select: { cookie: true, userAgent: true, referer: true, origin: true },
-            },
-          },
-        });
+    // ── 1. Bulk-fetch all channels in ONE DB round-trip ──────────────────────
+    const channels = await this.prisma.channel.findMany({
+      where: { id: { in: channelIds } },
+      select: {
+        id: true,
+        primaryStreamUrl: true,
+        streamStatus: true,
+        servers: {
+          where: { healthCheckEnabled: true, deletedAt: null, enabled: true },
+          orderBy: { priority: 'asc' },
+          take: 1,
+          select: { cookie: true, userAgent: true, referer: true, origin: true },
+        },
+      },
+    });
 
-        if (!channel?.primaryStreamUrl) continue;
+    const withUrl = channels.filter((ch) => !!ch.primaryStreamUrl);
+    if (withUrl.length === 0) {
+      this.logger.log('Health check: no channels with a stream URL — skipped');
+      return;
+    }
 
-        await this.prisma.channel.update({
-          where: { id: channelId },
-          data: { streamStatus: ChannelStreamStatus.checking },
-        });
+    // ── 2. Bulk-mark as 'checking' in ONE updateMany ──────────────────────────
+    await this.prisma.channel.updateMany({
+      where: { id: { in: withUrl.map((c) => c.id) } },
+      data: { streamStatus: ChannelStreamStatus.checking },
+    });
 
-        // Use the primary server's headers (cookie/userAgent) for validation
-        const primaryServer = channel.servers?.[0];
-        const result = await this.streamValidation.validateWithHeaders(
-          channel.primaryStreamUrl,
-          primaryServer ?? undefined,
-        );
+    // ── 3. Validate streams concurrently (max 5 at a time) ───────────────────
+    const CONCURRENCY = 5;
+    const results: Array<{
+      id: string;
+      ok: boolean;
+      failReason?: string;
+      responseTimeMs?: number;
+    }> = [];
 
-        const newStatus = result.success ? ChannelStreamStatus.active : ChannelStreamStatus.offline;
-        await this.prisma.channel.update({
-          where: { id: channelId },
+    for (let i = 0; i < withUrl.length; i += CONCURRENCY) {
+      const batch = withUrl.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async (ch) => {
+          try {
+            const result = await this.streamValidation.validateWithHeaders(
+              ch.primaryStreamUrl!,
+              ch.servers?.[0] ?? undefined,
+            );
+            return {
+              id: ch.id,
+              ok: result.success,
+              failReason: result.failReason,
+              responseTimeMs: result.responseTimeMs,
+            };
+          } catch {
+            return { id: ch.id, ok: false, failReason: 'validation_error' };
+          }
+        }),
+      );
+      results.push(...batchResults);
+    }
+
+    // ── 4. Bulk-write results in a single $transaction ────────────────────────
+    const now = new Date();
+    await this.prisma.$transaction(
+      results.map((r) =>
+        this.prisma.channel.update({
+          where: { id: r.id },
           data: {
-            streamStatus: newStatus,
-            isActive: result.success,
-            ...(result.success && { lastActiveAt: new Date() }),
+            streamStatus: r.ok ? ChannelStreamStatus.active : ChannelStreamStatus.offline,
+            isActive: r.ok,
+            ...(r.ok && { lastActiveAt: now }),
           },
-        });
+        }),
+      ),
+    );
 
-        const label = result.success ? 'ACTIVE' : `OFFLINE (${result.failReason ?? 'unknown'})`;
-        this.logger.debug(`Channel ${channelId}: ${label} (${result.responseTimeMs}ms)`);
-      } catch (err: any) {
-        this.logger.error(`Health check failed for ${channelId}: ${err?.message}`);
-        await this.prisma.channel.update({
-          where: { id: channelId },
-          data: { streamStatus: ChannelStreamStatus.offline },
-        }).catch(() => {});
-      }
+    for (const r of results) {
+      const label = r.ok ? 'ACTIVE' : `OFFLINE (${r.failReason ?? 'unknown'})`;
+      this.logger.debug(
+        `Channel ${r.id}: ${label}${r.responseTimeMs != null ? ` (${r.responseTimeMs}ms)` : ''}`,
+      );
     }
 
     this.logger.log(`Health check completed for ${channelIds.length} channels`);
