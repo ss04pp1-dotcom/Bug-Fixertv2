@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface AdItem {
   id: string;
@@ -65,10 +66,13 @@ export function AdNative({ placement, style }: AdNativeProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const impressionTracked = useRef(false);
+  const { user } = useAuthStore();
+  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
 
   useEffect(() => {
+    if (isPremium) return;
     fetchNativeAd(placement).then(setAd);
-  }, [placement]);
+  }, [placement, isPremium]);
 
   useEffect(() => {
     if (ad && !impressionTracked.current) {
@@ -76,6 +80,9 @@ export function AdNative({ placement, style }: AdNativeProps) {
       trackEvent(ad.id, 'impression', placement);
     }
   }, [ad, placement]);
+
+  // Premium users see no ads — placed after all hooks to respect Rules of Hooks
+  if (isPremium) return null;
 
   if (!ad || dismissed) return null;
 

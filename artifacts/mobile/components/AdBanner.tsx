@@ -13,6 +13,7 @@ import { Config } from '@/constants/config';
 import { admobAvailable, BannerAd, BannerAdSize, TestIds } from '@/lib/admob';
 import { appLovinAvailable, MaxAdView, AdFormat, AdViewPosition, initAppLovin } from '@/lib/applovin';
 import { useAdConfig, isAdMobActive, isAppLovinActive } from '@/hooks/useAdConfig';
+import { useAuthStore } from '@/lib/auth-store';
 import Constants from 'expo-constants';
 
 const { width: W } = Dimensions.get('window');
@@ -125,6 +126,8 @@ export function AdBanner({ placement, style }: AdBannerProps) {
   const [imgError, setImgError] = useState(false);
   const impressionTracked = useRef(false);
   const { data: adConfig } = useAdConfig();
+  const { user } = useAuthStore();
+  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
 
   const admobActive = isAdMobActive(adConfig);
   const applovinActive = isAppLovinActive(adConfig);
@@ -134,9 +137,9 @@ export function AdBanner({ placement, style }: AdBannerProps) {
 
   useEffect(() => {
     // House-ad fallback only needs to fetch when we're not using a real network banner.
-    if (useRealAdMob || useRealAppLovin) return;
+    if (isPremium || useRealAdMob || useRealAppLovin) return;
     fetchAd(placement).then(setAd);
-  }, [placement, useRealAdMob, useRealAppLovin]);
+  }, [placement, isPremium, useRealAdMob, useRealAppLovin]);
 
   useEffect(() => {
     if (ad && !impressionTracked.current) {
@@ -144,6 +147,9 @@ export function AdBanner({ placement, style }: AdBannerProps) {
       trackEvent(ad.id, 'impression', placement);
     }
   }, [ad, placement]);
+
+  // Premium users see no ads — placed after all hooks to respect Rules of Hooks
+  if (isPremium) return null;
 
   if (useRealAdMob) {
     return (

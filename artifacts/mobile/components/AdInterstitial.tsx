@@ -17,6 +17,7 @@ import { appLovinAvailable, initAppLovin } from '@/lib/applovin';
 import { useAdConfig, isAdMobActive, isAppLovinActive } from '@/hooks/useAdConfig';
 import { useAdMobInterstitial } from '@/hooks/useAdMobInterstitial';
 import { useAppLovinInterstitial } from '@/hooks/useAppLovinInterstitial';
+import { useAuthStore } from '@/lib/auth-store';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -39,7 +40,7 @@ async function fetchInterstitialAd(placement: string): Promise<AdItem | null> {
     const pl = items.find((p: any) => p.slug === placement || p.name);
     if (!pl) return null;
     const ads: any[] = (pl.advertisements ?? []).filter(
-      (a: any) => a.isActive !== false && ['interstitial', 'popup'].includes(a.type),
+      (a: any) => a.isActive !== false && ['interstitial', 'popup', 'app_open', 'splash'].includes(a.type),
     );
     if (ads.length === 0) return null;
     const pick = ads[Math.floor(Math.random() * ads.length)];
@@ -79,6 +80,13 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
   const [countdown, setCountdown] = useState(5);
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { user } = useAuthStore();
+  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
+
+  // If premium user, immediately close so navigation isn't blocked
+  useEffect(() => {
+    if (isPremium && visible) onClose();
+  }, [isPremium, visible, onClose]);
 
   const { data: adConfig } = useAdConfig();
   const admobActive = isAdMobActive(adConfig);
@@ -109,34 +117,34 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
   }, [visible, useRealNetwork]);
 
   useEffect(() => {
-    if (!visible || !useRealAdMob) return;
+    if (!visible || !useRealAdMob || isPremium) return;
     if (admobInterstitial.loaded && !shownRef.current) {
       shownRef.current = true;
       const didShow = admobInterstitial.show();
       if (!didShow) onClose();
     }
-  }, [visible, useRealAdMob, admobInterstitial.loaded]);
+  }, [visible, useRealAdMob, isPremium, admobInterstitial.loaded]);
 
   useEffect(() => {
-    if (!visible || !useRealAppLovin) return;
+    if (!visible || !useRealAppLovin || isPremium) return;
     if (applovinInterstitial.loaded && !shownRef.current) {
       shownRef.current = true;
       const didShow = applovinInterstitial.show();
       if (!didShow) onClose();
     }
-  }, [visible, useRealAppLovin, applovinInterstitial.loaded]);
+  }, [visible, useRealAppLovin, isPremium, applovinInterstitial.loaded]);
 
   // Real network path never had an ad loaded in time — don't block navigation.
   useEffect(() => {
-    if (!visible || !useRealNetwork) return;
+    if (!visible || !useRealNetwork || isPremium) return;
     const timeout = setTimeout(() => {
       if (!shownRef.current) onClose();
     }, 4000);
     return () => clearTimeout(timeout);
-  }, [visible, useRealNetwork, onClose]);
+  }, [visible, useRealNetwork, isPremium, onClose]);
 
   useEffect(() => {
-    if (useRealNetwork) return; // real network path handles itself above
+    if (useRealNetwork || isPremium) return; // real network / premium — no fetch needed
     if (visible) {
       setFetchState('loading');
       impressionTracked.current = false;
@@ -148,7 +156,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
       setAd(null);
       setFetchState('idle');
     }
-  }, [visible, placement, useRealNetwork]);
+  }, [visible, placement, useRealNetwork, isPremium]);
 
   // If ad fetch finished with no result, auto-close so channel switch proceeds
   useEffect(() => {
@@ -184,6 +192,9 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
 
   // Real network interstitials render themselves natively via `.show()` — no JSX here.
   if (useRealNetwork) return null;
+
+  // Premium users see no interstitials (onClose already called via useEffect above)
+  if (isPremium) return null;
 
   if (!visible || fetchState !== 'ready' || !ad) return null;
 
