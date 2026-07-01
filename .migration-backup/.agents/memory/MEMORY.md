@@ -1,8 +1,0 @@
-- [Notification user endpoints](notification-user-endpoints.md) — NotificationRead table added to Prisma+Drizzle; user endpoints live at /notifications/user (not /notifications which is admin-only)
-- [Orphaned Express files](orphaned-express-files.md) — src/app.ts, src/index.ts, src/lib/, src/routes/ were stale template files in the NestJS api-server; deleted to fix tsc
-- [Subscription path alias](subscription-alias.md) — Mobile calls /subscriptions/me; API has /subscriptions/my; added /me alias
-- [Series player navigation](series-player-nav.md) — always pass series id (not episode id) to /player/[id] with type=series; season param is 1-based episode index
-- [Mobile API endpoint auth mismatches](api-endpoint-auth.md) — several hooks were calling admin-only endpoints; correct public paths documented
-- [StreamPro full bug audit](streamPro-bug-fixes.md) — comprehensive table of all HTTP method and path bugs fixed across mobile api.service.ts, api-hooks.ts, auth-store.ts, API support controller, payments controller, and admin auth/axios-client
-- [Icy-MetaData IPTV playback issue](icy-metadata-iptv-issue.md) — never send Icy-MetaData:1; causes 26s server delay on Streamer 23.07 IPTV panels; use Lavf/58.29.100 UA instead
-- [isActive filter pattern for movies/series](isactive-filter-pattern.md) — findAll supports isActive=true/false/all; findOne enforces isActive:true; update/remove use private findOneAdmin (no isActive filter) so admin can edit inactive records; admin pages pass isActive=all
