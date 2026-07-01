@@ -101,11 +101,17 @@ export default function LiveTVScreen() {
     );
   }, [infiniteData]);
 
-  // Client-side tab filter — exact case-insensitive category name match
+  // Client-side tab filter.
+  // Priority 1: channel has a category assigned in the DB → exact name match.
+  // Priority 2: channel has no assigned category (M3U-imported) → match by
+  //             checking if the channel name contains the tab keyword.
   const filtered = useMemo(() => {
     if (activeTab === 'All') return allChannels;
     const tab = activeTab.toLowerCase();
-    return allChannels.filter(ch => ch.cat.toLowerCase() === tab);
+    return allChannels.filter(ch => {
+      if (ch.cat.toLowerCase() === tab) return true;
+      return ch.name.toLowerCase().includes(tab);
+    });
   }, [allChannels, activeTab]);
 
   // Reset tab to 'All' if the selected tab is no longer in the list (categories reloaded)

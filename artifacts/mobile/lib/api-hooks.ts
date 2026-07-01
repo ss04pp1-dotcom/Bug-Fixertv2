@@ -51,7 +51,7 @@ export const useLiveChannelsInfinite = (params?: { search?: string; limit?: numb
 export const useChannel = (id: string) => useQuery({ queryKey: ['channel', id], queryFn: () => apiClient.get(`/channels/${id}`).then(unwrap), enabled: !!id });
 
 // Categories
-export const useCategories = () => useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories', { params: { limit: 1000 } }).then(unwrapList) });
+export const useCategories = () => useQuery({ queryKey: ['categories'], queryFn: () => apiClient.get('/categories', { params: { limit: 500 } }).then(unwrapList) });
 
 // Content
 export const useMovie = (id: string) => useQuery({ queryKey: ['movie', id], queryFn: () => apiClient.get(`/movies/${id}`).then(unwrap), enabled: !!id });
