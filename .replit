@@ -48,7 +48,7 @@ args = "NEXT_PUBLIC_BASE_PATH='' pnpm --filter @workspace/admin run dev"
 outputType = "webview"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
