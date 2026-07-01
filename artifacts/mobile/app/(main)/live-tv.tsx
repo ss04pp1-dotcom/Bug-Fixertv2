@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLiveChannelsInfinite } from '@/lib/api-hooks';
+import { useLiveChannelsInfinite, useCategories } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 
 const { width: W } = Dimensions.get('window');
@@ -43,27 +43,6 @@ const GRADIENTS: [string, string][] = [
   ['#BE185D', '#9D174D'],
   ['#047857', '#064E3B'],
 ];
-
-// Category keyword mapping for client-side tab filtering
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Bangladesh': ['bd', 'bangladesh', 'bangla', 'btv', 'channel i', 'ntv', 'atn', 'somoy', 'jamuna', 'ekattor', 'independent', 'boishakhi', 'desh', 'maasranga', 'rtv', 'sa tv', 'deepto', 'nagorik', 'channel 24', 'mytv', 'brtv', 'gazi'],
-  'Sports': ['sport', 'espn', 'star sports', 'sky sports', 'bein', 'dazn', 'eurosport', 'bt sport', 'cricket', 'football', 'tennis', 'golf', 'boxing', 'f1', 'formula', 'nba', 'nfl', 'nhl', 'fox sport', 'supersport'],
-  'News': ['news', 'cnn', 'bbc', 'al jazeera', 'fox news', 'msnbc', 'cnbc', 'bloomberg', 'reuters', 'sky news', 'france 24', 'dw', 'euronews', 'abc news', 'nbc news', 'times now', 'ndtv'],
-  'Entertainment': ['entertainment', 'movie', 'films', 'cinema', 'hbo', 'showtime', 'fx', 'tnt', 'tbs', 'amc', 'star plus', 'zee', 'sony', 'colors', 'mtv', 'vh1', 'comedy', 'drama'],
-  'Kids': ['kids', 'cartoon', 'disney', 'nickelodeon', 'nick', 'cartoon network', 'boomerang', 'baby', 'junior', 'cbeebies', 'pbs kids', 'discovery kids'],
-  'Religious': ['religious', 'islamic', 'christian', 'peace', 'quran', 'bible', 'muslim', 'church', 'gospel', 'hindu', 'dharma', 'prayer', 'god', 'divine'],
-  'International': ['international', 'global', 'world', 'uk', 'usa', 'us', 'france', 'germany', 'spain', 'italy', 'arabic', 'indian', 'pakistan', 'turkey', 'russia', 'china', 'japan', 'korean'],
-  'IPTV': ['iptv', 'm3u8'],
-};
-
-function matchesCategory(name: string, category: string): boolean {
-  if (category === 'All') return true;
-  const lower = name.toLowerCase();
-  const keywords = CATEGORY_KEYWORDS[category] || [category.toLowerCase()];
-  return keywords.some(k => lower.includes(k));
-}
-
-const TABS = ['All', 'Bangladesh', 'Sports', 'News', 'Entertainment', 'Kids', 'Religious', 'International', 'IPTV'];
 
 function mapChannel(ch: any, i: number) {
   return {
@@ -93,6 +72,15 @@ export default function LiveTVScreen() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Fetch all categories from the API (limit=1000 set in the hook)
+  const { data: categoryList = [] } = useCategories();
+
+  // Build tab list dynamically: 'All' first, then every category from the DB
+  const tabs = useMemo<string[]>(
+    () => ['All', ...categoryList.map((c: any) => c.name as string).filter(Boolean)],
+    [categoryList],
+  );
+
   // Infinite query — normal browsing (no search): pages of 50 from server
   const {
     data: infiniteData,
@@ -113,14 +101,19 @@ export default function LiveTVScreen() {
     );
   }, [infiniteData]);
 
-  // Client-side tab filter (search uses server-side)
+  // Client-side tab filter — exact case-insensitive category name match
   const filtered = useMemo(() => {
     if (activeTab === 'All') return allChannels;
-    return allChannels.filter(ch =>
-      matchesCategory(ch.name, activeTab) ||
-      matchesCategory(ch.cat, activeTab)
-    );
+    const tab = activeTab.toLowerCase();
+    return allChannels.filter(ch => ch.cat.toLowerCase() === tab);
   }, [allChannels, activeTab]);
+
+  // Reset tab to 'All' if the selected tab is no longer in the list (categories reloaded)
+  useEffect(() => {
+    if (activeTab !== 'All' && tabs.length > 1 && !tabs.includes(activeTab)) {
+      setActiveTab('All');
+    }
+  }, [tabs, activeTab]);
 
   // Reset infinite query position when tab changes (not search — search goes to server)
   const handleTabChange = useCallback((tab: string) => {
@@ -256,7 +249,7 @@ export default function LiveTVScreen() {
       {!debouncedSearch && (
         <View style={{ paddingBottom: 8 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
-            {TABS.map(tab => {
+            {tabs.map(tab => {
               const isActive = activeTab === tab;
               return (
                 <Pressable key={tab} onPress={() => handleTabChange(tab)} style={{ marginRight: 8 }}>
@@ -305,7 +298,7 @@ export default function LiveTVScreen() {
               ? 'Please wait or pull down to refresh'
               : debouncedSearch
               ? `No results for "${debouncedSearch}"`
-              : `Try selecting "All" to see all channels`}
+              : `No channels in "${activeTab}" yet`}
           </Text>
           {allChannels.length === 0 && (
             <Pressable onPress={onRefresh} style={s.retryBtn}>
