@@ -29,7 +29,11 @@ function resolveBaseUrl(): string {
 function resolveWsUrl(): string {
   const raw = (process.env.NEXT_PUBLIC_WS_URL ?? '').replace(/\/+$/, '');
   if (raw) return raw;
-  if (typeof window === 'undefined') return 'wss://bug-fixertv2.onrender.com';
+  // During SSR there is no window — return empty string so the WS client
+  // skips connection until the browser hydrates and the real URL is known.
+  // Never fall back to a hardcoded external URL: it leaks presence data to
+  // a third-party server when NEXT_PUBLIC_WS_URL is misconfigured.
+  if (typeof window === 'undefined') return '';
   return window.location.origin
     .replace(/^https/, 'wss')
     .replace(/^http/, 'ws');

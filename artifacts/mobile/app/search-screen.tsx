@@ -25,64 +25,53 @@ type ResultItem = {
   category?: string;
 };
 
-// API response shape: { success, data: { data: [...], meta: {...} } }
-// Extract the inner array from a paginated or plain response.
-function extractList(axiosResponse: any): any[] {
-  const envelope = axiosResponse?.data;          // { success, data, ... }
-  const inner    = envelope?.data;               // { data: [...], meta } OR [...]
-  if (Array.isArray(inner)) return inner;        // non-paginated list
-  if (Array.isArray(inner?.data)) return inner.data; // paginated list
-  return [];
-}
-
+// Use the dedicated /search endpoint — one request instead of three parallel
+// calls per keystroke, reduces server load and avoids race conditions.
+// Endpoint: GET /v1/search?q=<query>
+// Response: { channels: [...], movies: [...], series: [...], query: string }
 async function searchAll(query: string): Promise<ResultItem[]> {
-  if (!query.trim()) return [];
+  const q = query.trim();
+  if (!q || q.length < 2) return [];
   try {
-    const [movies, series, channels] = await Promise.allSettled([
-      apiClient.get('/movies',   { params: { search: query, limit: 10 } }),
-      apiClient.get('/series',   { params: { search: query, limit: 10 } }),
-      apiClient.get('/channels', { params: { search: query, limit: 10 } }),
-    ]);
+    const res = await apiClient.get('/search', { params: { q } });
+    const envelope = res?.data?.data ?? res?.data ?? {};
+    const channels: any[] = Array.isArray(envelope.channels) ? envelope.channels : [];
+    const movies:   any[] = Array.isArray(envelope.movies)   ? envelope.movies   : [];
+    const series:   any[] = Array.isArray(envelope.series)   ? envelope.series   : [];
 
     const results: ResultItem[] = [];
 
-    if (movies.status === 'fulfilled') {
-      extractList(movies.value).forEach((m: any) => {
-        results.push({
-          id: m.id,
-          title: m.title || m.name || '',
-          type: 'movie',
-          poster: m.posterUrl || m.poster || m.thumbnailUrl || '',
-          year: m.year ? String(m.year) : '',
-          category: m.category?.name || 'Movie',
-        });
+    channels.forEach((ch: any) => {
+      results.push({
+        id:       ch.id,
+        title:    ch.name || '',
+        type:     'channel',
+        poster:   ch.logo || ch.logoUrl || '',
+        category: 'Live TV',
       });
-    }
+    });
 
-    if (series.status === 'fulfilled') {
-      extractList(series.value).forEach((s: any) => {
-        results.push({
-          id: s.id,
-          title: s.title || s.name || '',
-          type: 'series',
-          poster: s.posterUrl || s.poster || s.thumbnailUrl || '',
-          year: s.year ? String(s.year) : '',
-          category: s.category?.name || 'Series',
-        });
+    movies.forEach((m: any) => {
+      results.push({
+        id:       m.id,
+        title:    m.title || '',
+        type:     'movie',
+        poster:   m.poster || m.posterUrl || '',
+        year:     m.year ? String(m.year) : '',
+        category: 'Movie',
       });
-    }
+    });
 
-    if (channels.status === 'fulfilled') {
-      extractList(channels.value).forEach((ch: any) => {
-        results.push({
-          id: ch.id,
-          title: ch.name || '',
-          type: 'channel',
-          poster: ch.logoUrl || ch.logo || '',
-          category: ch.category?.name || 'Live TV',
-        });
+    series.forEach((s: any) => {
+      results.push({
+        id:       s.id,
+        title:    s.title || '',
+        type:     'series',
+        poster:   s.poster || s.posterUrl || '',
+        year:     s.year ? String(s.year) : '',
+        category: 'Series',
       });
-    }
+    });
 
     return results;
   } catch {
@@ -161,7 +150,7 @@ export default function SearchScreen() {
   const { data = [], isFetching } = useQuery({
     queryKey: ['search', debouncedQuery],
     queryFn: () => searchAll(debouncedQuery),
-    enabled: debouncedQuery.trim().length > 0,
+    enabled: debouncedQuery.trim().length > 1,  // API requires at least 2 chars
   });
 
   const handleSelect = useCallback((item: ResultItem) => {

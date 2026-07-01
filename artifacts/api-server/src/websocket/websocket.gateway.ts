@@ -167,12 +167,18 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
   @SubscribeMessage('join_channel')
   handleJoinChannel(@ConnectedSocket() client: Socket, @MessageBody() data: { channelId: string }) {
     if (!client.data.authed) return { error: 'Unauthorized' };
-    void client.join(`channel:${data.channelId}`);
-    const room = this.server.sockets.adapter.rooms.get(`channel:${data.channelId}`);
-    this.server.to(`channel:${data.channelId}`).emit('viewer_count', {
-      channelId: data.channelId, count: room?.size ?? 0,
+    // Validate channelId — must be a non-empty string; reject anything that
+    // could be used to join arbitrary room names (e.g. 'admin:presence').
+    const channelId = String(data?.channelId ?? '').trim();
+    if (!channelId || !/^[a-zA-Z0-9_-]+$/.test(channelId)) {
+      return { error: 'Invalid channelId' };
+    }
+    void client.join(`channel:${channelId}`);
+    const room = this.server.sockets.adapter.rooms.get(`channel:${channelId}`);
+    this.server.to(`channel:${channelId}`).emit('viewer_count', {
+      channelId, count: room?.size ?? 0,
     });
-    return { event: 'joined', channelId: data.channelId };
+    return { event: 'joined', channelId };
   }
 
   @SubscribeMessage('leave_channel')
@@ -221,7 +227,13 @@ export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnec
   // ── Used by other services ─────────────────────────────────────────────────
 
   broadcastNotification(notification: Record<string, unknown>): void {
-    this.server.emit('notification', notification);
+    // Only emit to authenticated sockets — unauthenticated connections must not
+    // receive server-side notification payloads which may contain user-specific data.
+    for (const socket of this.server.sockets.sockets.values()) {
+      if (socket.data?.authed) {
+        socket.emit('notification', notification);
+      }
+    }
   }
 
   broadcastToRoom(room: string, event: string, data: Record<string, unknown>): void {

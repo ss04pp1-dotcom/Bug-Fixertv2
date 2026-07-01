@@ -76,7 +76,8 @@ export class M3uImportService {
         importJobId: job.id,
         filePath,
       } as ImportJobData, {
-        attempts: 1,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: { count: 100 },
         removeOnFail: { count: 50 },
       });
@@ -548,7 +549,8 @@ export class M3uImportService {
           channelIds,
           offlineOnly: false,
         } as HealthCheckJobData, {
-          attempts: 1,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3_000 },
           removeOnComplete: { count: 100 },
         });
       } else {
@@ -592,7 +594,8 @@ export class M3uImportService {
           channelIds: channels.map((c) => c.id),
           offlineOnly: false,
         } as HealthCheckJobData, {
-          attempts: 1,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3_000 },
           removeOnComplete: { count: 100 },
         });
       } else {

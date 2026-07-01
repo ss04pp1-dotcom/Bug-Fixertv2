@@ -63,7 +63,8 @@ export class HealthCheckScheduler {
             channelIds: batch,
             offlineOnly: false,
           }, {
-            attempts: 1,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 3_000 },
             removeOnComplete: { count: 100 },
           });
         }
