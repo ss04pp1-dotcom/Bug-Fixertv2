@@ -21,6 +21,16 @@ interface AuthState {
   refreshProfile: () => Promise<void>;
 }
 
+function mapUserData(userData: any): User {
+  return {
+    id: userData.id,
+    name: userData.name,
+    email: userData.email,
+    avatar: userData.avatar,
+    plan: userData.isPremium ? (userData.subscription?.plan?.name || 'premium') : 'free',
+  };
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -39,14 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
       const response = await apiClient.get('/auth/profile');
-      const userData = response.data.data;
-      const user: User = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        avatar: userData.avatar,
-        plan: userData.isPremium ? (userData.subscription?.plan?.name || 'premium') : 'free',
-      };
+      const user = mapUserData(response.data.data);
       set({ isLoading: false, user, isAuthenticated: true });
     } catch {
       await tokenStorage.clearTokens();
@@ -56,14 +59,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateUser: async (data: Partial<User>) => {
     try {
       const response = await apiClient.put('/auth/profile', data);
-      const userData = response.data.data;
-      const user: User = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        avatar: userData.avatar,
-        plan: userData.isPremium ? (userData.subscription?.plan?.name || 'premium') : 'free',
-      };
+      const user = mapUserData(response.data.data);
       set({ user });
     } catch (err) {
       if (__DEV__) console.warn('[auth-store] Profile update failed:', err instanceof Error ? err.message : err);
@@ -73,14 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshProfile: async () => {
     try {
       const response = await apiClient.get('/auth/profile');
-      const userData = response.data.data;
-      const user: User = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        avatar: userData.avatar,
-        plan: userData.isPremium ? (userData.subscription?.plan?.name || 'premium') : 'free',
-      };
+      const user = mapUserData(response.data.data);
       set({ user, isAuthenticated: true });
     } catch (err) {
       if (__DEV__) console.warn('[auth-store] Profile refresh failed:', err instanceof Error ? err.message : err);

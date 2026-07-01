@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import OtaUpdateBanner from '@/components/OtaUpdateBanner';
 import GlobalVideoPlayer from '@/components/GlobalVideoPlayer';
-import { Slot, router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
@@ -148,7 +148,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <View style={styles.container}>
             <AppGuards>
-              <Slot />
+              <Stack screenOptions={{ headerShown: false }} />
             </AppGuards>
             <OtaUpdateBanner />
             <GlobalVideoPlayer />

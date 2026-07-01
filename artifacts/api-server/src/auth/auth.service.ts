@@ -30,6 +30,8 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    dto.email = dto.email?.trim() || undefined;
+    dto.phone = dto.phone?.trim() || undefined;
     if (!dto.email && !dto.phone) {
       throw new BadRequestException('Email or phone is required');
     }

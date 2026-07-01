@@ -76,11 +76,32 @@ export default function LivePlayerScreen() {
 
   const related = useMemo(() => {
     if (!relatedRaw || !Array.isArray(relatedRaw)) return [];
-    const pool = (relatedRaw as any[]).filter((ch: any) => ch.id !== id);
-    const scored = pool.map((ch: any) => {
-      const chCatId   = ch.categoryId || ch.category?.id || null;
-      const chCatName = ch.category?.name || ch.category || '';
-      const chLang    = (ch.language || '').toLowerCase();
+
+    interface ApiChannel {
+      id?: string;
+      name?: string;
+      logoUrl?: string;
+      logo?: string;
+      language?: string;
+      categoryId?: string;
+      category?: string | { id: string; name: string };
+      primaryStreamUrl?: string;
+      streamUrl?: string;
+    }
+
+    const pool = (relatedRaw as ApiChannel[]).filter((ch) => ch.id !== id);
+    const scored = pool.map((ch) => {
+      let chCatId: string | null = null;
+      let chCatName = '';
+      if (typeof ch.category === 'object' && ch.category) {
+        chCatId = ch.category.id;
+        chCatName = ch.category.name;
+      } else if (typeof ch.category === 'string') {
+        chCatName = ch.category;
+      }
+      if (ch.categoryId) chCatId = ch.categoryId;
+
+      const chLang    = (ch.language || '').trim().toLowerCase();
       let score = 0;
       if (currentCatId && chCatId && chCatId === currentCatId) score += 3;
       else if (currentCatName && chCatName && chCatName.toLowerCase() === currentCatName.toLowerCase()) score += 3;
@@ -90,7 +111,7 @@ export default function LivePlayerScreen() {
         _score: score, _sameCat: score >= 3,
         id: ch.id || '', name: ch.name || '',
         logo: ch.logoUrl || ch.logo || '',
-        cat: ch.category?.name || ch.category || ch.language || 'Live TV',
+        cat: chCatName || ch.language || 'Live TV',
         language: ch.language || '',
         streamUrl: ch.primaryStreamUrl || ch.streamUrl || '',
       };
@@ -198,7 +219,7 @@ export default function LivePlayerScreen() {
 
       setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
-      setCurrentLang((ch?.language || '').toLowerCase() || null);
+      setCurrentLang((ch?.language || '').trim().toLowerCase() || null);
       const srcs = buildSources(ch, passedUrl || undefined);
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
@@ -264,8 +285,7 @@ export default function LivePlayerScreen() {
     return () => {
       if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sources.length > 0]);
+  }, [sources, scheduleHourlyAd]);
 
   const handleHourlyAdClose = useCallback(() => {
     setHourlyAdVisible(false);

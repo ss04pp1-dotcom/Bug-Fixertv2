@@ -195,9 +195,12 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 process.on('uncaughtException', (err: Error) => {
   const logger = new Logger('Process');
-  logger.error('Uncaught exception — server will continue:', err.stack);
-  // Only truly fatal errors (OOM, SIGKILL) should terminate the process.
-  // Log and continue so Render does not restart the container unnecessarily.
+  logger.error('Uncaught exception — process is in an undefined state, shutting down:', err.stack);
+  // Node.js docs explicitly recommend terminating on uncaughtException: the process
+  // may be in a corrupted state (partially-freed resources, inconsistent state).
+  // Render will automatically restart the container, which is safer than limping
+  // along in an unknown state (risk of data corruption / silent security bypass).
+  process.exit(1);
 });
 
 bootstrap().catch((err: unknown) => {
