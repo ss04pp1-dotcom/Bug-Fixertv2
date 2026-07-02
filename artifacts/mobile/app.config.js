@@ -93,11 +93,11 @@ module.exports = {
       [
         'react-native-google-mobile-ads',
         {
-          android_app_id: ADMOB_ANDROID_APP_ID,
-          ios_app_id: ADMOB_IOS_APP_ID,
-          user_tracking_usage_description:
+          androidAppId: ADMOB_ANDROID_APP_ID,
+          iosAppId: ADMOB_IOS_APP_ID,
+          userTrackingUsageDescription:
             'This identifier will be used to deliver personalized ads to you.',
-          delay_app_measurement_init: true,
+          delayAppMeasurementInit: true,
         },
       ],
       './plugins/withAdMobManifest',
