@@ -260,7 +260,7 @@ export default function LiveTVScreen() {
         </View>
       )}
 
-      <AdBanner placement="live_tv_banner" style={{ marginTop: 4, marginBottom: 0 }} />
+      <AdBanner placement="home-banner" style={{ marginTop: 4, marginBottom: 0 }} />
 
       {/* ── Count hint ─────────────────────────────────────────── */}
       {!isLoading && filtered.length > 0 && (

@@ -36,7 +36,7 @@ function MainTabLayoutInner() {
     <>
       {/* Pre-load AdRewarded here so the ad is ready before user picks a channel */}
       <AdRewarded
-        placement="channel_select_rewarded"
+        placement="reward"
         visible={gate.visible}
         onClose={gate.onClose}
         onRewardEarned={gate.onRewardEarned}

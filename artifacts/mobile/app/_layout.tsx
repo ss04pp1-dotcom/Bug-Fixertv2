@@ -122,7 +122,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
     <FeatureFlagsContext.Provider value={flags}>
       {children}
       {/* App-open ad shown once on first launch */}
-      <AdInterstitial placement="app_open" visible={appOpenVisible} onClose={dismissAppOpen} />
+      <AdInterstitial placement="app-open" visible={appOpenVisible} onClose={dismissAppOpen} />
     </FeatureFlagsContext.Provider>
   );
 }

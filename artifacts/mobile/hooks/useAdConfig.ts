@@ -30,7 +30,9 @@ async function fetchAdConfig(): Promise<AdRemoteConfig | null> {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
-    return await res.json();
+    const json = await res.json();
+    // API wraps response in { success, data: {...} } — unwrap it
+    return (json?.data ?? json) as AdRemoteConfig;
   } catch {
     return null;
   }

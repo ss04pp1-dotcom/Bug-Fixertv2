@@ -396,7 +396,7 @@ export default function HomeScreen() {
         )}
 
         {/* Home Ad Banner */}
-        <AdBanner placement="home_banner" style={{ marginTop: 8 }} />
+        <AdBanner placement="home-banner" style={{ marginTop: 8 }} />
 
         {/* Live Matches */}
         <SectionHeader title="Live Now Match" dot onSeeAll={() => router.push('/(main)/search')} />
