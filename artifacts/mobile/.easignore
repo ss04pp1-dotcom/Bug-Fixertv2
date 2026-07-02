@@ -1,0 +1,56 @@
+# ── node_modules (সব level) ──────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Expo / Metro cache ────────────────────────────────────────────────────────
+.expo/
+.expo-shared/
+expo-env.d.ts
+
+# ── Compiled / build output ───────────────────────────────────────────────────
+dist/
+.next/
+out/
+*.tsbuildinfo
+assetmap.json
+
+# ── Server / backend (mobile build-এ দরকার নেই) ─────────────────────────────
+server/
+
+# ── Workspace root — monorepo packages মোবাইল বিল্ডে দরকার নেই ─────────────
+../../node_modules/
+../../lib/
+../../scripts/
+../../artifacts/admin-panel/
+../../artifacts/api-server/
+../../artifacts/api-spec/
+../../artifacts/db/
+
+# ── Dev tools & editor files ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.log
+*.local
+
+# ── Test & CI ────────────────────────────────────────────────────────────────
+__tests__/
+__mocks__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+coverage/
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Replit-specific ───────────────────────────────────────────────────────────
+.replit
+replit.nix
+.local/
+attached_assets/
