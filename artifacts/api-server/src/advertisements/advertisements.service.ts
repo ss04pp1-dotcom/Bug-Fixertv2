@@ -131,12 +131,6 @@ export class AdvertisementsService {
   }
 
   async getPublicPlacements(slug?: string) {
-    const where: Prisma.AdPlacementWhereInput = { isEnabled: true };
-    if (slug) where.slug = slug;
-
-    const placements = await this.prisma.adPlacement.findMany({ where });
-    if (placements.length === 0) return [];
-
     const now = new Date();
     const activeAds = await this.prisma.advertisement.findMany({
       where: {
@@ -149,7 +143,56 @@ export class AdvertisementsService {
       include: { provider: true },
     });
 
-    return placements.map(pl => ({
+    // Try exact slug match first
+    if (slug) {
+      const exactPlacement = await this.prisma.adPlacement.findFirst({
+        where: { isEnabled: true, slug },
+      });
+      if (exactPlacement) {
+        return [{
+          ...exactPlacement,
+          advertisements: activeAds.filter(ad => ad.type === exactPlacement.type),
+        }];
+      }
+
+      // Fallback: try case-insensitive name match or slug with hyphens/underscores swapped
+      const slugAlt = slug.includes('_') ? slug.replace(/_/g, '-') : slug.replace(/-/g, '_');
+      const fuzzyPlacement = await this.prisma.adPlacement.findFirst({
+        where: {
+          isEnabled: true,
+          OR: [
+            { slug: slugAlt },
+            { name: { equals: slug.replace(/[_-]/g, ' '), mode: 'insensitive' } },
+          ],
+        },
+      });
+      if (fuzzyPlacement) {
+        return [{
+          ...fuzzyPlacement,
+          advertisements: activeAds.filter(ad => ad.type === fuzzyPlacement.type),
+        }];
+      }
+
+      // Last resort: infer ad type from slug keyword and return any matching ads
+      const inferredType = slug.includes('reward') ? 'rewarded'
+        : slug.includes('app_open') || slug.includes('appopen') ? 'app_open'
+        : slug.includes('channel') || slug.includes('switch') || slug.includes('hourly') || slug.includes('interstitial') ? 'interstitial'
+        : 'banner';
+      const allowedTypes = inferredType === 'rewarded' ? ['rewarded', 'video']
+        : inferredType === 'app_open' ? ['app_open', 'interstitial']
+        : inferredType === 'interstitial' ? ['interstitial', 'popup', 'app_open', 'splash']
+        : ['banner', 'interstitial'];
+      const typeAds = activeAds.filter(ad => allowedTypes.includes(ad.type));
+      if (typeAds.length > 0) {
+        return [{ id: '__fallback__', slug, name: slug, type: inferredType, isEnabled: true, advertisements: typeAds }];
+      }
+
+      return [];
+    }
+
+    // No slug: return all enabled placements with their ads
+    const allPlacements = await this.prisma.adPlacement.findMany({ where: { isEnabled: true } });
+    return allPlacements.map(pl => ({
       ...pl,
       advertisements: activeAds.filter(ad => ad.type === pl.type),
     }));

@@ -40,7 +40,7 @@ async function fetchAd(placement: string): Promise<AdItem | null> {
     if (!res.ok) return null;
     const data = await res.json();
     const items: any[] = Array.isArray(data) ? data : data?.data ?? [];
-    const placement_item = items.find((p: any) => p.slug === placement || p.name);
+    const placement_item = items.find((p: any) => p.slug === placement || p.name === placement) ?? items[0];
     if (!placement_item) return null;
 
     const ads: any[] = Array.isArray(placement_item.advertisements)

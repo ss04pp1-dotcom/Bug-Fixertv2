@@ -31,7 +31,7 @@ async function fetchRewardedAd(placement: string): Promise<AdItem | null> {
     if (!res.ok) return null;
     const data = await res.json();
     const items: any[] = Array.isArray(data) ? data : data?.data ?? [];
-    const pl = items.find((p: any) => p.slug === placement || p.name);
+    const pl = items.find((p: any) => p.slug === placement || p.name === placement) ?? items[0];
     if (!pl) return null;
     const ads: any[] = (pl.advertisements ?? []).filter(
       (a: any) => a.isActive !== false && ['rewarded', 'video', 'interstitial'].includes(a.type),
