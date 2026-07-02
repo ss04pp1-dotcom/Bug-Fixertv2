@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings, useUpdateSetting } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
 import { Config } from '@/constants/config';
+import { admobAvailable, mobileAds } from '@/lib/admob';
 
 const C = {
   bg: '#0A0A0F',
@@ -70,6 +71,16 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline' as const, iconColor: '#8B5CF6', type: 'nav' as const, route: '/iptv-report' },
     ] as SettingItem[],
   }] : []),
+  // Ad Inspector only exists in a real build with the native AdMob module
+  // linked (never in Expo Go). Shows exactly why an ad request failed
+  // (no fill, invalid unit, not approved yet, network error, etc.) without
+  // needing adb/device logs.
+  ...(admobAvailable ? [{
+    title: 'Ads Diagnostics',
+    items: [
+      { id: 'ad-inspector', label: 'Open Ad Inspector', icon: 'bug-outline' as const, iconColor: '#F59E0B', type: 'nav' as const },
+    ] as SettingItem[],
+  }] : []),
 ];
 
 export default function SettingsScreen() {
@@ -96,6 +107,21 @@ export default function SettingsScreen() {
           Alert.alert('Saved locally', 'Couldn\u2019t sync preference to the server — saved on this device for now.'),
       },
     );
+  };
+
+  const handleOpenAdInspector = () => {
+    if (!admobAvailable || !mobileAds) {
+      Alert.alert('Not available', 'Ad Inspector only works in a real build (EAS build), not in Expo Go.');
+      return;
+    }
+    mobileAds()
+      .openAdInspector()
+      .catch((err: unknown) => {
+        Alert.alert(
+          'Could not open Ad Inspector',
+          err instanceof Error ? err.message : 'Unknown error. Make sure the AdMob SDK finished initializing.',
+        );
+      });
   };
 
   const handleLogout = () => {
@@ -140,7 +166,11 @@ export default function SettingsScreen() {
                     key={item.id}
                     style={[s.settingRow, idx < group.items.length - 1 && s.settingRowBorder]}
                     onPress={() => {
-                      if (item.route) router.push(item.route as any);
+                      if (item.id === 'ad-inspector') {
+                        handleOpenAdInspector();
+                      } else if (item.route) {
+                        router.push(item.route as any);
+                      }
                     }}
                     activeOpacity={item.type === 'toggle' ? 1 : 0.7}
                   >
