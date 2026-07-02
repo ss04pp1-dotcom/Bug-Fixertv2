@@ -94,8 +94,11 @@ export const useGlobalPlayer = create<GlobalPlayerState>((set) => ({
       title: '',
       logo: '',
       contentId: '',
+      contentType: 'channel',
+      isLive: false,
       isPlaying: false,
       nextEpisode: null,
+      playerRoute: null,
     }),
 
   setPlaying: (v) => set({ isPlaying: v }),

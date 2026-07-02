@@ -343,6 +343,12 @@ export default function HomeScreen() {
               keyExtractor={(item) => item.id}
               onViewableItemsChanged={onViewableItemsChanged}
               viewabilityConfig={viewabilityConfig}
+              onScrollToIndexFailed={({ index }) => {
+                // Layout not ready yet — retry once after a short delay
+                setTimeout(() => {
+                  heroRef.current?.scrollToIndex({ index, animated: false });
+                }, 250);
+              }}
               renderItem={({ item }) => (
                 <View style={s.heroCardWrap}>
                   <Pressable style={s.heroCard} onPress={() => {

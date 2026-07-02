@@ -14,7 +14,8 @@ const path = require('path');
 // In EAS builds, EXPO_ROUTER_APP_ROOT is correctly resolved by Metro at bundle
 // time — no patch needed. Skip the expo-router patch to avoid breaking the
 // pnpm virtual store path resolution.
-const isEasBuild = process.env.EAS_BUILD === '1';
+// EAS sets EAS_BUILD to "true" (string), so use a truthy check rather than === '1'
+const isEasBuild = !!process.env.EAS_BUILD;
 if (isEasBuild) {
   console.log('[patch-expo-router] EAS build detected — skipping expo-router patch (EXPO_ROUTER_APP_ROOT will be used)');
 }

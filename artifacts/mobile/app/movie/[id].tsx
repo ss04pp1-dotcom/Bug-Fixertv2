@@ -200,7 +200,7 @@ export default function MovieDetailsScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.myListButton} activeOpacity={0.8} onPress={handleToggleFavorite}>
               <Ionicons name={isBookmarked ? 'checkmark' : 'add-outline'} size={20} color="#FFFFFF" />
-              <Text style={styles.myListText}>{isBookmarked ? 'My List' : 'My List'}</Text>
+              <Text style={styles.myListText}>{isBookmarked ? 'Added' : 'My List'}</Text>
             </TouchableOpacity>
           </View>
 

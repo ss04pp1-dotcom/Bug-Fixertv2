@@ -123,7 +123,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
       const didShow = admobInterstitial.show();
       if (!didShow) onClose();
     }
-  }, [visible, useRealAdMob, isPremium, admobInterstitial.loaded]);
+  }, [visible, useRealAdMob, isPremium, admobInterstitial.loaded, onClose]);
 
   useEffect(() => {
     if (!visible || !useRealAppLovin || isPremium) return;
@@ -132,7 +132,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
       const didShow = applovinInterstitial.show();
       if (!didShow) onClose();
     }
-  }, [visible, useRealAppLovin, isPremium, applovinInterstitial.loaded]);
+  }, [visible, useRealAppLovin, isPremium, applovinInterstitial.loaded, onClose]);
 
   // Real network path never had an ad loaded in time — don't block navigation.
   useEffect(() => {

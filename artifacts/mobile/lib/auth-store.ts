@@ -38,9 +38,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   logout: async () => {
     await tokenStorage.clearTokens();
-    set({ user: null, isAuthenticated: false });
+    // Also reset isLoading so a concurrent checkAuth can't leave the store stuck
+    set({ user: null, isAuthenticated: false, isLoading: false });
   },
   checkAuth: async () => {
+    // Guard: skip if already in progress to avoid race conditions from concurrent calls
+    if (get().isLoading) return;
     set({ isLoading: true });
     try {
       const token = await tokenStorage.getAccessToken();
@@ -51,9 +54,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await apiClient.get('/auth/profile');
       const user = mapUserData(response.data.data);
       set({ isLoading: false, user, isAuthenticated: true });
-    } catch {
-      await tokenStorage.clearTokens();
-      set({ isLoading: false, user: null, isAuthenticated: false });
+    } catch (err: unknown) {
+      // Re-throw so callers (e.g. splash) can distinguish network vs auth errors.
+      // Only clear tokens for explicit auth rejections (HTTP 401/403); leave them
+      // intact for network timeouts so offline users stay logged in.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        await tokenStorage.clearTokens();
+        set({ isLoading: false, user: null, isAuthenticated: false });
+      } else {
+        // Network/server error — preserve tokens, mark unauthenticated for now
+        set({ isLoading: false, user: null, isAuthenticated: false });
+      }
+      throw err; // let callers branch on network vs auth failure
     }
   },
   updateUser: async (data: Partial<User>) => {

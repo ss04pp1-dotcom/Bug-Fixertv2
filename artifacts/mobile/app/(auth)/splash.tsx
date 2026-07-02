@@ -20,6 +20,8 @@ export default function SplashScreenComponent() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
   useEffect(() => {
+    let isMounted = true;
+
     RNAnimated.parallel([
       RNAnimated.spring(logoScale, {
         toValue: 1,
@@ -44,11 +46,16 @@ export default function SplashScreenComponent() {
     );
     glowLoop.start();
 
+    const navigate = (route: string) => {
+      if (!isMounted) return;
+      router.replace(route as any);
+    };
+
     const timer = setTimeout(async () => {
       try {
         const token = await tokenStorage.getAccessToken();
         if (!token) {
-          router.replace('/(auth)/onboarding');
+          navigate('/(auth)/onboarding');
           return;
         }
         // Validate token server-side to avoid re-login loop with expired tokens
@@ -56,9 +63,9 @@ export default function SplashScreenComponent() {
           await checkAuth();
           const authenticated = useAuthStore.getState().isAuthenticated;
           if (authenticated) {
-            router.replace('/(main)');
+            navigate('/(main)');
           } else {
-            router.replace('/(auth)/login');
+            navigate('/(auth)/login');
           }
         } catch (checkErr: unknown) {
           // Distinguish: network error (device offline) vs auth rejection (bad token)
@@ -66,18 +73,18 @@ export default function SplashScreenComponent() {
           if (!hasResponse) {
             // No HTTP response → device is offline. Token is still in storage and
             // could be valid — let the main app handle any subsequent 401.
-            router.replace('/(main)');
+            navigate('/(main)');
           } else {
             // Server responded with an error (401/403/etc.) → token is invalid.
-            router.replace('/(auth)/login');
+            navigate('/(auth)/login');
           }
         }
       } catch {
-        router.replace('/(auth)/onboarding');
+        navigate('/(auth)/onboarding');
       }
     }, 2000);
 
-    return () => { glowLoop.stop(); clearTimeout(timer); };
+    return () => { isMounted = false; glowLoop.stop(); clearTimeout(timer); };
   }, []);
 
   return (

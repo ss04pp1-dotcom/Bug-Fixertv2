@@ -52,12 +52,15 @@ export default function SubscriptionScreen() {
       }))
     : [];
 
-  // Auto-select the first available plan once plans load
+  // Auto-select the first available plan once plans load.
+  // Use plans[0]?.id directly instead of the plans array reference (which changes
+  // every render since it's a new array each time) to avoid infinite effect triggers.
+  const firstPlanId = plans[0]?.id;
   React.useEffect(() => {
-    if (plans.length > 0 && !selectedPlan) {
-      setSelectedPlan(plans[0].id);
+    if (firstPlanId && !selectedPlan) {
+      setSelectedPlan(firstPlanId);
     }
-  }, [plans.length]);
+  }, [firstPlanId, selectedPlan]);
 
   const handleSubscribe = async () => {
     if (!selectedPlan) {

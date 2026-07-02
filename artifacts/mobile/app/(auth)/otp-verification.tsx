@@ -30,6 +30,7 @@ export default function OTPVerificationScreen() {
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const endTimeRef = useRef<number>(0);
+  const resendIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // M-044: single interval based on an absolute end-time ref — avoids recreating
   // setInterval on every tick (which the old `[timer]` dep did).
@@ -41,6 +42,13 @@ export default function OTPVerificationScreen() {
       if (remaining <= 0) clearInterval(int);
     }, 250);
     return () => clearInterval(int);
+  }, []);
+
+  // Clear any resend interval on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (resendIntervalRef.current) clearInterval(resendIntervalRef.current);
+    };
   }, []);
 
   const handleChange = (text: string, index: number) => {
@@ -108,10 +116,14 @@ export default function OTPVerificationScreen() {
       // M-044: restart the absolute end-time and re-arm the interval
       endTimeRef.current = Date.now() + 59000;
       setTimer(59);
-      const int = setInterval(() => {
+      if (resendIntervalRef.current) clearInterval(resendIntervalRef.current);
+      resendIntervalRef.current = setInterval(() => {
         const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
         setTimer(remaining);
-        if (remaining <= 0) clearInterval(int);
+        if (remaining <= 0) {
+          clearInterval(resendIntervalRef.current!);
+          resendIntervalRef.current = null;
+        }
       }, 250);
     } catch (err) {
       Alert.alert('Error', 'Failed to resend code');

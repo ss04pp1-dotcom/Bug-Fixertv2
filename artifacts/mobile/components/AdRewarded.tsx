@@ -122,7 +122,7 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRe
   };
 
   return (
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={() => {}}>
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={rewardEarned ? onClose : () => {}}>
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.topBar}>
