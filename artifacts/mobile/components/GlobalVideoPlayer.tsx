@@ -321,9 +321,13 @@ export default function GlobalVideoPlayer() {
   const swipeSide      = useRef<'left'|'right'>('right');
   const trackWidthRef  = useRef(200);
   const resumePosRef   = useRef<number | null>(null);
-  const networkRetryRef = useRef(0);
-  const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stallTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const networkRetryRef    = useRef(0);
+  const retryTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stallTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce the buffering spinner — only show after 400 ms of continuous
+  // buffering so micro-stalls (< 400 ms) are invisible to the user.
+  const bufferDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [estimatedBps, setEstimatedBps] = useState(0); // live bandwidth (bits/s)
   const sourcesRef      = useRef(sources);
   const lastVolUpdateSV = useSharedValue(0); // UI-thread throttle for setVideoVolume
   const reportedRef     = useRef(false);
@@ -1079,6 +1083,38 @@ export default function GlobalVideoPlayer() {
     }
   }, [srcIdx, setSrcIdx, contentType, reportPlayback]);
 
+  // ── Buffer debounce ───────────────────────────────────────────────────────
+  // onBuffer fires on every micro-stall — network hiccups as short as 50 ms
+  // trigger it. Without debouncing, the spinner flashes on screen for every
+  // brief LTE jitter, which destroys the "smooth" feeling.
+  //
+  // Strategy: when buffering STOPS, clear immediately (video is playing again).
+  //           When buffering STARTS, wait 400 ms before showing the spinner.
+  //           Sub-400 ms stalls are absorbed silently; longer ones get a spinner.
+  const handleBuffer = useCallback((isBuffering: boolean) => {
+    if (bufferDebounceRef.current) {
+      clearTimeout(bufferDebounceRef.current);
+      bufferDebounceRef.current = null;
+    }
+    if (!isBuffering) {
+      // Clear immediately — video is playing again, no need to wait.
+      setBuffering(false);
+      return;
+    }
+    // Delay the visual spinner by 400 ms.
+    bufferDebounceRef.current = setTimeout(() => {
+      setBuffering(true);
+    }, 400);
+  }, []);
+
+  // ── Bandwidth tracker ─────────────────────────────────────────────────────
+  // onBandwidthUpdate fires roughly every 1–2 s from ExoPlayer.
+  // Store latest estimate so the debug panel (and future adaptive logic) can
+  // display / react to it. State update is cheap (number comparison in React).
+  const handleBandwidth = useCallback((bps: number) => {
+    setEstimatedBps(bps);
+  }, []);
+
   // ── Orientation management ────────────────────────────────────────────────
   // fullscreen mode ALWAYS locks landscape (portrait fullscreen is removed).
   // top/mini/hidden → restore portrait.
@@ -1208,7 +1244,8 @@ export default function GlobalVideoPlayer() {
                 }
               }
             }}
-            onBuffer={setBuffering}
+            onBuffer={handleBuffer}
+            onBandwidth={handleBandwidth}
             onError={handleError}
             onEnd={() => { setEnded(true); setPlaying(false); }}
             onVideoTracks={setVideoTracks}
@@ -1444,6 +1481,14 @@ export default function GlobalVideoPlayer() {
                 <View style={[db.badge, { backgroundColor: 'rgba(139,92,246,0.18)' }]}>
                   <Text style={[db.badgeTxt, { color: C.primary }]}>
                     {nativeSource?.type ?? 'auto (sniff)'}
+                  </Text>
+                </View>
+              </View>
+              <View style={db.row}>
+                <Text style={db.rowLabel}>Bandwidth (live)</Text>
+                <View style={[db.badge, { backgroundColor: estimatedBps > 0 ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.06)' }]}>
+                  <Text style={[db.badgeTxt, { color: estimatedBps > 0 ? C.green : C.dim }]}>
+                    {estimatedBps > 0 ? `${(estimatedBps / 1_000_000).toFixed(1)} Mbps` : 'measuring…'}
                   </Text>
                 </View>
               </View>
