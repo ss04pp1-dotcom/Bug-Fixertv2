@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings, useUpdateSetting } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
 import { Config } from '@/constants/config';
-import { admobAvailable, mobileAds } from '@/lib/admob';
+import { admobAvailable, mobileAds, initAdMob, InterstitialAd, AdEventType, TestIds } from '@/lib/admob';
 
 const C = {
   bg: '#0A0A0F',
@@ -71,16 +71,15 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline' as const, iconColor: '#8B5CF6', type: 'nav' as const, route: '/iptv-report' },
     ] as SettingItem[],
   }] : []),
-  // Ad Inspector only exists in a real build with the native AdMob module
-  // linked (never in Expo Go). Shows exactly why an ad request failed
-  // (no fill, invalid unit, not approved yet, network error, etc.) without
-  // needing adb/device logs.
-  ...(admobAvailable ? [{
-    title: 'Ads Diagnostics',
+  {
+    title: 'Ads',
     items: [
-      { id: 'ad-inspector', label: 'Open Ad Inspector', icon: 'bug-outline' as const, iconColor: '#F59E0B', type: 'nav' as const },
+      { id: 'test-ad', label: 'Show Test Ad', icon: 'play-circle-outline' as const, iconColor: '#22C55E', type: 'nav' as const },
+      ...(admobAvailable ? [
+        { id: 'ad-inspector', label: 'Open Ad Inspector', icon: 'bug-outline' as const, iconColor: '#F59E0B', type: 'nav' as const },
+      ] as SettingItem[] : []),
     ] as SettingItem[],
-  }] : []),
+  },
 ];
 
 export default function SettingsScreen() {
@@ -114,14 +113,49 @@ export default function SettingsScreen() {
       Alert.alert('Not available', 'Ad Inspector only works in a real build (EAS build), not in Expo Go.');
       return;
     }
-    mobileAds()
-      .openAdInspector()
-      .catch((err: unknown) => {
-        Alert.alert(
-          'Could not open Ad Inspector',
-          err instanceof Error ? err.message : 'Unknown error. Make sure the AdMob SDK finished initializing.',
-        );
-      });
+    initAdMob().then(() => {
+      mobileAds()
+        .openAdInspector()
+        .catch((err: unknown) => {
+          Alert.alert(
+            'Could not open Ad Inspector',
+            err instanceof Error ? err.message : 'Unknown error.',
+          );
+        });
+    });
+  };
+
+  const handleTestAd = () => {
+    if (!admobAvailable || !InterstitialAd || !AdEventType || !TestIds) {
+      Alert.alert(
+        'Not available',
+        'Test ad requires a real APK build (not Expo Go). Native AdMob module is not loaded.',
+      );
+      return;
+    }
+    initAdMob().then(() => {
+      try {
+        const ad = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL, {
+          requestNonPersonalizedAdsOnly: false,
+        });
+        const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+          unsubLoaded();
+          unsubError();
+          ad.show();
+        });
+        const unsubError = ad.addAdEventListener(AdEventType.ERROR, (e: unknown) => {
+          unsubLoaded();
+          unsubError();
+          Alert.alert(
+            'Test Ad Failed',
+            `AdMob returned an error:\n${e instanceof Error ? e.message : JSON.stringify(e)}\n\nMake sure the device has internet access and the AdMob App ID in app.config.js is correct.`,
+          );
+        });
+        ad.load();
+      } catch (e: unknown) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Unknown error loading test ad.');
+      }
+    });
   };
 
   const handleLogout = () => {
@@ -166,7 +200,9 @@ export default function SettingsScreen() {
                     key={item.id}
                     style={[s.settingRow, idx < group.items.length - 1 && s.settingRowBorder]}
                     onPress={() => {
-                      if (item.id === 'ad-inspector') {
+                      if (item.id === 'test-ad') {
+                        handleTestAd();
+                      } else if (item.id === 'ad-inspector') {
                         handleOpenAdInspector();
                       } else if (item.route) {
                         router.push(item.route as any);
