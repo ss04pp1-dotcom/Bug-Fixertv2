@@ -431,7 +431,7 @@ export default function LivePlayerScreen() {
           <FlatList
             data={related}
             keyExtractor={item => item.id}
-            numColumns={2}
+            numColumns={REL_COLS}
             contentContainerStyle={s.grid}
             columnWrapperStyle={s.columnWrapper}
             showsVerticalScrollIndicator={false}
@@ -447,28 +447,28 @@ export default function LivePlayerScreen() {
             ) : null}
             renderItem={({ item }: { item: any }) => (
               <TouchableOpacity style={s.chCard} onPress={() => switchChannel(item)} activeOpacity={0.75}>
-                <View style={s.chThumb}>
+                {/* Same-category accent dot */}
+                {item._sameCat && <View style={s.chSameCatBadge} />}
+
+                {/* Logo circle — white bg like live-tv grid */}
+                <View style={s.chLogoCircle}>
                   {item.logo ? (
-                    <Image source={{ uri: item.logo }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                    <Image source={{ uri: item.logo }} style={s.chLogoImg} resizeMode="contain" />
                   ) : (
-                    <LinearGradient colors={[C.primary, C.accent]} style={StyleSheet.absoluteFill}>
-                      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <Ionicons name="tv-outline" size={24} color="rgba(255,255,255,0.5)" />
-                      </View>
+                    <LinearGradient colors={[C.primary, C.accent]} style={s.chLogoFallback}>
+                      <Ionicons name="tv-outline" size={20} color="rgba(255,255,255,0.8)" />
                     </LinearGradient>
                   )}
-                  <View style={s.chLiveBadge}>
-                    <View style={s.liveDotSmall} />
-                    <Text style={s.chLiveTxt}>LIVE</Text>
-                  </View>
-                  {item._sameCat && (
-                    <View style={s.chSameCatBadge}>
-                      <Text style={s.chSameCatTxt}>●</Text>
-                    </View>
-                  )}
                 </View>
+
+                {/* Channel name */}
                 <Text style={s.chName} numberOfLines={1}>{item.name}</Text>
-                <Text style={s.chCat} numberOfLines={1}>{item.cat}</Text>
+
+                {/* LIVE badge */}
+                <View style={s.chLiveBadge}>
+                  <View style={s.chLiveDot} />
+                  <Text style={s.chLiveTxt}>LIVE</Text>
+                </View>
               </TouchableOpacity>
             )}
             ListEmptyComponent={() => (
@@ -508,36 +508,99 @@ export default function LivePlayerScreen() {
 }
 
 const { width: SW } = Dimensions.get('window');
-const CARD_W = Math.floor((SW - 14 * 2 - 10) / 2);
+
+// 3-column grid — matches live-tv.tsx card style
+const REL_H_PAD  = 10;
+const REL_GAP    = 8;
+const REL_COLS   = 3;
+const REL_CARD_W = Math.floor((SW - REL_H_PAD * 2 - REL_GAP * (REL_COLS - 1)) / REL_COLS);
+const REL_LOGO_D = Math.round(REL_CARD_W * 0.56);
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+
+  // Channel header below player
   channelHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
-  channelLogo:  { width: 52, height: 52, borderRadius: 10, overflow: 'hidden', backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' },
+  channelLogo:  { width: 52, height: 52, borderRadius: 26, overflow: 'hidden', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   channelInfo:  { flex: 1 },
   channelName:  { color: '#fff', fontSize: 16, fontWeight: '700' },
   refreshBtn:   { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   livePillSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   liveDotSmall:  { width: 6, height: 6, borderRadius: 3, backgroundColor: C.live },
   liveTxtSmall:  { color: C.dim, fontSize: 12 },
+
+  // Tab bar
   tabBar:    { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 14 },
   tabItem:   { paddingVertical: 10, marginRight: 20, position: 'relative' },
   tabTxt:    { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
   tabTxtActive: { color: '#fff' },
   tabLine:   { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: C.primary, borderRadius: 1 },
-  grid:         { paddingHorizontal: 14, paddingVertical: 14, paddingBottom: 100 },
-  columnWrapper: { gap: 10, marginBottom: 10 },
-  chCard: { width: CARD_W },
-  chThumb: { width: '100%', height: 90, borderRadius: 10, backgroundColor: C.card, overflow: 'hidden', marginBottom: 6, position: 'relative' },
-  chLiveBadge: { position: 'absolute', bottom: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(239,68,68,0.88)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  chLiveTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  chName:    { color: '#fff', fontSize: 13, fontWeight: '600' },
-  chCat:     { color: C.dim, fontSize: 11, marginTop: 2 },
-  relatedHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
+
+  // 3-column related-channels grid
+  grid:          { paddingHorizontal: REL_H_PAD, paddingVertical: 12, paddingBottom: 100 },
+  columnWrapper: { gap: REL_GAP, marginBottom: REL_GAP },
+
+  // Card — same look as live-tv.tsx
+  chCard: {
+    width: REL_CARD_W,
+    backgroundColor: '#141418',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#222228',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    gap: 6,
+    overflow: 'hidden',
+  },
+
+  // Logo circle (white, like screenshot)
+  chLogoCircle: {
+    width: REL_LOGO_D,
+    height: REL_LOGO_D,
+    borderRadius: REL_LOGO_D / 2,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  chLogoImg: {
+    width: REL_LOGO_D - 6,
+    height: REL_LOGO_D - 6,
+    borderRadius: (REL_LOGO_D - 6) / 2,
+  },
+  chLogoFallback: {
+    width: REL_LOGO_D,
+    height: REL_LOGO_D,
+    borderRadius: REL_LOGO_D / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Channel name
+  chName: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', width: '100%' },
+
+  // LIVE badge
+  chLiveBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,59,48,0.18)', borderRadius: 5,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderWidth: 1, borderColor: 'rgba(255,59,48,0.3)',
+  },
+  chLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.live },
+  chLiveTxt: { color: C.live, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+
+  // "Same category" accent dot
+  chSameCatBadge: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: C.primary },
+
+  // Related header
+  relatedHeader:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
   relatedHeaderTxt: { color: C.dim, fontSize: 12 },
-  chSameCatBadge: { position: 'absolute', top: 6, right: 6, backgroundColor: C.primary, borderRadius: 10, paddingHorizontal: 5, paddingVertical: 2 },
-  chSameCatTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
-  emptyBox: { flex: 1, alignItems: 'center', paddingTop: 60, gap: 12 },
+
+  // Empty / info
+  emptyBox: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt: { color: C.dim, fontSize: 14 },
   infoPad:  { padding: 14, gap: 2 },
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
