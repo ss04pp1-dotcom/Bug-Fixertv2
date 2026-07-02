@@ -1,18 +1,20 @@
 /**
  * withGMSResolution — Expo config plugin
  *
- * Pins Google Mobile Services dependencies to versions that exist in Maven.
+ * Pins Google Mobile Services dependencies to versions compatible with
+ * the project's Kotlin version (2.1.21).
  *
  * WHY this is needed:
- *   react-native-google-mobile-ads@16.x declares a transitive dependency on
- *   com.google.android.gms:play-services-ads-identifier:23.6.0, which does
- *   not yet exist in Google's Maven repository (highest published version is
- *   18.x.x). This causes EAS/Gradle builds to fail at dependency resolution
- *   with "Could not find play-services-ads-identifier:23.6.0".
+ *   react-native-google-mobile-ads@16.x depended on play-services-ads@25.4.0
+ *   which was compiled with Kotlin 2.3.0 metadata. Kotlin 2.1.21 cannot read
+ *   2.3.0 metadata → build failed at :react-native-google-mobile-ads:compileReleaseKotlin.
+ *   FIX: downgraded to react-native-google-mobile-ads@15.x which targets
+ *   play-services-ads@24.x (Kotlin 2.1-compatible).
  *
- *   The fix: force the dependency to the highest actually-published version
- *   via resolutionStrategy.force so Gradle never attempts to fetch the
- *   non-existent 23.6.0 artifact.
+ *   Additionally, google-mobile-ads historically declares transitive deps on
+ *   play-services-ads-identifier versions that do not exist in Google Maven
+ *   (e.g. 23.6.0). This plugin forces the highest actually-published version
+ *   so Gradle never attempts to fetch a non-existent artifact.
  */
 const { withAppBuildGradle } = require('expo/config-plugins');
 

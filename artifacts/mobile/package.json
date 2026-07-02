@@ -75,7 +75,7 @@
     "expo-updates": "~29.0.18",
     "hls.js": "^1.6.16",
     "react-native-applovin-max": "^9.6.0",
-    "react-native-google-mobile-ads": "^16.4.0",
+    "react-native-google-mobile-ads": "^15.0.0",
     "react-native-web-webview": "^1.0.2",
     "react-native-webview": "^13.12.5",
     "react-native-youtube-iframe": "^2.3.0"
