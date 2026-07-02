@@ -7,15 +7,30 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "APPLOVIN_SDK_KEY": ""
+      }
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "APPLOVIN_SDK_KEY": ""
+      }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "APPLOVIN_SDK_KEY": ""
+      }
     }
   },
   "submit": {
