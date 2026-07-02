@@ -50,7 +50,7 @@ module.exports = {
         foregroundImage: './assets/images/adaptive-icon.png',
         backgroundColor: '#05070F',
       },
-      package: 'com.streampro.app',
+      package: 'com.soltv.app',
       usesCleartextTraffic: true,
       permissions: [
         'android.permission.INTERNET',
@@ -102,6 +102,7 @@ module.exports = {
           delay_app_measurement_init: true,
         },
       ],
+      './plugins/withAdMobManifest',
       ['./plugins/withAppLovinConfig', { sdkKey: APPLOVIN_SDK_KEY }],
       'expo-screen-orientation',
       './plugins/withPipSupport',
