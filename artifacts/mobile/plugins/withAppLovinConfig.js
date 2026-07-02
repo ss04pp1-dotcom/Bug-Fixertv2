@@ -13,7 +13,7 @@
  * code.
  */
 
-const { withAndroidManifest, withInfoPlist } = require('@expo/config-plugins');
+const { withAndroidManifest, withInfoPlist } = require('expo/config-plugins');
 
 function withAppLovinAndroidManifest(config, sdkKey) {
   return withAndroidManifest(config, cfg => {

@@ -27,7 +27,7 @@
 const {
   withAppBuildGradle,
   withGradleProperties,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 
 const MEDIA3_VERSION = '1.8.1';
 

@@ -19,7 +19,7 @@
  *     so no build.gradle patching is needed.
  *   - Idempotency guard prevents duplicate rules on repeated prebuild runs.
  */
-const { withDangerousMod } = require('@expo/config-plugins');
+const { withDangerousMod } = require('expo/config-plugins');
 const fs   = require('fs');
 const path = require('path');
 

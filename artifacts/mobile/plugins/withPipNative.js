@@ -10,7 +10,7 @@
  *   with a Build.VERSION.SDK_INT >= 31 guard, so it compiles and runs safely
  *   on all API levels (24+).
  */
-const { withMainActivity } = require('@expo/config-plugins');
+const { withMainActivity } = require('expo/config-plugins');
 
 // ── Kotlin code ───────────────────────────────────────────────────────────────
 const KT_IMPORTS = [

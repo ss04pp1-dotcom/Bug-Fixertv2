@@ -23,7 +23,7 @@
  *   android:configChanges (additions)          — no restart on PiP resize
  *   android:launchMode="singleTask"            — keeps activity alive
  */
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 module.exports = function withPipSupport(config) {
   return withAndroidManifest(config, async (config) => {
