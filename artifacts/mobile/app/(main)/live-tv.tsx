@@ -55,6 +55,10 @@ function mapChannel(ch: any, i: number) {
 
 // ── Grid channel card ─────────────────────────────────────────────────────────
 function ChannelCard({ item }: { item: ReturnType<typeof mapChannel> }) {
+  const [imgErr, setImgErr] = useState(false);
+  const showLogo = item.logo && !imgErr;
+  const logoUri  = item.logo ? Config.imageUrl(item.logo) : '';
+
   return (
     <Pressable
       style={s.card}
@@ -66,11 +70,12 @@ function ChannelCard({ item }: { item: ReturnType<typeof mapChannel> }) {
     >
       {/* Logo circle */}
       <View style={s.logoCircle}>
-        {item.logo ? (
+        {showLogo ? (
           <Image
-            source={{ uri: Config.imageUrl(item.logo) }}
+            source={{ uri: logoUri }}
             style={s.logoImg}
             resizeMode="contain"
+            onError={() => setImgErr(true)}
           />
         ) : (
           <LinearGradient colors={item.color} style={s.logoFallback}>

@@ -25,6 +25,44 @@ import { useLiveChannels } from '@/lib/api-hooks';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { AdInterstitial } from '@/components/AdInterstitial';
 
+// ── Related channel card (3-col grid, white logo circle + onError fallback) ──
+function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
+  const [imgErr, setImgErr] = React.useState(false);
+  const showLogo = !!(item.logo && !imgErr);
+
+  return (
+    <TouchableOpacity style={s.chCard} onPress={onPress} activeOpacity={0.75}>
+      {/* Same-category purple dot */}
+      {item._sameCat && <View style={s.chSameCatBadge} />}
+
+      {/* White logo circle */}
+      <View style={s.chLogoCircle}>
+        {showLogo ? (
+          <Image
+            source={{ uri: item.logo }}
+            style={s.chLogoImg}
+            resizeMode="contain"
+            onError={() => setImgErr(true)}
+          />
+        ) : (
+          <LinearGradient colors={[C.primary, C.accent]} style={s.chLogoFallback}>
+            <Ionicons name="tv-outline" size={20} color="rgba(255,255,255,0.8)" />
+          </LinearGradient>
+        )}
+      </View>
+
+      {/* Channel name */}
+      <Text style={s.chName} numberOfLines={1}>{item.name}</Text>
+
+      {/* LIVE badge */}
+      <View style={s.chLiveBadge}>
+        <View style={s.chLiveDot} />
+        <Text style={s.chLiveTxt}>LIVE</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ── Channel-switch ad gate ─────────────────────────────────────────────────
 // Module-level so counter persists across router.replace() remounts.
 // Show an interstitial after every AD_EVERY channel switches.
@@ -58,6 +96,8 @@ export default function LivePlayerScreen() {
   const contentTitle = titleParam || 'Live TV';
   const logoUrl      = passedLogo || '';
   const category     = passedCat  || 'Live TV';
+
+  const [headerImgErr, setHeaderImgErr] = useState(false);
 
   // ── Stream sources ─────────────────────────────────────────────────────────
   const [sources, setSources]         = useState<PlayerSource[]>([]);
@@ -395,8 +435,13 @@ export default function LivePlayerScreen() {
       )}
         {/* Channel header */}
         <View style={s.channelHeader}>
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={s.channelLogo} resizeMode="contain" />
+          {logoUrl && !headerImgErr ? (
+            <Image
+              source={{ uri: logoUrl }}
+              style={s.channelLogo}
+              resizeMode="contain"
+              onError={() => setHeaderImgErr(true)}
+            />
           ) : (
             <LinearGradient colors={[C.primary, C.accent]} style={s.channelLogo}>
               <Ionicons name="tv" size={20} color="#fff" />
@@ -446,30 +491,7 @@ export default function LivePlayerScreen() {
               </View>
             ) : null}
             renderItem={({ item }: { item: any }) => (
-              <TouchableOpacity style={s.chCard} onPress={() => switchChannel(item)} activeOpacity={0.75}>
-                {/* Same-category accent dot */}
-                {item._sameCat && <View style={s.chSameCatBadge} />}
-
-                {/* Logo circle — white bg like live-tv grid */}
-                <View style={s.chLogoCircle}>
-                  {item.logo ? (
-                    <Image source={{ uri: item.logo }} style={s.chLogoImg} resizeMode="contain" />
-                  ) : (
-                    <LinearGradient colors={[C.primary, C.accent]} style={s.chLogoFallback}>
-                      <Ionicons name="tv-outline" size={20} color="rgba(255,255,255,0.8)" />
-                    </LinearGradient>
-                  )}
-                </View>
-
-                {/* Channel name */}
-                <Text style={s.chName} numberOfLines={1}>{item.name}</Text>
-
-                {/* LIVE badge */}
-                <View style={s.chLiveBadge}>
-                  <View style={s.chLiveDot} />
-                  <Text style={s.chLiveTxt}>LIVE</Text>
-                </View>
-              </TouchableOpacity>
+              <RelatedCard item={item} onPress={() => switchChannel(item)} />
             )}
             ListEmptyComponent={() => (
               <View style={s.emptyBox}>
