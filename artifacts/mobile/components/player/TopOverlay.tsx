@@ -5,7 +5,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated from 'react-native-reanimated';
-import { GestureDetector, type GestureType } from 'react-native-gesture-handler';
+import { GestureDetector, type GestureType, type ComposedGesture } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
 import { C } from './constants';
 import { g } from './playerStyles';
@@ -35,7 +35,7 @@ export interface TopOverlayProps {
   onRefresh: () => void;
   onShowDebug: () => void;
   pipActive: boolean;
-  fsGesture: GestureType;
+  fsGesture: GestureType | ComposedGesture;
   showCtrl: boolean;
   ctrlStyle: any;
   isLocked: boolean;

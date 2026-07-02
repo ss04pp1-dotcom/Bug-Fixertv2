@@ -108,6 +108,7 @@ module.exports = {
       './plugins/withPipNative',
       './plugins/withMedia3Gradle',
       './plugins/withMedia3ProGuard',
+      './plugins/withGMSResolution',
       './plugins/withNetworkSecurityConfig',
     ],
     updates: {

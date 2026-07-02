@@ -92,9 +92,8 @@ function formatScheduledTime(dateStr: string): string {
   }
 }
 
-function capitalizeSport(sport: string): Category {
-  const s = sport.charAt(0).toUpperCase() + sport.slice(1).toLowerCase();
-  return s as Category;
+function capitalizeSport(sport: string): string {
+  return sport.charAt(0).toUpperCase() + sport.slice(1).toLowerCase();
 }
 
 const sportIconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
