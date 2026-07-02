@@ -8,6 +8,10 @@ out-tsc
 .expo
 .expo-shared
 
+# Next.js build output (auto-generated, never commit)
+.next
+out
+
 # dependencies
 node_modules
 
