@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLiveMatches, useUpcomingMatches, useMyTeams } from '@/lib/api-hooks';
+import { useLiveMatches, useUpcomingMatches, useMyTeams, useSportTypes } from '@/lib/api-hooks';
 import { AdBanner } from '@/components/AdBanner';
 import { SocketService } from '@/services/socket.service';
 
@@ -40,11 +40,11 @@ const colors = {
 const CARD_W = SCREEN_WIDTH - 48;
 
 // ─── Types ───────────────────────────────────────────────────
-type Category = 'All' | 'Cricket' | 'Football' | 'Tennis' | 'Basketball';
-
+// sport is now a plain string — fetched dynamically from the API so any sport
+// the admin creates (Baseball, Kabaddi, …) automatically appears in the UI.
 interface LiveMatch {
   id: string;
-  sport: Category;
+  sport: string;
   teamA: { name: string; score: string; abbr: string };
   teamB: { name: string; score: string; abbr: string };
   status: string;
@@ -62,14 +62,11 @@ interface UpcomingMatch {
   id: string;
   teamA: string;
   teamB: string;
-  sport: Category;
+  sport: string;
   time: string;
   tournament: string;
   icon: keyof typeof Ionicons.glyphMap;
 }
-
-// ─── Data ───────────────────────────────────────────────────
-const categories: Category[] = ['All', 'Cricket', 'Football', 'Tennis', 'Basketball'];
 
 const teamGradients: Record<string, [string, string]> = {
   MI: ['#004BA0', '#D4A843'],
@@ -224,10 +221,17 @@ function UpcomingRow({ item }: { item: UpcomingMatch }) {
 // ─── Main Screen ─────────────────────────────────────────────
 
 export default function SportsScreen() {
-  const [activeCategory, setActiveCategory] = useState<Category>('All');
+  // selectedSportId: null = "All", otherwise the actual UUID from the API.
+  // Passing the UUID (not the name) to useLiveMatches / useUpcomingMatches is
+  // what makes the server-side filter work correctly.
+  const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
+  const [activeName, setActiveName] = useState<string>('All');
   const queryClient = useQueryClient();
 
-  const sportId = activeCategory !== 'All' ? activeCategory.toLowerCase() : undefined;
+  // Fetch sport types dynamically — admin can add any sport and it appears here.
+  const { data: sportTypes = [] } = useSportTypes();
+
+  const sportId = selectedSportId ?? undefined;
   const { data: liveData, isLoading: liveLoading, isError: liveError, refetch: refetchLive } = useLiveMatches(sportId);
 
   // T3.8: Socket → React Query — match_update events patch the live matches
@@ -256,27 +260,39 @@ export default function SportsScreen() {
 
   const liveMatches: LiveMatch[] = useMemo(() => {
     const items = Array.isArray(liveData) ? liveData : liveData?.data ?? [];
-    return items.map((m: any) => ({
-      id: m.id,
-      sport: capitalizeSport(m.sport || 'Cricket'),
-      teamA: { name: m.teamA?.name || '', score: m.teamAScore || '', abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
-      teamB: { name: m.teamB?.name || '', score: m.teamBScore || '', abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
-      status: m.status || '',
-      tournament: typeof m.tournament === 'string' ? m.tournament : m.tournament?.name || '',
-    }));
+    return items.map((m: any) => {
+      // FIX: API returns sport as an object {id, name, slug} — extract .name
+      // before calling capitalizeSport (which calls .charAt on a string).
+      // Without this fix, passing the raw object causes:
+      //   TypeError: sport.charAt is not a function → app crash.
+      const sportName = typeof m.sport === 'object' ? m.sport?.name : m.sport;
+      return {
+        id: m.id,
+        sport: capitalizeSport(sportName || 'Sport'),
+        teamA: { name: m.teamA?.name || '', score: m.teamAScore || '', abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
+        teamB: { name: m.teamB?.name || '', score: m.teamBScore || '', abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
+        status: m.status || '',
+        tournament: typeof m.tournament === 'object' ? m.tournament?.name || '' : m.tournament || '',
+      };
+    });
   }, [liveData]);
 
   const upcomingMatches: UpcomingMatch[] = useMemo(() => {
     const items = Array.isArray(upcomingData) ? upcomingData : upcomingData?.data ?? [];
-    return items.map((m: any) => ({
-      id: m.id,
-      teamA: m.teamA?.name || '',
-      teamB: m.teamB?.name || '',
-      sport: capitalizeSport(m.sport || 'Cricket'),
-      time: m.scheduledAt ? formatScheduledTime(m.scheduledAt) : '',
-      tournament: typeof m.tournament === 'string' ? m.tournament : m.tournament?.name || '',
-      icon: sportIconMap[m.sport?.toLowerCase() ? capitalizeSport(m.sport) : 'Cricket'] || 'ellipse-outline',
-    }));
+    return items.map((m: any) => {
+      // FIX: same object-extraction fix as liveMatches above.
+      const sportName = typeof m.sport === 'object' ? m.sport?.name : m.sport;
+      const sportLabel = capitalizeSport(sportName || 'Sport');
+      return {
+        id: m.id,
+        teamA: m.teamA?.name || '',
+        teamB: m.teamB?.name || '',
+        sport: sportLabel,
+        time: m.scheduledAt ? formatScheduledTime(m.scheduledAt) : '',
+        tournament: typeof m.tournament === 'object' ? m.tournament?.name || '' : m.tournament || '',
+        icon: (sportIconMap[sportLabel] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap,
+      };
+    });
   }, [upcomingData]);
 
   const myTeams: (Team | null)[] = useMemo(() => {
@@ -338,18 +354,23 @@ export default function SportsScreen() {
         bounces={true}
       >
         {/* ── Category Tabs ─────────────────────────── */}
+        {/* Dynamic — built from API sport types so any sport admin creates
+            automatically appears here without a code change. */}
         <View style={styles.categoryRow}>
           <FlatList
-            data={categories}
-            keyExtractor={(c) => c}
+            data={[{ id: null, name: 'All' }, ...sportTypes] as { id: string | null; name: string }[]}
+            keyExtractor={(c) => c.id ?? 'all'}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryList}
             renderItem={({ item }) => (
               <CategoryTab
-                label={item}
-                active={activeCategory === item}
-                onPress={() => setActiveCategory(item)}
+                label={item.name}
+                active={activeName === item.name}
+                onPress={() => {
+                  setSelectedSportId(item.id);
+                  setActiveName(item.name);
+                }}
               />
             )}
           />
@@ -359,7 +380,7 @@ export default function SportsScreen() {
         <Text style={styles.sectionTitle}>Live Matches</Text>
         <FlatList
           data={liveMatches.filter(
-            (m) => activeCategory === 'All' || m.sport === activeCategory,
+            (m) => activeName === 'All' || m.sport === activeName,
           )}
           keyExtractor={(m) => m.id}
           horizontal
@@ -391,7 +412,7 @@ export default function SportsScreen() {
         <Text style={styles.sectionTitle}>Upcoming</Text>
         <FlatList
           data={upcomingMatches.filter(
-            (m) => activeCategory === 'All' || m.sport === activeCategory,
+            (m) => activeName === 'All' || m.sport === activeName,
           )}
           keyExtractor={(m) => m.id}
           scrollEnabled={false}

@@ -167,6 +167,19 @@ export const useSaveWatchProgress = () => useMutation({
 });
 
 // ─── Sports ──────────────────────────────────────────────────
+
+// Fetch all sport types (Football, Cricket, Baseball…) from the API.
+// staleTime: 5 min — sport types rarely change, no need to refetch on every mount.
+export const useSportTypes = () => useQuery({
+  queryKey: ['sports', 'types'],
+  queryFn: () => apiClient.get('/sports/sports', { params: { limit: 200 } })
+    .then((r: any) => {
+      const list = Array.isArray(r) ? r : r?.data ?? [];
+      return list as { id: string; name: string; slug: string; icon?: string }[];
+    }),
+  staleTime: 5 * 60 * 1000,
+});
+
 export const useLiveMatches = (sportId?: string) => useQuery({
   queryKey: ['sports', 'live', sportId],
   queryFn: () => apiClient.get('/sports/live', { params: sportId ? { sportId } : {} }).then(unwrapList),
