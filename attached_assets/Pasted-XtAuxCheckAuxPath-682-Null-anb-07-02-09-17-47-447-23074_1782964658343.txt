@@ -1,0 +1,171 @@
+XtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.447 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.559 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.564 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.635 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.641 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.649 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.720 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.727 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.734 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.739 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.747 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.755 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.832 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.843 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.851 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.859 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.943 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.948 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.956 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:47.965 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.041 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.048 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.061 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.065 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.139 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.145 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.151 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.159 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.165 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.174 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.242 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.250 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.256 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.264 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.272 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:48.476 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:51.047 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:51.098 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:17:52.713 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.717 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.720 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.800 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.803 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.819 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.910 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.914 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:52.919 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.105 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.111 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.118 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.512 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.519 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.522 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.536 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.623 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.627 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:17:53.637 23074 23141 E BLASTBufferQueue: [VRI[MainActivity,type=1]#9](f:2,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-02 09:18:03.370 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:18:06.770 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:18:06.836 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:18:07.494 19222 19417 E msgr.msys: E[N 1278]onEOF(751)=>261/1278/3325/-1
+07-02 09:18:07.536 19222 19376 E msgr.msys: E[N WA]WCCXMPPStreamDisconnectImmediately(917)=>[WARNING] xmpp/disconnect/immediate in state=2 reason=xmpp/idle/timeout
+07-02 09:18:07.601 19222 19376 E msgr.msys: E[N WA]_WCCXMPPStreamDisconnectHandler(344)=>xmpp/disconnect - WCIStreamStateErrorCode: 1, domain: WCIStreamState, subdomain: happyeyeballs: Error Domain=WCIStreamState Code=1 UserInfo=0x2a11311780 {MCFErrorDirectUnderlyingErrorKey=0xb400007725b2a610 "Error Domain=happyeyeballs Code=1"}
+07-02 09:18:07.602 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2214)=>[INFO] connection/xmpp/lifecycle_event/not-connected, [368.5459s]
+07-02 09:18:07.614 19222 19376 E msgr.msys: E[N WA]_WCCXMPPStreamDoDisconnect(1319)=>xmpp/disconnect - flags: 0
+07-02 09:18:07.614 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMEmitStateChange(3230)=>[INFO] connection/new_state/not-connected [connection_id=802416528, wcc_source=1, wcc_reason=0]
+07-02 09:18:07.671 19222 19376 E msgr.msys: E[C MEMConnectionManager]_MEMConnectionManagerStateChangeHandler(627)=>[Critical] MEMConnectionState updated to ID: 0 with connectionId: 802416528
+07-02 09:18:07.702 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMEmitStateChange(3230)=>[INFO] connection/new_state/connecting [connection_id=802416529, wcc_source=1, wcc_reason=0]
+07-02 09:18:07.703 19222 19376 E msgr.msys: E[C MEMConnectionManager]_MEMConnectionManagerStateChangeHandler(627)=>[Critical] MEMConnectionState updated to ID: 1 with connectionId: 802416529
+07-02 09:18:07.746 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMDoConnectWithAuthKeys(1576)=>[INFO] connection/connect/start/[host=chat-e2ee-mini.facebook.com port=5222]/[57.144.86.8:5222]/socketAddressCount=1
+07-02 09:18:07.749 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2206)=>[INFO] connection/xmpp/lifecycle_event/will-connect
+07-02 09:18:07.749 19222 19376 E msgr.msys: E[A WA]WCCHandshakeCreate(191)=>handshake/create, pq mode:0
+07-02 09:18:07.810 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2214)=>[INFO] connection/xmpp/lifecycle_event/did-connect, [0.0607s]
+07-02 09:18:07.827 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2214)=>[INFO] connection/xmpp/lifecycle_event/did-send-initial-payload, [0.0165s]
+07-02 09:18:07.890 19222 19368 E msgr.msys: E[N mns:DGWClient]_OnResolverSuccess(359)=>Cache refresh succeeded with system DNS resolver. IP count: 1
+07-02 09:18:08.142 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2214)=>[INFO] connection/xmpp/lifecycle_event/will-handshake, [0.3144s]
+07-02 09:18:08.147 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2214)=>[INFO] connection/xmpp/lifecycle_event/did-handshake, [0.0027s]
+07-02 09:18:08.148 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMReceiveHandler(2386)=>[INFO] connection/receive/login-success
+07-02 09:18:08.148 19222 19376 E msgr.msys: E[N WCCConnectionMEM]_WCCConnectionMEMEmitStateChange(3230)=>[INFO] connection/new_state/connected [connection_id=802416529, wcc_source=1, wcc_reason=0]
+07-02 09:18:08.148 19222 19376 E msgr.msys: E[C MEMConnectionManager]_MEMConnectionManagerStateChangeHandler(627)=>[Critical] MEMConnectionState updated to ID: 2 with connectionId: 802416529
+07-02 09:18:08.157 19222 19377 E msgr.ZeroChatDHostController: Trying to add the same listener twice. This must be a bug.
+07-02 09:18:08.161 19222 19405 E msgr.msys: E[C mem.context]_ZeroRatingStateChangedOnExecutionContext(8643)=>[INFO] ZeroRatingStateChange: notify wa-msys with [host: chat-e2ee-mini.facebook.com, ipv4 fallback IPs are not set, ipv6 fallback IPs are not set]
+07-02 09:18:10.050 26982 26982 E ibrevpn.android: BBinder_init Processname  org.librevpn.android  
+07-02 09:18:10.050 26982 26982 E ibrevpn.android: BBinder_init hasGetProcessName  org.librevpn.android
+07-02 09:18:14.102 27047 27047 E m.streampro.app: BBinder_init Processname  com.streampro.app  
+07-02 09:18:14.102 27047 27047 E m.streampro.app: BBinder_init hasGetProcessName  com.streampro.app
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: FATAL EXCEPTION: main
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: Process: com.streampro.app, PID: 27047
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: java.lang.RuntimeException: Unable to get provider com.google.android.gms.ads.MobileAdsInitProvider: java.lang.IllegalStateException: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: ******************************************************************************
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * Invalid application ID. Follow instructions here:                          *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * https://goo.gle/admob-android-update-manifest                              *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * to find your app ID.                                                       *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * Google Ad Manager publishers should follow instructions here:              *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * https://goo.gle/ad-manager-android-update-manifest.                        *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: ******************************************************************************
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:9918)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:9408)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:9013)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(ActivityThread.java:0)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:3062)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:114)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:266)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:361)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:10382)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:675)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1002)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: Caused by: java.lang.IllegalStateException: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: ******************************************************************************
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * Invalid application ID. Follow instructions here:                          *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * https://goo.gle/admob-android-update-manifest                              *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * to find your app ID.                                                       *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * Google Ad Manager publishers should follow instructions here:              *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: * https://goo.gle/ad-manager-android-update-manifest.                        *
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: ******************************************************************************
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at com.google.android.gms.ads.internal.client.zzey.attachInfo(com.google.android.gms:play-services-ads-api@@24.6.0:12)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at com.google.android.gms.ads.MobileAdsInitProvider.attachInfo(com.google.android.gms:play-services-ads-api@@24.6.0:1)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:9913)
+07-02 09:18:14.321 27047 27047 E AndroidRuntime: 	... 11 more
+07-02 09:18:15.760 27081 27081 E m.streampro.app: BBinder_init Processname  com.streampro.app  
+07-02 09:18:15.760 27081 27081 E m.streampro.app: BBinder_init hasGetProcessName  com.streampro.app
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: FATAL EXCEPTION: main
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: Process: com.streampro.app, PID: 27081
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: java.lang.RuntimeException: Unable to get provider com.google.android.gms.ads.MobileAdsInitProvider: java.lang.IllegalStateException: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: ******************************************************************************
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * Invalid application ID. Follow instructions here:                          *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * https://goo.gle/admob-android-update-manifest                              *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * to find your app ID.                                                       *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * Google Ad Manager publishers should follow instructions here:              *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * https://goo.gle/ad-manager-android-update-manifest.                        *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: ******************************************************************************
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:9918)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:9408)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:9013)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(ActivityThread.java:0)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:3062)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:114)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:266)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:361)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:10382)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:675)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1002)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: Caused by: java.lang.IllegalStateException: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: ******************************************************************************
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * Invalid application ID. Follow instructions here:                          *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * https://goo.gle/admob-android-update-manifest                              *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * to find your app ID.                                                       *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * Google Ad Manager publishers should follow instructions here:              *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: * https://goo.gle/ad-manager-android-update-manifest.                        *
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: ******************************************************************************
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at com.google.android.gms.ads.internal.client.zzey.attachInfo(com.google.android.gms:play-services-ads-api@@24.6.0:12)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at com.google.android.gms.ads.MobileAdsInitProvider.attachInfo(com.google.android.gms:play-services-ads-api@@24.6.0:1)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	at android.app.ActivityThread.installProvider(ActivityThread.java:9913)
+07-02 09:18:15.899 27081 27081 E AndroidRuntime: 	... 11 more
+07-02 09:18:18.379 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-02 09:18:23.604 23074 23141 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
