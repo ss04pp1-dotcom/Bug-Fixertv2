@@ -32,7 +32,7 @@ import Animated, {
 import { Gesture } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
-import { C, IS_EXPO_GO, IS_WEB, BUFFER_LIVE, BUFFER_VOD } from './player/constants';
+import { C, IS_EXPO_GO, IS_WEB } from './player/constants';
 import { g, db, MINI_W, MINI_H, MINI_TITLE_H, MINI_MARGIN, TAB_BAR_BASE_H } from './player/playerStyles';
 import { NativeIPTVPlayer } from './player/NativeIPTVPlayer';
 import { SettingsSheet, type AspectMode, type SheetType } from './player/SettingsSheet';
