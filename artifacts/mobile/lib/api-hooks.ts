@@ -30,13 +30,21 @@ export const useTrending = () => useQuery({ queryKey: ['trending'], queryFn: () 
 export const useLiveChannels = (params?: object) => useQuery({ queryKey: ['channels', params], queryFn: () => apiClient.get('/channels', { params: { limit: 200, ...params as any } }).then(unwrapList) });
 
 // Infinite-scroll version — loads 50 channels per page from the server.
-// Pass `search` to do server-side full-text search across ALL channels.
-export const useLiveChannelsInfinite = (params?: { search?: string; limit?: number }) =>
+// Pass `search` for server-side full-text search.
+// Pass `categoryId` for server-side category filtering (avoids client-side pagination gap).
+export const useLiveChannelsInfinite = (params?: { search?: string; limit?: number; categoryId?: string }) =>
   useInfiniteQuery({
     queryKey: ['channels-infinite', params],
     queryFn: ({ pageParam }) =>
       apiClient
-        .get('/channels', { params: { page: pageParam, limit: params?.limit ?? 50, ...(params?.search ? { search: params.search } : {}) } })
+        .get('/channels', {
+          params: {
+            page: pageParam,
+            limit: params?.limit ?? 50,
+            ...(params?.search      ? { search:     params.search      } : {}),
+            ...(params?.categoryId  ? { categoryId: params.categoryId  } : {}),
+          },
+        })
         .then((r: any) => {
           const d = r.data.data;
           const items: any[] = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];

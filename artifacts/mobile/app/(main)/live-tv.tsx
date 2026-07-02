@@ -123,15 +123,34 @@ export default function LiveTVScreen() {
   }, [search]);
 
   const { data: categoryList = [] } = useCategories();
+
+  // Build tab list (names) and a name→id map for server-side filtering
   const tabs = useMemo<string[]>(
     () => ['All', ...categoryList.map((c: any) => c.name as string).filter(Boolean)],
     [categoryList],
+  );
+  const tabIdMap = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    categoryList.forEach((c: any) => { if (c.name && c.id) m[c.name] = c.id; });
+    return m;
+  }, [categoryList]);
+
+  // When search is active, ignore category; when a category tab is selected, pass its ID to the API
+  const activeCategoryId = !debouncedSearch && activeTab !== 'All'
+    ? tabIdMap[activeTab]
+    : undefined;
+
+  const hookParams = useMemo(
+    () => (debouncedSearch || activeCategoryId
+      ? { search: debouncedSearch || undefined, categoryId: activeCategoryId }
+      : undefined),
+    [debouncedSearch, activeCategoryId],
   );
 
   const {
     data: infiniteData, fetchNextPage, hasNextPage,
     isFetchingNextPage, isLoading, refetch: refetchBrowse,
-  } = useLiveChannelsInfinite(debouncedSearch ? { search: debouncedSearch } : undefined);
+  } = useLiveChannelsInfinite(hookParams);
 
   const allChannels = useMemo(() => {
     if (!infiniteData?.pages) return [];
@@ -140,25 +159,13 @@ export default function LiveTVScreen() {
     );
   }, [infiniteData]);
 
-  const filtered = useMemo(() => {
-    if (activeTab === 'All') return allChannels;
-    const tab = activeTab.toLowerCase();
-    return allChannels.filter(ch => {
-      if (ch.cat.toLowerCase() === tab) return true;
-      return ch.name.toLowerCase().includes(tab);
-    });
-  }, [allChannels, activeTab]);
+  // Server handles both search and category filtering — no client-side filter needed
+  const filtered = allChannels;
 
+  // Reset active tab to 'All' if its category disappears from the list
   useEffect(() => {
     if (activeTab !== 'All' && tabs.length > 1 && !tabs.includes(activeTab)) setActiveTab('All');
   }, [tabs, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === 'All') return;
-    if (filtered.length > 0) return;
-    if (!hasNextPage || isFetchingNextPage) return;
-    fetchNextPage();
-  }, [activeTab, filtered.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -295,20 +302,24 @@ export default function LiveTVScreen() {
         <View style={s.centerBox}>
           <Ionicons name="tv-outline" size={48} color={C.textSec} />
           <Text style={s.emptyTitle}>
-            {allChannels.length === 0 ? 'Loading channels…' : 'No channels found'}
+            {debouncedSearch
+              ? `No results for "${debouncedSearch}"`
+              : activeTab !== 'All'
+                ? `No channels in "${activeTab}"`
+                : 'No channels found'}
           </Text>
           <Text style={s.emptyTxt}>
-            {allChannels.length === 0
-              ? 'Please wait or pull down to refresh'
-              : debouncedSearch ? `No results for "${debouncedSearch}"` : `No channels in "${activeTab}" yet`}
+            {debouncedSearch
+              ? 'Try a different search term'
+              : activeTab !== 'All'
+                ? 'Try a different category or pull to refresh'
+                : 'Pull down to refresh'}
           </Text>
-          {allChannels.length === 0 && (
-            <Pressable onPress={onRefresh} style={s.retryBtn}>
-              <LinearGradient colors={[C.primary, C.accent]} style={s.retryGrad}>
-                <Text style={s.retryTxt}>Refresh</Text>
-              </LinearGradient>
-            </Pressable>
-          )}
+          <Pressable onPress={onRefresh} style={s.retryBtn}>
+            <LinearGradient colors={[C.primary, C.accent]} style={s.retryGrad}>
+              <Text style={s.retryTxt}>Refresh</Text>
+            </LinearGradient>
+          </Pressable>
         </View>
       ) : (
         <FlatList
