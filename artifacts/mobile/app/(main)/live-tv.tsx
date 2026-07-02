@@ -11,8 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLiveChannelsInfinite, useCategories } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 import { AdBanner } from '@/components/AdBanner';
-import { AdRewarded } from '@/components/AdRewarded';
-import { useChannelAdGate } from '@/hooks/useChannelAdGate';
+import { useChannelAdGateContext } from '@/lib/channel-ad-gate-context';
 
 const { width: W } = Dimensions.get('window');
 
@@ -169,7 +168,7 @@ export default function LiveTVScreen() {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const channelGate = useChannelAdGate();
+  const channelGate = useChannelAdGateContext();
   const handleSelectChannel = useCallback((item: ReturnType<typeof mapChannel>) => {
     channelGate.requestChannel(item.id, { title: item.name, logo: item.logo, cat: item.cat, streamUrl: item.streamUrl });
   }, [channelGate]);
@@ -198,14 +197,6 @@ export default function LiveTVScreen() {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <AdRewarded
-        placement="channel_select_rewarded"
-        visible={channelGate.visible}
-        onClose={channelGate.onClose}
-        onRewardEarned={channelGate.onRewardEarned}
-        rewardSeconds={30}
-      />
-
       {/* ── Header ─────────────────────────────────────────────── */}
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>

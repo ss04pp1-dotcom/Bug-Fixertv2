@@ -11,8 +11,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useFeatureFlagsContext } from '@/app/_layout';
 import { setUnauthenticatedHandler } from '@/lib/api';
+import { ChannelAdGateProvider, useChannelAdGateContext } from '@/lib/channel-ad-gate-context';
+import { AdRewarded } from '@/components/AdRewarded';
 
-export default function MainTabLayout() {
+function MainTabLayoutInner() {
   const insets = useSafeAreaInsets();
   const flags = useFeatureFlagsContext();
   const sportsEnabled = flags['sports_enabled'] !== false;
@@ -28,8 +30,19 @@ export default function MainTabLayout() {
     });
   }, []);
 
+  const gate = useChannelAdGateContext();
+
   return (
-    <Tabs
+    <>
+      {/* Pre-load AdRewarded here so the ad is ready before user picks a channel */}
+      <AdRewarded
+        placement="channel_select_rewarded"
+        visible={gate.visible}
+        onClose={gate.onClose}
+        onRewardEarned={gate.onRewardEarned}
+        rewardSeconds={30}
+      />
+      <Tabs
       screenOptions={{
         headerShown: false,
         lazy: true,
@@ -105,6 +118,15 @@ export default function MainTabLayout() {
         }}
       />
     </Tabs>
+    </>
+  );
+}
+
+export default function MainTabLayout() {
+  return (
+    <ChannelAdGateProvider>
+      <MainTabLayoutInner />
+    </ChannelAdGateProvider>
   );
 }
 
