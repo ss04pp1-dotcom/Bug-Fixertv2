@@ -21,39 +21,29 @@ import React, {
   useRef, useState, useCallback, useEffect, useMemo,
 } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Platform, BackHandler, StatusBar, ActivityIndicator,
-  Modal, useWindowDimensions, ScrollView,
+  View, Text, TouchableOpacity,
+  Platform, BackHandler, Modal, useWindowDimensions, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { C, IS_EXPO_GO, IS_WEB, BUFFER_LIVE, BUFFER_VOD } from './player/constants';
+import { g, db, MINI_W, MINI_H, MINI_TITLE_H, MINI_MARGIN, TAB_BAR_BASE_H } from './player/playerStyles';
 import { NativeIPTVPlayer } from './player/NativeIPTVPlayer';
-import { SettingsSheet, ASPECT_CYCLE, type AspectMode, type SheetType } from './player/SettingsSheet';
-import { SeekFeedback, SwipeIndicator } from './player/SwipeOverlays';
+import { SettingsSheet, type AspectMode, type SheetType } from './player/SettingsSheet';
 import { PosterFade } from './player/PosterFade';
 import { NextEpisodeOverlay } from './player/NextEpisodeOverlay';
-import { SeekBar } from './player/SeekBar';
+import { MiniOverlay } from './player/MiniOverlay';
+import { TopOverlay } from './player/TopOverlay';
+import { FullscreenOverlay } from './player/FullscreenOverlay';
 import { router } from 'expo-router';
 import apiClient from '@/lib/api';
 import * as ScreenOrientation from 'expo-screen-orientation';
-
-// ─── Constants (C, IS_EXPO_GO, IS_WEB, BUFFER_LIVE, BUFFER_VOD) imported from ./player/constants ──
-
-// ─── Mini layout constants ────────────────────────────────────────────────────
-const MINI_W = 220;
-const MINI_H = 124;        // 16:9
-const MINI_TITLE_H = 36;
-const MINI_MARGIN = 12;
-// Tab bar base height (without bottom safe-area inset — that is subtracted separately)
-const TAB_BAR_BASE_H = 60;
 
 
 // ─── Stream type detection ────────────────────────────────────────────────────
@@ -1241,562 +1231,141 @@ export default function GlobalVideoPlayer() {
         </Animated.View>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════
-          MINI MODE OVERLAY — gesture + controls + title bar.
-          Tracks the same miniAnimStyle as the video surface above.
-          The video area here is transparent — video renders behind it.
-          ══════════════════════════════════════════════════════════════════ */}
       {mode === 'mini' && (
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[g.miniRoot, miniAnimStyle]}>
-
-            {/* Transparent video area (actual video is the sibling behind) */}
-            <View style={[g.miniVideo, { backgroundColor: 'transparent' }]}>{/* ── Video surface ─────────────────────────────────────────────── */}
-            {/* (rendered as sibling Animated.View above — kept alive across modes) */}
-
-            {/* LIVE badge */}
-            {isLive && (
-              <View style={g.miniLive} pointerEvents="none">
-                <View style={g.miniLiveDot} />
-                <Text style={g.miniLiveTxt}>LIVE</Text>
-              </View>
-            )}
-
-            {/* Tap area — show controls, then auto-hide after 1.5 s */}
-            <TouchableOpacity
-              activeOpacity={1}
-              style={StyleSheet.absoluteFill}
-              onPress={() => {
-                setShowCtrl(v => {
-                  const next = !v;
-                  if (miniCtrlTimer.current) clearTimeout(miniCtrlTimer.current);
-                  if (next) {
-                    miniCtrlTimer.current = setTimeout(() => setShowCtrl(false), 1500);
-                  }
-                  return next;
-                });
-              }}
-            >
-              {showCtrl && (
-                <View style={g.miniOverlay}>
-                  {/* Close × */}
-                  <TouchableOpacity
-                    style={g.miniClose}
-                    onPress={hide}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="close" size={12} color="#fff" />
-                  </TouchableOpacity>
-
-                  {/* Center: play/pause + expand */}
-                  <View style={g.miniCenter}>
-                    <TouchableOpacity
-                      style={g.miniBtn}
-                      onPress={() => setPlaying(!isPlaying)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={g.miniBtn}
-                      onPress={() => {
-                        if (playerRoute) {
-                          try { router.navigate(playerRoute as any); } catch {}
-                        }
-                        enterTop();
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="expand-outline" size={18} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Title bar ─────────────────────────────────────────────────── */}
-          <View style={g.miniTitle}>
-            <Text style={g.miniTitleTxt} numberOfLines={1}>{title}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity
-                onPress={() => setPlaying(!isPlaying)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons
-                  name={isPlaying ? 'pause' : 'play'}
-                  size={14}
-                  color="rgba(255,255,255,0.78)"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={hide}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={16} color="rgba(255,255,255,0.78)" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-        </Animated.View>
-        </GestureDetector>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════
-          TOP MODE OVERLAY — controls on top of the video surface.
-          Video is the sibling Animated.View above (transparent overlay here).
-          ══════════════════════════════════════════════════════════════════ */}
-      {mode === 'top' && (
-        <View style={[g.topRoot, { top: insets.top, height: topH }]} pointerEvents="box-none">
-
-        {/* Brightness overlay */}
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, { opacity: (1 - brightness) * 0.85 }]}
+        <MiniOverlay
+          panGesture={panGesture}
+          miniAnimStyle={miniAnimStyle}
+          isLive={isLive}
+          title={title}
+          isPlaying={isPlaying}
+          showCtrl={showCtrl}
+          onToggleCtrl={() => {
+            setShowCtrl(v => {
+              const next = !v;
+              if (miniCtrlTimer.current) clearTimeout(miniCtrlTimer.current);
+              if (next) {
+                miniCtrlTimer.current = setTimeout(() => setShowCtrl(false), 1500);
+              }
+              return next;
+            });
+          }}
+          onSetPlaying={setPlaying}
+          onExpand={() => {
+            if (playerRoute) {
+              try { router.navigate(playerRoute as any); } catch {}
+            }
+            enterTop();
+          }}
+          onClose={hide}
         />
-
-        {/* Buffering */}
-        {(buffering || !isReady) && !playerError && nativeSource && (
-          <View style={g.overlayCenter} pointerEvents="none">
-            <ActivityIndicator size="large" color={C.primary} />
-            <Text style={g.bufferingTxt}>
-              {isLive ? 'Buffering live stream…' : 'Buffering…'}
-            </Text>
-          </View>
-        )}
-
-        {/* Error */}
-        {playerError && (
-          <View style={g.overlayCenter}>
-            <Ionicons name="alert-circle-outline" size={32} color={C.live} />
-            <Text style={[g.errorTxt, { fontSize: 13 }]}>Playback Failed</Text>
-            {src?.cookieExpired && (
-              <Text style={[g.errorSub, { fontSize: 11, color: '#f59e0b', marginTop: 4, textAlign: 'center' }]}>
-                🍪 Cookie expired — admin needs to update stream credentials
-              </Text>
-            )}
-            <View style={[g.errorActions, { marginTop: 10 }]}>
-              {sources.length > 1 && srcIdx < sources.length - 1 && (
-                <TouchableOpacity onPress={() => switchToSource(srcIdx + 1)} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
-                  <Text style={[g.retryTxt, { fontSize: 12 }]}>Try Server {srcIdx + 2}</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={refreshStream} style={[g.retryBtn, { paddingHorizontal: 16, paddingVertical: 8 }]}>
-                <Ionicons name="refresh" size={14} color="#fff" />
-                <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowDebug(true)} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
-                <Text style={[g.retryTxt, { fontSize: 12 }]}>Debug</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Swipe-down hint — pill handle at bottom edge (YouTube-style) */}
-        {!pipActive && !playerError && (
-          <View style={g.swipeHandle} pointerEvents="none">
-            <View style={g.swipeHandlePill} />
-          </View>
-        )}
-
-        {/* Gesture layer — disabled on error so Debug/Retry buttons are tappable */}
-        {/* T1.2: GestureDetector (UI thread) replaces PanResponder (JS thread) */}
-        {!pipActive && !playerError && (
-          <GestureDetector gesture={fsGesture}>
-            <View style={StyleSheet.absoluteFill} />
-          </GestureDetector>
-        )}
-
-        {/* Full controls overlay */}
-        {showCtrl && !pipActive && !playerError && (
-          <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
-            {/* Gradient — transparent at top, very subtle dark only at bottom for controls readability */}
-            <LinearGradient
-              colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.30)']}
-              locations={[0, 0.55, 0.78, 1]}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-
-            {/* Top bar */}
-            {!isLocked && (
-            <View style={[g.topBar, { paddingTop: 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={goBackFromTop}>
-                <Ionicons name="arrow-back" size={22} color="#fff" />
-              </TouchableOpacity>
-              <View style={{ flex: 1, marginHorizontal: 8 }}>
-                <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>
-                {streamFormat !== 'UNKNOWN' && (
-                  <Text style={g.formatBadge}>{streamFormat}</Text>
-                )}
-              </View>
-              <View style={g.topRight}>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity style={g.iconBtn} onPress={() => { setPip(v => !v); bumpCtrl(); }}>
-                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={g.iconBtn} onPress={refreshStream}>
-                  <Ionicons name="refresh-outline" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-
-            {/* Server pills */}
-            {!isLocked && sources.length > 1 && (
-              <View style={g.pillRow}>
-                {sources.map((s, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    onPress={() => switchToSource(i)}
-                    style={[g.pill, i === srcIdx && g.pillActive]}
-                  >
-                    <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt]}>
-                      {i === srcIdx ? '● ' : ''}{s.label || `Server ${i + 1}`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {/* LIVE badge */}
-            {isLive && !isLocked && (
-              <View style={g.liveRow}>
-                <View style={g.liveBadge}>
-                  <View style={g.liveDot} />
-                  <Text style={g.liveTxt}>LIVE</Text>
-                </View>
-                {isReady && !buffering && (
-                  <View style={g.livePing}>
-                    <Ionicons name="wifi" size={11} color={C.green} />
-                    <Text style={g.livePingTxt}>
-                      {selectedVidIdx >= 0 && videoTracks[selectedVidIdx]?.height
-                        ? `${videoTracks[selectedVidIdx].height}p`
-                        : 'HD'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Center controls */}
-            {!isLocked && (
-            <View style={g.centerPanel} pointerEvents="box-none">
-              <View style={g.glassRow}>
-                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-back" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
-                  {buffering && isReady
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
-                  }
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-forward" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-
-            {/* Bottom tool row */}
-            {!isLocked && (
-            <View style={[g.bottomBar, { paddingBottom: 10 }]}>
-              {!isLive && duration > 0 && (
-                <SeekBar
-                  progressSV={progressSV}
-                  currentTime={currentTime}
-                  duration={duration}
-                  trackWidthRef={trackWidthRef}
-                  onSeekFrac={seekToFrac}
-                />
-              )}
-              <View style={g.toolRow}>
-                <TouchableOpacity onPress={() => { setSheet('speed'); bumpCtrl(); }} style={g.toolBtn}>
-                  <Text style={g.speedTxt}>{speed}×</Text>
-                </TouchableOpacity>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity onPress={() => { setSheet('quality'); bumpCtrl(); }} style={g.toolBtn}>
-                    <MaterialIcons name="hd" size={22} color={selectedVidIdx !== -1 ? C.primary : '#fff'} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => { setSheet('audio'); bumpCtrl(); }} style={g.toolBtn}>
-                  <Ionicons name="musical-note-outline" size={20} color={selectedAudIdx !== -1 ? C.primary : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setSheet('subtitle'); bumpCtrl(); }} style={g.toolBtn}>
-                  <MaterialCommunityIcons name="subtitles-outline" size={20} color={selectedSubIdx !== -1 ? C.primary : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setAspect(a => ASPECT_CYCLE[(ASPECT_CYCLE.indexOf(a) + 1) % ASPECT_CYCLE.length]); bumpCtrl(); }} style={g.toolBtn}>
-                  <MaterialIcons name="aspect-ratio" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={toggleLandscape} style={g.toolBtn} hitSlop={8}>
-                  <MaterialIcons name="screen-rotation" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setLocked(v => !v); bumpCtrl(); }} style={g.toolBtn}>
-                  <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-          </Animated.View>
-        )}
-
-        {/* Lock badge — OUTSIDE showCtrl so it stays visible after auto-hide */}
-        {isLocked && !pipActive && !playerError && (
-          <TouchableOpacity
-            onPress={() => { setLocked(false); forceShowCtrl(); }}
-            style={g.lockBadge}
-          >
-            <Ionicons name="lock-closed" size={18} color="#fff" />
-            <Text style={g.lockTxt}>Tap to unlock</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Seek feedback + swipe indicator */}
-        {!pipActive && seekSide && (
-          <SeekFeedback
-            key={seekSide.side + Date.now()}
-            side={seekSide.side}
-            seconds={seekSide.secs}
-            onDone={() => setSeekSide(null)}
-          />
-        )}
-        {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
-        </View>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════
-          FULLSCREEN MODE OVERLAY
-          ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'top' && (
+        <TopOverlay
+          insetsTop={insets.top}
+          topH={topH}
+          brightness={brightness}
+          buffering={buffering}
+          isReady={isReady}
+          playerError={playerError}
+          hasSource={!!nativeSource}
+          isLive={isLive}
+          src={src}
+          sources={sources}
+          srcIdx={srcIdx}
+          onSwitchSource={switchToSource}
+          onRefresh={refreshStream}
+          onShowDebug={() => setShowDebug(true)}
+          pipActive={pipActive}
+          fsGesture={fsGesture}
+          showCtrl={showCtrl}
+          ctrlStyle={ctrlStyle}
+          isLocked={isLocked}
+          onGoBack={goBackFromTop}
+          title={title}
+          streamFormat={streamFormat}
+          pip={pip}
+          onTogglePip={() => { setPip(v => !v); bumpCtrl(); }}
+          selectedVidIdx={selectedVidIdx}
+          videoTracks={videoTracks}
+          onSeek={seek}
+          onSeekSide={setSeekSide}
+          seekSide={seekSide}
+          isPlaying={isPlaying}
+          onSetPlaying={setPlaying}
+          duration={duration}
+          currentTime={currentTime}
+          progressSV={progressSV}
+          trackWidthRef={trackWidthRef}
+          onSeekFrac={seekToFrac}
+          speed={speed}
+          onOpenSheet={setSheet}
+          selectedAudIdx={selectedAudIdx}
+          selectedSubIdx={selectedSubIdx}
+          aspect={aspect}
+          onSetAspect={(a) => setAspect(a)}
+          onToggleLandscape={toggleLandscape}
+          onSetLocked={(v) => setLocked(v)}
+          onForceShowCtrl={forceShowCtrl}
+          swipeType={swipeType}
+          swipeValue={swipeValue}
+          bumpCtrl={bumpCtrl}
+        />
+      )}
+
       {mode === 'fullscreen' && (
-        <View style={g.fullRoot} pointerEvents="box-none">
-          <StatusBar hidden barStyle="light-content" backgroundColor="#000" />
-
-          {/* ── Brightness overlay (animated, ZERO re-renders) ──────────────── */}
-      <Animated.View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, brightnessOverlayStyle]}
-      />
-
-      {/* ── Buffering ─────────────────────────────────────────────────────── */}
-      {!pipActive && (buffering || !isReady) && !playerError && nativeSource && (
-        <View style={g.overlayCenter} pointerEvents="none">
-          <ActivityIndicator size="large" color={C.primary} />
-          <Text style={g.bufferingTxt}>
-            {isLive ? 'Buffering live stream…' : 'Buffering…'}
-          </Text>
-        </View>
-      )}
-
-      {/* ── Error ─────────────────────────────────────────────────────────── */}
-      {!pipActive && playerError && (
-        <View style={g.overlayCenter}>
-          <Ionicons name="alert-circle-outline" size={48} color={C.live} />
-          <Text style={g.errorTxt}>Playback Failed</Text>
-          <Text style={g.errorSub} numberOfLines={3}>{playerError}</Text>
-          {src?.cookieExpired && (
-            <Text style={[g.errorSub, { fontSize: 12, color: '#f59e0b', marginTop: 6, textAlign: 'center' }]}>
-              🍪 Cookie expired — admin needs to update stream credentials
-            </Text>
-          )}
-          <View style={g.errorActions}>
-            {sources.length > 1 && srcIdx < sources.length - 1 && (
-              <TouchableOpacity onPress={() => switchToSource(srcIdx + 1)} style={g.altBtn}>
-                <Text style={g.altBtnTxt}>Try Server {srcIdx + 2}</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={refreshStream} style={g.retryBtn}>
-              <Ionicons name="refresh" size={16} color="#fff" />
-              <Text style={g.retryTxt}>Retry</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDebug(true)} style={g.altBtn}>
-              <Text style={g.altBtnTxt}>Debug</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* ── Gesture layer — tap/double-tap/swipe for controls, brightness, volume ── */}
-      {!pipActive && !playerError && (
-        <GestureDetector gesture={fsGesture}>
-          <View style={StyleSheet.absoluteFill} />
-        </GestureDetector>
-      )}
-
-      {/* ── Controls ──────────────────────────────────────────────────────── */}
-      {showCtrl && !pipActive && !playerError && (
-        <Animated.View style={[StyleSheet.absoluteFill, ctrlStyle]} pointerEvents="box-none">
-          <LinearGradient
-            colors={['transparent', 'transparent', 'transparent', 'rgba(0,0,0,0.35)']}
-            locations={[0, 0.55, 0.78, 1]}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-
-          {/* Top bar */}
-          {!isLocked && (
-            <View style={[g.topBar, { paddingTop: insets.top + 10 }]}>
-              <TouchableOpacity style={g.iconBtn} onPress={() => { unlockOrientation(); enterTop(); }}>
-                <Ionicons name="arrow-back" size={22} color="#fff" />
-              </TouchableOpacity>
-              <View style={{ flex: 1, marginHorizontal: 8 }}>
-                <Text style={g.titleTxt} numberOfLines={1}>{title}</Text>
-                {streamFormat !== 'UNKNOWN' && (
-                  <Text style={g.formatBadge}>{streamFormat}</Text>
-                )}
-              </View>
-              <View style={g.topRight}>
-                {/* PiP */}
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity style={g.iconBtn} onPress={() => { setPip(v => !v); bumpCtrl(); }}>
-                    <MaterialIcons name="picture-in-picture-alt" size={20} color={pip ? C.primary : '#fff'} />
-                  </TouchableOpacity>
-                )}
-                {/* Refresh */}
-                <TouchableOpacity style={g.iconBtn} onPress={refreshStream}>
-                  <Ionicons name="refresh-outline" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Server pills */}
-          {!isLocked && sources.length > 1 && (
-            <View style={g.pillRow}>
-              {sources.map((s, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => switchToSource(i)}
-                  style={[g.pill, i === srcIdx && g.pillActive]}
-                >
-                  <Text style={[g.pillTxt, i === srcIdx && g.pillActiveTxt]}>
-                    {i === srcIdx ? '● ' : ''}{s.label || `S${i + 1}`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* LIVE badge */}
-          {isLive && !isLocked && (
-            <View style={g.liveRow}>
-              <View style={g.liveBadge}>
-                <View style={g.liveDot} />
-                <Text style={g.liveTxt}>LIVE</Text>
-              </View>
-              {isReady && !buffering && (
-                <View style={g.livePing}>
-                  <Ionicons name="wifi" size={11} color={C.green} />
-                  <Text style={g.livePingTxt}>
-                    {selectedVidIdx >= 0 && videoTracks[selectedVidIdx]?.height
-                      ? `${videoTracks[selectedVidIdx].height}p`
-                      : 'HD'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Center controls */}
-          {!isLocked && (
-            <View style={g.centerPanel} pointerEvents="box-none">
-              <View style={g.glassRow}>
-                <TouchableOpacity onPress={() => { seek(-10); setSeekSide({ side: 'left', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-back" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setPlaying(!isPlaying); bumpCtrl(); }} style={g.playBtn}>
-                  {buffering && isReady
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#fff" style={isPlaying ? {} : { marginLeft: 3 }} />
-                  }
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { seek(10); setSeekSide({ side: 'right', secs: 10 }); }} style={g.ctrlBtn}>
-                  <Ionicons name="play-forward" size={22} color="#fff" />
-                  <Text style={g.seekLabel}>10s</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Bottom bar */}
-          {!isLocked && (
-            <View style={[g.bottomBar, { paddingBottom: insets.bottom + 14 }]}>
-              {!isLiveNow && (
-                <SeekBar
-                  progressSV={progressSV}
-                  currentTime={currentTime}
-                  duration={duration}
-                  trackWidthRef={trackWidthRef}
-                  onSeekFrac={seekToFrac}
-                />
-              )}
-
-              {/* Tool row */}
-              <View style={g.toolRow}>
-                <TouchableOpacity onPress={() => { setSheet('speed'); bumpCtrl(); }} style={g.toolBtn}>
-                  <Text style={g.speedTxt}>{speed}×</Text>
-                </TouchableOpacity>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity onPress={() => { setSheet('quality'); bumpCtrl(); }} style={g.toolBtn}>
-                    <MaterialIcons name="hd" size={22} color={selectedVidIdx !== -1 ? C.primary : '#fff'} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => { setSheet('audio'); bumpCtrl(); }} style={g.toolBtn}>
-                  <Ionicons name="musical-note-outline" size={20} color={selectedAudIdx !== -1 ? C.primary : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setSheet('subtitle'); bumpCtrl(); }} style={g.toolBtn}>
-                  <MaterialCommunityIcons name="subtitles-outline" size={20} color={selectedSubIdx !== -1 ? C.primary : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setAspect(a => ASPECT_CYCLE[(ASPECT_CYCLE.indexOf(a) + 1) % ASPECT_CYCLE.length]); bumpCtrl(); }} style={g.toolBtn}>
-                  <MaterialIcons name="aspect-ratio" size={20} color="#fff" />
-                </TouchableOpacity>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity onPress={toggleLandscape} style={g.toolBtn} hitSlop={8}>
-                    <MaterialIcons
-                      name={isLandscape ? 'stay-primary-portrait' : 'stay-primary-landscape'}
-                      size={20}
-                      color={isLandscape ? C.primary : '#fff'}
-                    />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => { setLocked(v => !v); bumpCtrl(); }} style={g.toolBtn}>
-                  <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-        </Animated.View>
-      )}
-
-          {/* Lock badge — OUTSIDE showCtrl block so it stays visible even after
-              controls auto-hide. Tapping unlocks and re-shows controls. */}
-          {isLocked && !pipActive && !playerError && (
-            <TouchableOpacity
-              onPress={() => { setLocked(false); forceShowCtrl(); }}
-              style={g.lockBadge}
-            >
-              <Ionicons name="lock-closed" size={18} color="#fff" />
-              <Text style={g.lockTxt}>Tap to unlock</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Seek feedback + swipe indicator */}
-          {!pipActive && seekSide && (
-            <SeekFeedback
-              key={seekSide.side + Date.now()}
-              side={seekSide.side}
-              seconds={seekSide.secs}
-              onDone={() => setSeekSide(null)}
-            />
-          )}
-          {!pipActive && swipeType && <SwipeIndicator type={swipeType} value={swipeValue} />}
-
-        </View>
+        <FullscreenOverlay
+          insetsTop={insets.top}
+          insetsBottom={insets.bottom}
+          brightnessOverlayStyle={brightnessOverlayStyle}
+          buffering={buffering}
+          isReady={isReady}
+          playerError={playerError}
+          hasSource={!!nativeSource}
+          isLive={isLive}
+          isLiveNow={isLiveNow}
+          src={src}
+          sources={sources}
+          srcIdx={srcIdx}
+          onSwitchSource={switchToSource}
+          onRefresh={refreshStream}
+          onShowDebug={() => setShowDebug(true)}
+          pipActive={pipActive}
+          fsGesture={fsGesture}
+          showCtrl={showCtrl}
+          ctrlStyle={ctrlStyle}
+          isLocked={isLocked}
+          onGoBack={() => { unlockOrientation(); enterTop(); }}
+          title={title}
+          streamFormat={streamFormat}
+          pip={pip}
+          onTogglePip={() => { setPip(v => !v); bumpCtrl(); }}
+          selectedVidIdx={selectedVidIdx}
+          videoTracks={videoTracks}
+          onSeek={seek}
+          onSeekSide={setSeekSide}
+          seekSide={seekSide}
+          isPlaying={isPlaying}
+          onSetPlaying={setPlaying}
+          duration={duration}
+          currentTime={currentTime}
+          progressSV={progressSV}
+          trackWidthRef={trackWidthRef}
+          onSeekFrac={seekToFrac}
+          speed={speed}
+          onOpenSheet={setSheet}
+          selectedAudIdx={selectedAudIdx}
+          selectedSubIdx={selectedSubIdx}
+          aspect={aspect}
+          onSetAspect={(a) => setAspect(a)}
+          isLandscape={isLandscape}
+          onToggleLandscape={toggleLandscape}
+          onSetLocked={(v) => setLocked(v)}
+          onForceShowCtrl={forceShowCtrl}
+          swipeType={swipeType}
+          swipeValue={swipeValue}
+          bumpCtrl={bumpCtrl}
+        />
       )}
       {/* ══════════════════════════════════════════════════════════════════
           PHASE 3: NEXT EPISODE OVERLAY
@@ -1958,224 +1527,3 @@ export default function GlobalVideoPlayer() {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// STYLES
-// ════════════════════════════════════════════════════════════════════════════
-const g = StyleSheet.create({
-  // Root wrapper — absoluteFill so all absolute children position correctly
-  // on React Native new architecture (Fabric). Using a Fragment caused
-  // translateY from the mini-player's shared values to leak into top mode.
-  playerRoot: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9997,
-    elevation: 49,
-  },
-  // Fullscreen
-  fullRoot: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'transparent', zIndex: 9999, elevation: 50,
-  },
-  overlayCenter: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center', alignItems: 'center', gap: 10,
-    backgroundColor: 'transparent',
-  },
-  bufferingTxt: { color: C.dim, fontSize: 13, marginTop: 6 },
-  errorTxt:  { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 8, textAlign: 'center' },
-  errorSub:  { color: C.dim, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
-  errorActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  retryBtn:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: C.primary, borderRadius: 22 },
-  retryTxt:  { color: '#fff', fontWeight: '700', fontSize: 14 },
-  altBtn:    { paddingHorizontal: 18, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 22, borderWidth: 1, borderColor: C.border },
-  altBtnTxt: { color: '#fff', fontSize: 14 },
-
-  topBar:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingBottom: 6, gap: 8 },
-  iconBtn:   { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border },
-  titleTxt:  { color: '#fff', fontSize: 14, fontWeight: '600' },
-  formatBadge: { color: C.dim, fontSize: 10, marginTop: 1 },
-  topRight:  { flexDirection: 'row', gap: 8 },
-
-  pillRow:       { flexDirection: 'row', gap: 6, paddingHorizontal: 14, flexWrap: 'wrap', marginTop: 2 },
-  pill:          { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 14, borderWidth: 1, borderColor: C.border },
-  pillActive:    { borderColor: C.primary, backgroundColor: 'rgba(139,92,246,0.2)' },
-  pillExpired:   { borderColor: 'rgba(239,68,68,0.5)', backgroundColor: 'rgba(239,68,68,0.12)' },
-  pillTxt:       { color: '#ccc', fontSize: 12 },
-  pillActiveTxt: { color: C.primary, fontWeight: '700' },
-  pillExpiredTxt:{ color: '#f87171' },
-
-  liveRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginTop: 4 },
-  liveBadge:  { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.live, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4 },
-  liveDot:    { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' },
-  liveTxt:    { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  livePing:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  livePingTxt:{ color: C.green, fontSize: 10, fontWeight: '600' },
-
-  centerPanel: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  glassRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent', borderRadius: 30, paddingHorizontal: 16, paddingVertical: 12 },
-  ctrlBtn:   { alignItems: 'center', justifyContent: 'center', width: 54, height: 48, gap: 2 },
-  seekLabel: { color: '#fff', fontSize: 9, fontWeight: '700', opacity: 0.8 },
-  playBtn:   { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center', marginHorizontal: 6 },
-
-  bottomBar:   { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 12, paddingBottom: 14, paddingTop: 4 },
-  toolRow:     { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 2 },
-  toolBtn:     { width: 40, height: 36, justifyContent: 'center', alignItems: 'center' },
-  speedTxt:    { color: '#e5e7eb', fontSize: 13, fontWeight: '700' },
-
-  lockBadge: { position: 'absolute', alignSelf: 'center', top: '46%', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: C.border },
-  lockTxt:   { color: '#fff', fontSize: 13 },
-
-  // Swipe-down pill handle (YouTube-style) — shown at bottom edge of TOP mode video
-  swipeHandle: {
-    position: 'absolute', bottom: 4, left: 0, right: 0,
-    alignItems: 'center', paddingBottom: 2,
-  },
-  swipeHandlePill: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-
-  // Top mode (video at top, related channels visible below)
-  topRoot: {
-    position: 'absolute', left: 0, right: 0,
-    backgroundColor: 'transparent', zIndex: 9999, elevation: 50,
-  },
-  topControls: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingTop: 8, paddingBottom: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)', gap: 6,
-  },
-  topIconBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  topLiveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.live, borderRadius: 4,
-    paddingHorizontal: 7, paddingVertical: 3,
-    marginLeft: 4,
-  },
-
-  // Mini
-  miniRoot: {
-    position: 'absolute', top: 0, left: 0,
-    width: MINI_W,
-    zIndex: 9999, elevation: 60,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.65, shadowRadius: 20,
-  },
-  miniVideo: {
-    width: MINI_W, height: MINI_H,
-    backgroundColor: '#000',
-    borderTopLeftRadius: 12, borderTopRightRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1.5, borderBottomWidth: 0,
-    borderColor: 'rgba(139,92,246,0.6)',
-  },
-  miniBuffering: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  miniLive: {
-    position: 'absolute', top: 6, left: 6,
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(220,38,38,0.92)',
-    borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2,
-  },
-  miniLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' },
-  miniLiveTxt: { color: '#fff', fontSize: 8, fontWeight: '800' },
-  miniOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.48)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  miniClose: {
-    position: 'absolute', top: 6, right: 6,
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  miniCenter: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: MINI_TITLE_H,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16,
-  },
-  miniBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  miniTitle: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8,
-    height: MINI_TITLE_H, backgroundColor: '#0D0D1F',
-    borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
-    borderWidth: 1.5, borderTopWidth: 0,
-    borderColor: 'rgba(139,92,246,0.6)',
-  },
-  miniTitleLogo: { width: 20, height: 20, borderRadius: 4 },
-  miniTitleTxt: { flex: 1, color: '#EFEFEF', fontSize: 10.5, fontWeight: '600' },
-  miniError: {
-    position: 'absolute', top: 6, right: 6,
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4,
-  },
-});
-
-const db = StyleSheet.create({
-  backdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'flex-end',
-  },
-  panel: {
-    backgroundColor: '#0f1729',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '85%',
-    paddingBottom: 24,
-    borderTopWidth: 1, borderColor: 'rgba(139,92,246,0.3)',
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
-  },
-  headerTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
-  },
-  statusTxt: { fontSize: 12, fontWeight: '700' },
-  scrollWrap: { paddingHorizontal: 18, paddingTop: 14 },
-  sectionTitle: {
-    color: C.dim, fontSize: 10, fontWeight: '700',
-    letterSpacing: 0.8, marginBottom: 8,
-  },
-  codeBox: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 8, padding: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  codeText: { color: '#e5e7eb', fontSize: 11, lineHeight: 17 },
-  metaLine: { color: C.dim, fontSize: 11, marginTop: 5, marginBottom: 2 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  rowLabel: { color: C.dim, fontSize: 13 },
-  rowVal: { color: '#e5e7eb', fontSize: 13 },
-  badge: { borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4 },
-  badgeTxt: { fontSize: 12, fontWeight: '700' },
-  emptyNote: { color: C.dim, fontSize: 12, fontStyle: 'italic', paddingVertical: 4 },
-  closeBtn: {
-    marginTop: 18, marginHorizontal: 18,
-    backgroundColor: C.primary,
-    borderRadius: 24, paddingVertical: 13,
-    alignItems: 'center',
-  },
-  closeTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
-});
