@@ -28,10 +28,15 @@ const { withAndroidManifest } = require('expo/config-plugins');
 
 const TEST_ANDROID_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
 
-module.exports = function withAdMobManifest(config) {
+// NOTE: this plugin used to read `process.env.ADMOB_ANDROID_APP_ID`, but that
+// env var is never actually set anywhere (app.config.js hardcodes the real ID
+// as a JS constant instead of exporting it to the environment). That mismatch
+// meant this "fix it up" plugin silently overwrote the real Android App ID
+// with Google's TEST id on every prebuild/EAS build. Fixed by passing the
+// real ID in directly from app.config.js instead of relying on env vars.
+module.exports = function withAdMobManifest(config, { androidAppId } = {}) {
   return withAndroidManifest(config, (cfg) => {
-    const androidAppId =
-      process.env.ADMOB_ANDROID_APP_ID || TEST_ANDROID_APP_ID;
+    const resolvedAppId = androidAppId || TEST_ANDROID_APP_ID;
 
     const manifest = cfg.modResults.manifest;
     const application = manifest.application[0];
@@ -59,13 +64,13 @@ module.exports = function withAdMobManifest(config) {
     application['meta-data'].push({
       $: {
         'android:name': 'com.google.android.gms.ads.APPLICATION_ID',
-        'android:value': androidAppId,
+        'android:value': resolvedAppId,
         'tools:replace': 'android:value',
       },
     });
 
     console.log(
-      `[withAdMobManifest] Injected APPLICATION_ID: ${androidAppId}`,
+      `[withAdMobManifest] Injected APPLICATION_ID: ${resolvedAppId}`,
     );
 
     return cfg;

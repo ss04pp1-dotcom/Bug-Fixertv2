@@ -100,7 +100,7 @@ module.exports = {
           delayAppMeasurementInit: true,
         },
       ],
-      './plugins/withAdMobManifest',
+      ['./plugins/withAdMobManifest', { androidAppId: ADMOB_ANDROID_APP_ID }],
       ['./plugins/withAppLovinConfig', { sdkKey: APPLOVIN_SDK_KEY }],
       'expo-screen-orientation',
       './plugins/withPipSupport',
