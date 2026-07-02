@@ -24,7 +24,7 @@ import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import { YouTubeVideoBox, isYouTubeUrl, extractYouTubeStream } from '@/components/YouTubePlayer';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
-import { AdRewarded } from '@/components/AdRewarded';
+import { AdBanner } from '@/components/AdBanner';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -309,6 +309,8 @@ export default function PlayerScreen() {
           </View>
         </View>
       </View>
+
+      <AdBanner placement="player_banner" style={{ marginTop: 0 }} />
 
       {(episodes.length > 0 || related.length > 0 || overview) && (
         <View style={s.tabBar}>

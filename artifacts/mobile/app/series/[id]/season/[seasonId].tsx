@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSeries } from '@/lib/api-hooks';
+import { AdBanner } from '@/components/AdBanner';
 
 interface Episode {
   id: string;
@@ -176,6 +177,7 @@ export default function SeasonEpisodesScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      <AdBanner placement="series_episodes_banner" />
     </View>
   );
 

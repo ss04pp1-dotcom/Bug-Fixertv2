@@ -9,6 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { Config } from '@/constants/config';
+import { AdBanner } from '@/components/AdBanner';
+import { AdRewarded } from '@/components/AdRewarded';
+import { useChannelAdGate } from '@/hooks/useChannelAdGate';
 
 const C = {
   bg: '#0A0A0F', card: '#13131C', primary: '#8B5CF6',
@@ -153,11 +156,15 @@ export default function SearchScreen() {
     enabled: debouncedQuery.trim().length > 1,  // API requires at least 2 chars
   });
 
+  const channelGate = useChannelAdGate();
+
   const handleSelect = useCallback((item: ResultItem) => {
     if (item.type === 'movie') router.push(`/movie/${item.id}`);
     else if (item.type === 'series') router.push(`/series/${item.id}`);
-    else router.push({ pathname: `/live-player/${item.id}` as any, params: { title: item.title } });
-  }, []);
+    // Channels are gated behind a mandatory rewarded ad — navigation only
+    // happens once the reward is actually earned (see useChannelAdGate).
+    else channelGate.requestChannel(item.id, { title: item.title });
+  }, [channelGate]);
 
   const showPlaceholder = !isFetching && debouncedQuery.length === 0;
   const showEmpty = !isFetching && debouncedQuery.length > 0 && data.length === 0;
@@ -165,6 +172,13 @@ export default function SearchScreen() {
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <AdRewarded
+        placement="channel_select_rewarded"
+        visible={channelGate.visible}
+        onClose={channelGate.onClose}
+        onRewardEarned={channelGate.onRewardEarned}
+        rewardSeconds={30}
+      />
 
       {/* Header */}
       <View style={s.header}>
@@ -190,6 +204,8 @@ export default function SearchScreen() {
           )}
         </View>
       </View>
+
+      <AdBanner placement="search_banner" style={{ marginTop: 4 }} />
 
       {/* Results area */}
       {isFetching ? (

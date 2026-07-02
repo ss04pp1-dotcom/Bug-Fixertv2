@@ -10,6 +10,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLiveChannelsInfinite, useCategories } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
+import { AdBanner } from '@/components/AdBanner';
+import { AdRewarded } from '@/components/AdRewarded';
+import { useChannelAdGate } from '@/hooks/useChannelAdGate';
 
 const { width: W } = Dimensions.get('window');
 
@@ -54,7 +57,7 @@ function mapChannel(ch: any, i: number) {
 }
 
 // ── Grid channel card ─────────────────────────────────────────────────────────
-function ChannelCard({ item }: { item: ReturnType<typeof mapChannel> }) {
+function ChannelCard({ item, onSelect }: { item: ReturnType<typeof mapChannel>; onSelect: (item: ReturnType<typeof mapChannel>) => void }) {
   const [imgErr, setImgErr] = useState(false);
   const showLogo = item.logo && !imgErr;
   const logoUri  = item.logo ? Config.imageUrl(item.logo) : '';
@@ -62,10 +65,7 @@ function ChannelCard({ item }: { item: ReturnType<typeof mapChannel> }) {
   return (
     <Pressable
       style={s.card}
-      onPress={() => router.push({
-        pathname: `/live-player/${item.id}` as any,
-        params: { title: item.name, logo: item.logo, cat: item.cat, streamUrl: item.streamUrl },
-      })}
+      onPress={() => onSelect(item)}
       android_ripple={{ color: 'rgba(139,92,246,0.15)', borderless: false }}
     >
       {/* Logo circle */}
@@ -169,10 +169,15 @@ export default function LiveTVScreen() {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  const channelGate = useChannelAdGate();
+  const handleSelectChannel = useCallback((item: ReturnType<typeof mapChannel>) => {
+    channelGate.requestChannel(item.id, { title: item.name, logo: item.logo, cat: item.cat, streamUrl: item.streamUrl });
+  }, [channelGate]);
+
   // numColumns must be stable — don't pass dynamic value
   const renderItem = useCallback(({ item }: { item: ReturnType<typeof mapChannel> }) => (
-    <ChannelCard item={item} />
-  ), []);
+    <ChannelCard item={item} onSelect={handleSelectChannel} />
+  ), [handleSelectChannel]);
 
   const renderSkeleton = useCallback(({ item }: any) => <SkeletonCard />, []);
 
@@ -193,6 +198,13 @@ export default function LiveTVScreen() {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
+      <AdRewarded
+        placement="channel_select_rewarded"
+        visible={channelGate.visible}
+        onClose={channelGate.onClose}
+        onRewardEarned={channelGate.onRewardEarned}
+        rewardSeconds={30}
+      />
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <View style={s.header}>
@@ -256,6 +268,8 @@ export default function LiveTVScreen() {
           </ScrollView>
         </View>
       )}
+
+      <AdBanner placement="live_tv_banner" style={{ marginTop: 4, marginBottom: 0 }} />
 
       {/* ── Count hint ─────────────────────────────────────────── */}
       {!isLoading && filtered.length > 0 && (

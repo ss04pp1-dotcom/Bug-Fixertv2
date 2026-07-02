@@ -11,6 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
+import Constants from 'expo-constants';
+import { admobAvailable } from '@/lib/admob';
+import { appLovinAvailable, initAppLovin } from '@/lib/applovin';
+import { useAdConfig, isAdMobActive, isAppLovinActive } from '@/hooks/useAdConfig';
+import { useAdMobRewarded } from '@/hooks/useAdMobRewarded';
+import { useAppLovinRewarded } from '@/hooks/useAppLovinRewarded';
 
 const { width: W, height: H } = Dimensions.get('window');
 const DEFAULT_REWARD_SECONDS = 10;
@@ -64,7 +70,7 @@ interface AdRewardedProps {
   visible: boolean;
   onClose: () => void;
   onRewardEarned: () => void;
-  /** Seconds the user must watch before earning the reward. Default: 10 */
+  /** Seconds the user must watch before earning the reward (house-ad fallback only). Default: 10 */
   rewardSeconds?: number;
 }
 
@@ -75,39 +81,104 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned, reward
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rewardCalledRef = useRef(false);
+  const shownRef = useRef(false);
+
+  const { data: adConfig } = useAdConfig();
+  const admobActive = isAdMobActive(adConfig);
+  const applovinActive = isAppLovinActive(adConfig);
+  const rewardedUnitId = adConfig?.activeProvider?.adUnits?.rewarded;
+  const useRealAdMob = admobActive && admobAvailable && !!rewardedUnitId;
+  const useRealAppLovin = applovinActive && appLovinAvailable && !!rewardedUnitId;
+  const useRealNetwork = useRealAdMob || useRealAppLovin;
+
+  const handleRewardEarnedOnce = () => {
+    if (rewardCalledRef.current) return;
+    rewardCalledRef.current = true;
+    onRewardEarned();
+  };
+
+  const admobRewarded = useAdMobRewarded(
+    useRealAdMob ? rewardedUnitId : null,
+    !!adConfig?.activeProvider?.isTestMode,
+    handleRewardEarnedOnce,
+  );
+  const applovinRewarded = useAppLovinRewarded(
+    useRealAppLovin ? rewardedUnitId : null,
+    true,
+    handleRewardEarnedOnce,
+  );
 
   useEffect(() => {
+    const sdkKey = (Constants.expoConfig?.extra as any)?.applovinSdkKey;
+    if (useRealAppLovin) initAppLovin(sdkKey);
+  }, [useRealAppLovin]);
+
+  // Real network path: reset per-open state.
+  useEffect(() => {
+    if (!visible) return;
+    rewardCalledRef.current = false;
+    if (useRealNetwork) shownRef.current = false;
+  }, [visible, useRealNetwork]);
+
+  useEffect(() => {
+    if (!visible || !useRealAdMob) return;
+    if (admobRewarded.loaded && !shownRef.current) {
+      shownRef.current = true;
+      const didShow = admobRewarded.show();
+      if (!didShow) onClose();
+    }
+  }, [visible, useRealAdMob, admobRewarded.loaded, onClose]);
+
+  useEffect(() => {
+    if (!visible || !useRealAppLovin) return;
+    if (applovinRewarded.loaded && !shownRef.current) {
+      shownRef.current = true;
+      const didShow = applovinRewarded.show();
+      if (!didShow) onClose();
+    }
+  }, [visible, useRealAppLovin, applovinRewarded.loaded, onClose]);
+
+  // Real network never loaded in time — fall back to closing (caller decides what happens next).
+  useEffect(() => {
+    if (!visible || !useRealNetwork) return;
+    const timeout = setTimeout(() => {
+      if (!shownRef.current) onClose();
+    }, 6000);
+    return () => clearTimeout(timeout);
+  }, [visible, useRealNetwork, onClose]);
+
+  // House-ad fallback: only fetch/run when no real network rewarded ad is active.
+  useEffect(() => {
+    if (useRealNetwork) return;
     if (visible) {
       fetchRewardedAd(placement).then(setAd);
       setCountdown(rewardSeconds);
       setRewardEarned(false);
       impressionTracked.current = false;
-      rewardCalledRef.current = false;
     } else {
       setAd(null);
     }
-  }, [visible, placement]);
+  }, [visible, placement, useRealNetwork]);
 
   useEffect(() => {
+    if (useRealNetwork) return;
     if (visible && ad && !impressionTracked.current) {
       impressionTracked.current = true;
       trackEvent(ad.id, 'impression', placement);
     }
-  }, [ad, visible, placement]);
+  }, [ad, visible, placement, useRealNetwork]);
 
   // Countdown only starts when an ad is actually loaded — prevents free reward
   // if the API returns no ad (visible=true but ad=null → no timer, no reward).
   useEffect(() => {
+    if (useRealNetwork) return;
     if (!visible || !ad) return;
     timerRef.current = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
           if (timerRef.current) clearInterval(timerRef.current);
           setRewardEarned(true);
-          if (!rewardCalledRef.current) {
-            rewardCalledRef.current = true;
-            onRewardEarned();
-          }
+          handleRewardEarnedOnce();
           return 0;
         }
         return c - 1;
@@ -116,7 +187,11 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned, reward
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [visible, ad, onRewardEarned, rewardSeconds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, ad, rewardSeconds, useRealNetwork]);
+
+  // Real network rewarded ads render themselves natively via `.show()` — no JSX here.
+  if (useRealNetwork) return null;
 
   if (!visible || !ad) return null;
 
