@@ -81,7 +81,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { user } = useAuthStore();
-  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
+  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
 
   // If premium user, immediately close so navigation isn't blocked
   useEffect(() => {

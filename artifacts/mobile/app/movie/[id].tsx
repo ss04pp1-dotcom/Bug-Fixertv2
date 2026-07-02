@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useMovie, useToggleFavorite, useRelatedMovies, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
+import { AdBanner } from '@/components/AdBanner';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -216,6 +217,9 @@ export default function MovieDetailsScreen() {
               <Text style={styles.readMoreText}>more</Text>
             )}
           </TouchableOpacity>
+
+          {/* Ad Banner — shown to free users between description and cast */}
+          <AdBanner placement="movies_banner" style={{ marginTop: 16, marginBottom: 4 }} />
 
           {/* Cast */}
           <Text style={styles.sectionTitle}>Cast</Text>

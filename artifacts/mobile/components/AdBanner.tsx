@@ -127,7 +127,7 @@ export function AdBanner({ placement, style }: AdBannerProps) {
   const impressionTracked = useRef(false);
   const { data: adConfig } = useAdConfig();
   const { user } = useAuthStore();
-  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
+  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
 
   const admobActive = isAdMobActive(adConfig);
   const applovinActive = isAppLovinActive(adConfig);

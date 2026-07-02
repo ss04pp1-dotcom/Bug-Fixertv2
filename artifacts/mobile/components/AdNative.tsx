@@ -67,7 +67,7 @@ export function AdNative({ placement, style }: AdNativeProps) {
   const [dismissed, setDismissed] = useState(false);
   const impressionTracked = useRef(false);
   const { user } = useAuthStore();
-  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
+  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
 
   useEffect(() => {
     if (isPremium) return;

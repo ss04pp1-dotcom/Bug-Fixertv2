@@ -25,7 +25,7 @@ export function useAppOpenAd() {
   const [visible, setVisible] = useState(false);
   const { data: adConfig } = useAdConfig();
   const { user } = useAuthStore();
-  const isPremium = !!user && user.plan?.toLowerCase() !== 'free';
+  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
   const shownRef = useRef(false);
 
   const admobActive = isAdMobActive(adConfig);
