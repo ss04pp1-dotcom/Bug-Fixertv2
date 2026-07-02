@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveMatches, useUpcomingMatches, useMyTeams, useSportTypes } from '@/lib/api-hooks';
 import { AdBanner } from '@/components/AdBanner';
+import { AdInterstitial } from '@/components/AdInterstitial';
 import { SocketService } from '@/services/socket.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -127,12 +128,12 @@ function CategoryTab({
   );
 }
 
-function LiveMatchCard({ match }: { match: LiveMatch }) {
+function LiveMatchCard({ match, onPress }: { match: LiveMatch; onPress: () => void }) {
   return (
     <TouchableOpacity
       style={styles.liveMatchCard}
       activeOpacity={0.85}
-      onPress={() => router.push(`/match/${match.id}`)}
+      onPress={onPress}
     >
       <View style={styles.liveMatchHeader}>
         <View style={styles.liveBadge}>
@@ -194,9 +195,9 @@ function TeamCircle({ team }: { team: Team | null }) {
   );
 }
 
-function UpcomingRow({ item }: { item: UpcomingMatch }) {
+function UpcomingRow({ item, onPress }: { item: UpcomingMatch; onPress: () => void }) {
   return (
-    <View style={styles.upcomingRow}>
+    <TouchableOpacity style={styles.upcomingRow} activeOpacity={0.75} onPress={onPress}>
       <View style={styles.upcomingIcon}>
         <Ionicons
           name={sportIconMap[item.sport] || 'ellipse-outline'}
@@ -213,7 +214,7 @@ function UpcomingRow({ item }: { item: UpcomingMatch }) {
         <Text style={styles.upcomingTournament}>{item.tournament}</Text>
       </View>
       <Text style={styles.upcomingTime}>{item.time}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -226,6 +227,24 @@ export default function SportsScreen() {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
   const [activeName, setActiveName] = useState<string>('All');
   const queryClient = useQueryClient();
+
+  // ── Match pre-navigation ad (30-second interstitial) ─────────────────────
+  const [matchAdVisible, setMatchAdVisible] = useState(false);
+  const pendingMatchPath = React.useRef<string | null>(null);
+
+  const handleMatchPress = React.useCallback((matchId: string) => {
+    pendingMatchPath.current = `/match/${matchId}`;
+    setMatchAdVisible(true);
+  }, []);
+
+  const handleMatchAdClose = React.useCallback(() => {
+    setMatchAdVisible(false);
+    if (pendingMatchPath.current) {
+      const path = pendingMatchPath.current;
+      pendingMatchPath.current = null;
+      router.push(path as any);
+    }
+  }, []);
 
   // Fetch sport types dynamically — admin can add any sport and it appears here.
   const { data: sportTypes = [] } = useSportTypes();
@@ -334,6 +353,14 @@ export default function SportsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
+      {/* ── Match pre-navigation ad (30-second interstitial) ─── */}
+      <AdInterstitial
+        placement="sports_interstitial"
+        visible={matchAdVisible}
+        onClose={handleMatchAdClose}
+        skipAfterSeconds={30}
+      />
+
       {/* ── Header ─────────────────────────────────────── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sports</Text>
@@ -385,7 +412,7 @@ export default function SportsScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.liveMatchList}
-          renderItem={({ item }) => <LiveMatchCard match={item} />}
+          renderItem={({ item }) => <LiveMatchCard match={item} onPress={() => handleMatchPress(item.id)} />}
           ListEmptyComponent={
             <View style={styles.emptySection}>
               <Text style={styles.emptyText}>No live matches right now</Text>
@@ -415,7 +442,7 @@ export default function SportsScreen() {
           )}
           keyExtractor={(m) => m.id}
           scrollEnabled={false}
-          renderItem={({ item }) => <UpcomingRow item={item} />}
+          renderItem={({ item }) => <UpcomingRow item={item} onPress={() => handleMatchPress(item.id)} />}
           ItemSeparatorComponent={() => <View style={styles.upcomingSeparator} />}
           ListEmptyComponent={
             <View style={styles.emptySection}>

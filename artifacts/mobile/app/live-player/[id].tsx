@@ -24,6 +24,7 @@ import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { AdInterstitial } from '@/components/AdInterstitial';
+import { AdRewarded } from '@/components/AdRewarded';
 
 // ── Related channel card (3-col grid, white logo circle + onError fallback) ──
 function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
@@ -72,6 +73,10 @@ let _switchCount = 0;
 // ── Hourly playback ad ─────────────────────────────────────────────────────
 // Show an interstitial every HOURLY_MS of continuous live playback.
 const HOURLY_MS = 60 * 60 * 1000; // 60 minutes
+
+// ── Rewarded playback ad ───────────────────────────────────────────────────
+// Show a 30-second rewarded ad every 30 minutes — higher eCPM than interstitial.
+const REWARDED_MS = 30 * 60 * 1000; // 30 minutes
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -311,26 +316,42 @@ export default function LivePlayerScreen() {
   // ── Ad gate state ───────────────────────────────────────────────────────────
   const [adVisible, setAdVisible]               = useState(false);
   const [hourlyAdVisible, setHourlyAdVisible]   = useState(false);
+  const [rewardedAdVisible, setRewardedAdVisible] = useState(false);
   const pendingChannel   = useRef<typeof related[0] | null>(null);
   const hourlyTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rewardedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleHourlyAd = useCallback(() => {
     if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
     hourlyTimerRef.current = setTimeout(() => setHourlyAdVisible(true), HOURLY_MS);
   }, []);
 
-  // Start hourly timer once the stream is loaded; restart when channel changes
+  const scheduleRewardedAd = useCallback(() => {
+    if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current);
+    rewardedTimerRef.current = setTimeout(() => setRewardedAdVisible(true), REWARDED_MS);
+  }, []);
+
+  // Start hourly + rewarded timers once the stream is loaded; restart on channel change
   useEffect(() => {
-    if (sources.length > 0) scheduleHourlyAd();
+    if (sources.length > 0) {
+      scheduleHourlyAd();
+      scheduleRewardedAd();
+    }
     return () => {
       if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
+      if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current);
     };
-  }, [sources, scheduleHourlyAd]);
+  }, [sources, scheduleHourlyAd, scheduleRewardedAd]);
 
   const handleHourlyAdClose = useCallback(() => {
     setHourlyAdVisible(false);
     scheduleHourlyAd(); // restart 60-minute clock after ad closes
   }, [scheduleHourlyAd]);
+
+  const handleRewardedAdClose = useCallback(() => {
+    setRewardedAdVisible(false);
+    scheduleRewardedAd(); // restart 30-minute clock after ad closes
+  }, [scheduleRewardedAd]);
 
   const doSwitchChannel = useCallback((ch: typeof related[0]) => {
     router.replace({
@@ -412,6 +433,15 @@ export default function LivePlayerScreen() {
         placement="live_hourly"
         visible={hourlyAdVisible}
         onClose={handleHourlyAdClose}
+      />
+
+      {/* Rewarded playback ad — fires every 30 minutes, 30-second watch required */}
+      <AdRewarded
+        placement="live_rewarded"
+        visible={rewardedAdVisible}
+        onClose={handleRewardedAdClose}
+        onRewardEarned={handleRewardedAdClose}
+        rewardSeconds={30}
       />
 
       {/* Spacer for the video area — includes status bar height so it matches

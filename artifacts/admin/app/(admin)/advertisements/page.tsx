@@ -108,6 +108,11 @@ export default function Advertisements() {
   const [placementError, setPlacementError] = useState<string | null>(null);
   const [seedLoading, setSeedLoading] = useState(false);
   const [analyticsSeedLoading, setAnalyticsSeedLoading] = useState(false);
+
+  // ── House Ads quick-create state ──────────────────────────────────────────
+  const [quickAdForm, setQuickAdForm] = useState({ title: "", imageUrl: "", targetUrl: "", type: "interstitial" });
+  const [quickAdSaving, setQuickAdSaving] = useState(false);
+  const [quickAdResult, setQuickAdResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [analyticsSeedResult, setAnalyticsSeedResult] = useState<string | null>(null);
   const [analyticsResetLoading, setAnalyticsResetLoading] = useState(false);
 
@@ -168,6 +173,31 @@ export default function Advertisements() {
       setAnalyticsSeedResult(`✓ Seeded ${r.revenueRowsInserted?.toLocaleString()} revenue rows + ${r.eventRowsInserted?.toLocaleString()} events across ${r.daysSeeded} days / ${r.providersUsed} providers`);
     }
     refetchAnalytics();
+  };
+
+  const handleQuickAdSave = async () => {
+    if (!quickAdForm.title.trim()) {
+      setQuickAdResult({ ok: false, msg: "Ad title is required" });
+      return;
+    }
+    setQuickAdSaving(true);
+    setQuickAdResult(null);
+    try {
+      await call("post", "/v1/advertisements", {
+        title: quickAdForm.title.trim(),
+        imageUrl: quickAdForm.imageUrl.trim() || undefined,
+        targetUrl: quickAdForm.targetUrl.trim() || undefined,
+        type: quickAdForm.type,
+        isActive: true,
+      });
+      setQuickAdResult({ ok: true, msg: "Ad created and activated ✓" });
+      setQuickAdForm({ title: "", imageUrl: "", targetUrl: "", type: "interstitial" });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to create ad";
+      setQuickAdResult({ ok: false, msg: Array.isArray(msg) ? msg.join(", ") : String(msg) });
+    } finally {
+      setQuickAdSaving(false);
+    }
   };
 
   const handleResetAnalytics = async () => {
@@ -369,6 +399,80 @@ export default function Advertisements() {
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* ── House Ads Quick-Create ─────────────────────────────────────────── */}
+              <div className="bg-card border border-border rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap size={14} className="text-primary" />
+                  <h3 className="text-sm font-semibold text-white">House Ads — Quick Add</h3>
+                </div>
+                <p className="text-[11px] text-[#8B92A5] mb-4">
+                  Create an in-app ad instantly. It shows to all free users on the placement you choose (channel switch, sports match, home banner, etc.).
+                  No ad network account needed.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Ad Title *</label>
+                    <input
+                      type="text"
+                      value={quickAdForm.title}
+                      onChange={e => setQuickAdForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder="e.g. Watch StreamPro Premium"
+                      className="w-full bg-[#0d1525] border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5] focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Ad Type</label>
+                    <select
+                      value={quickAdForm.type}
+                      onChange={e => setQuickAdForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full bg-[#0d1525] border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                    >
+                      <option value="interstitial">Interstitial — full-screen (channel switch, sports match, app open)</option>
+                      <option value="banner">Banner — strip at bottom (home, movies, sports)</option>
+                      <option value="rewarded">Rewarded — user watches to unlock content</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Image URL (optional)</label>
+                    <input
+                      type="url"
+                      value={quickAdForm.imageUrl}
+                      onChange={e => setQuickAdForm(f => ({ ...f, imageUrl: e.target.value }))}
+                      placeholder="https://… (jpg, png, webp)"
+                      className="w-full bg-[#0d1525] border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5] focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Click URL (optional)</label>
+                    <input
+                      type="url"
+                      value={quickAdForm.targetUrl}
+                      onChange={e => setQuickAdForm(f => ({ ...f, targetUrl: e.target.value }))}
+                      placeholder="https://… (where tapping the ad goes)"
+                      className="w-full bg-[#0d1525] border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5] focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleQuickAdSave}
+                    disabled={quickAdSaving || !quickAdForm.title.trim()}
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+                  >
+                    {quickAdSaving ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+                    Create & Activate Ad
+                  </button>
+                  {quickAdResult && (
+                    <span className={cn("text-xs font-medium", quickAdResult.ok ? "text-emerald-400" : "text-red-400")}>
+                      {quickAdResult.msg}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-[#8B92A5] mt-3">
+                  💡 <strong className="text-white/60">Tip:</strong> Interstitial ads show on channel switches (every 3rd switch) and sports match opens (30 seconds). Banner ads show on home &amp; movies screens. To disable an ad type entirely, go to <strong className="text-white/60">Placements</strong> tab and toggle off the placement.
+                </p>
               </div>
 
               <div className="bg-card border border-border rounded-xl overflow-hidden">

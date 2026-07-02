@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
 
 const { width: W, height: H } = Dimensions.get('window');
-const REWARD_SECONDS = 10;
+const DEFAULT_REWARD_SECONDS = 10;
 
 interface AdItem {
   id: string;
@@ -64,11 +64,13 @@ interface AdRewardedProps {
   visible: boolean;
   onClose: () => void;
   onRewardEarned: () => void;
+  /** Seconds the user must watch before earning the reward. Default: 10 */
+  rewardSeconds?: number;
 }
 
-export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRewardedProps) {
+export function AdRewarded({ placement, visible, onClose, onRewardEarned, rewardSeconds = DEFAULT_REWARD_SECONDS }: AdRewardedProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
-  const [countdown, setCountdown] = useState(REWARD_SECONDS);
+  const [countdown, setCountdown] = useState(rewardSeconds);
   const [rewardEarned, setRewardEarned] = useState(false);
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,7 +79,7 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRe
   useEffect(() => {
     if (visible) {
       fetchRewardedAd(placement).then(setAd);
-      setCountdown(REWARD_SECONDS);
+      setCountdown(rewardSeconds);
       setRewardEarned(false);
       impressionTracked.current = false;
       rewardCalledRef.current = false;
@@ -93,8 +95,10 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRe
     }
   }, [ad, visible, placement]);
 
+  // Countdown only starts when an ad is actually loaded — prevents free reward
+  // if the API returns no ad (visible=true but ad=null → no timer, no reward).
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !ad) return;
     timerRef.current = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
@@ -112,7 +116,7 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRe
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [visible, onRewardEarned]);
+  }, [visible, ad, onRewardEarned, rewardSeconds]);
 
   if (!visible || !ad) return null;
 
@@ -162,7 +166,7 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned }: AdRe
               <View
                 style={[
                   styles.progressFill,
-                  { width: `${((REWARD_SECONDS - countdown) / REWARD_SECONDS) * 100}%` },
+                  { width: `${((rewardSeconds - countdown) / rewardSeconds) * 100}%` },
                 ]}
               />
             </View>

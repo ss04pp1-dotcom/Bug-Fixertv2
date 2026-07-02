@@ -69,15 +69,17 @@ interface AdInterstitialProps {
   placement: string;
   visible: boolean;
   onClose: () => void;
+  /** Seconds before the skip/close button appears. Default: 5 */
+  skipAfterSeconds?: number;
 }
 
 // Track whether ad fetch has resolved (null = no ad available)
 type FetchState = 'idle' | 'loading' | 'ready' | 'empty';
 
-export function AdInterstitial({ placement, visible, onClose }: AdInterstitialProps) {
+export function AdInterstitial({ placement, visible, onClose, skipAfterSeconds = 5 }: AdInterstitialProps) {
   const [ad, setAd] = useState<AdItem | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(skipAfterSeconds);
   const impressionTracked = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { user } = useAuthStore();
@@ -175,7 +177,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
 
   useEffect(() => {
     if (fetchState !== 'ready') return;
-    setCountdown(5);
+    setCountdown(skipAfterSeconds);
     timerRef.current = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
@@ -188,7 +190,7 @@ export function AdInterstitial({ placement, visible, onClose }: AdInterstitialPr
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [fetchState]);
+  }, [fetchState, skipAfterSeconds]);
 
   // Real network interstitials render themselves natively via `.show()` — no JSX here.
   if (useRealNetwork) return null;

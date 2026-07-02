@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -16,6 +16,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useMovie, useToggleFavorite, useRelatedMovies, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 import { AdBanner } from '@/components/AdBanner';
+import { AdRewarded } from '@/components/AdRewarded';
+import { useAuthStore } from '@/lib/auth-store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,6 +32,12 @@ export default function MovieDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [descExpanded, setDescExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Movie');
+  const [rewardAdVisible, setRewardAdVisible] = useState(false);
+  const { user } = useAuthStore();
+  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
+
+  const handleWatchAdPlay = useCallback(() => setRewardAdVisible(true), []);
+  const handleRewardAdClose = useCallback(() => setRewardAdVisible(false), []);
 
   const { data: movieData, isLoading, isError, refetch } = useMovie(id || '');
   const { data: relatedData } = useRelatedMovies(id || '');
@@ -84,6 +92,12 @@ export default function MovieDetailsScreen() {
       gradientColors: GRADIENTS[i % GRADIENTS.length],
     }));
   }, [movie, relatedData]);
+
+  // handleRewardEarned is declared here — after `movie` — so movie?.title is safe.
+  const handleRewardEarned = useCallback(() => {
+    setRewardAdVisible(false);
+    router.push(`/player/${id}?type=movie&title=${encodeURIComponent(movie?.title || '')}`);
+  }, [id, movie?.title]);
 
   const handleToggleFavorite = () => {
     // M-022: drive the toggle off the server-derived state.
@@ -186,6 +200,14 @@ export default function MovieDetailsScreen() {
             <Text style={styles.metaText}>{movie.duration}</Text>
           </View>
 
+          {/* Rewarded Ad Modal */}
+          <AdRewarded
+            placement="movie_rewarded"
+            visible={rewardAdVisible}
+            onClose={handleRewardAdClose}
+            onRewardEarned={handleRewardEarned}
+          />
+
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity activeOpacity={0.8} onPress={() => router.push(`/player/${id}?type=movie&title=${encodeURIComponent(movie?.title || '')}`)}>
@@ -199,6 +221,15 @@ export default function MovieDetailsScreen() {
                 <Text style={styles.watchNowText}>Play</Text>
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* Watch Ad & Play — shown to free users only */}
+            {!isPremium && (
+              <TouchableOpacity style={styles.watchAdButton} activeOpacity={0.8} onPress={handleWatchAdPlay}>
+                <Ionicons name="play-circle-outline" size={18} color="#F59E0B" />
+                <Text style={styles.watchAdText}>Watch Ad & Play</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity style={styles.myListButton} activeOpacity={0.8} onPress={handleToggleFavorite}>
               <Ionicons name={isBookmarked ? 'checkmark' : 'add-outline'} size={20} color="#FFFFFF" />
               <Text style={styles.myListText}>{isBookmarked ? 'Added' : 'My List'}</Text>
@@ -430,6 +461,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Inter',
+  },
+  watchAdButton: {
+    width: '100%',
+    height: 48,
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(245,158,11,0.35)',
+  },
+  watchAdText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#F59E0B',
     fontFamily: 'Inter',
   },
   myListButton: {

@@ -11,7 +11,7 @@
  * When the user presses back, the player auto-transitions to MINI mode
  * (no reload, no rebuffer) via the back-handler in GlobalVideoPlayer.
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Dimensions,
   ScrollView, StatusBar, Platform, Image, BackHandler,
@@ -24,6 +24,7 @@ import apiClient from '@/lib/api';
 import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib/api-hooks';
 import { YouTubeVideoBox, isYouTubeUrl, extractYouTubeStream } from '@/components/YouTubePlayer';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
+import { AdRewarded } from '@/components/AdRewarded';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
