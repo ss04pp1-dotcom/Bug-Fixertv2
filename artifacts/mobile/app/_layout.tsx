@@ -11,19 +11,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { Config } from '@/constants/config';
-import { initAdMob } from '@/lib/admob';
-import { initAppLovin } from '@/lib/applovin';
-import Constants from 'expo-constants';
-import { useAppOpenAd } from '@/hooks/useAppOpenAd';
-import { AdInterstitial } from '@/components/AdInterstitial';
-
 SplashScreen.preventAutoHideAsync();
-
-// Initialise ad SDKs once at app startup. Both are no-ops in Expo Go / when
-// the native module is unavailable. AppLovin only initialises if an SDK key
-// is present in the EAS build config.
-initAdMob();
-initAppLovin((Constants.expoConfig?.extra as any)?.applovinSdkKey ?? null);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,7 +30,6 @@ export const useFeatureFlagsContext = () => useContext(FeatureFlagsContext);
 // ─── App Guards (inside QueryClientProvider) ──────────────────────────────────
 function AppGuards({ children }: { children: React.ReactNode }) {
   const unwrap = (r: any) => r?.data?.data;
-  const { visible: appOpenVisible, dismiss: dismissAppOpen } = useAppOpenAd();
 
   useEffect(() => {
     // Register safe navigation handler now that router is mounted.
@@ -121,8 +108,6 @@ function AppGuards({ children }: { children: React.ReactNode }) {
   return (
     <FeatureFlagsContext.Provider value={flags}>
       {children}
-      {/* App-open ad shown once on first launch */}
-      <AdInterstitial placement="app-open" visible={appOpenVisible} onClose={dismissAppOpen} />
     </FeatureFlagsContext.Provider>
   );
 }

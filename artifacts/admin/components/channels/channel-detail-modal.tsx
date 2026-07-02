@@ -49,6 +49,10 @@ interface ChannelDetail {
   primaryStreamUrl?: string | null;
   epgChannelId?: string | null;
   isActive: boolean;
+  isSmartlinkEnabled?: boolean;
+  smartlinkUrl?: string | null;
+  vastUrl?: string | null;
+  bannerHtmlCode?: string | null;
   categoryId?: string | null;
   category?: { id: string; name: string } | null;
   normalizedName?: string | null;
@@ -118,6 +122,10 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
   const tvgRef       = useRef<HTMLInputElement>(null);
   const catRef       = useRef<HTMLSelectElement>(null);
   const [editLogo, setEditLogo] = useState("");
+  const [isSmartlinkEnabled, setIsSmartlinkEnabled] = useState(false);
+  const smartlinkUrlRef  = useRef<HTMLInputElement>(null);
+  const vastUrlRef       = useRef<HTMLInputElement>(null);
+  const bannerHtmlRef    = useRef<HTMLTextAreaElement>(null);
 
   // ── Override state ────────────────────────────────────────────────────────
   const [overrideName,   setOverrideName]   = useState("");
@@ -162,6 +170,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       const ch: ChannelDetail = chRes.data?.data ?? chRes.data;
       setDetail(ch);
       setEditLogo(ch.logo ?? "");
+      setIsSmartlinkEnabled(ch.isSmartlinkEnabled ?? false);
       setOverrideName(ch.adminNameOverride ?? "");
       setOverrideLogo(ch.adminLogoOverride ?? "");
       setOverrideCatId(ch.adminCategoryIdOverride ?? "");
@@ -186,11 +195,15 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
     try {
       await apiClient.put(`/v1/channels/${detail.id}`, {
         name,
-        streamType:      streamRef.current?.value || detail.streamType,
-        primaryStreamUrl: url || detail.primaryStreamUrl,
-        epgChannelId:    tvgRef.current?.value || null,
-        categoryId:      catRef.current?.value || null,
-        logo:            editLogo || null,
+        streamType:         streamRef.current?.value || detail.streamType,
+        primaryStreamUrl:   url || detail.primaryStreamUrl,
+        epgChannelId:       tvgRef.current?.value || null,
+        categoryId:         catRef.current?.value || null,
+        logo:               editLogo || null,
+        isSmartlinkEnabled,
+        smartlinkUrl:       smartlinkUrlRef.current?.value?.trim() || null,
+        vastUrl:            vastUrlRef.current?.value?.trim() || null,
+        bannerHtmlCode:     bannerHtmlRef.current?.value?.trim() || null,
       });
       await loadDetail();
       onSaved();
@@ -501,6 +514,62 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                     label="Channel Logo"
                     previewClass="h-20 w-full"
                   />
+
+                  {/* ── Ad Monetization ── */}
+                  <div className="border-t border-border pt-4 space-y-3">
+                    <p className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wide">Ad Monetization</p>
+
+                    {/* Smartlink toggle */}
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-background/60 border border-border rounded-lg">
+                      <div>
+                        <p className="text-sm text-white font-medium">Smartlink Gate</p>
+                        <p className="text-xs text-[#8B92A5]">Open a Smartlink in the browser before the channel loads</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsSmartlinkEnabled(v => !v)}
+                        className="flex-shrink-0 ml-4"
+                      >
+                        {isSmartlinkEnabled
+                          ? <ToggleRight size={28} className="text-primary" />
+                          : <ToggleLeft  size={28} className="text-[#8B92A5]" />}
+                      </button>
+                    </div>
+
+                    {/* Smartlink URL */}
+                    <div>
+                      <label className="text-xs text-[#8B92A5] mb-1.5 block">Smartlink URL</label>
+                      <input
+                        ref={smartlinkUrlRef}
+                        defaultValue={detail.smartlinkUrl ?? ""}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary font-mono text-xs"
+                        placeholder="https://example.com/smartlink"
+                      />
+                    </div>
+
+                    {/* VAST URL */}
+                    <div>
+                      <label className="text-xs text-[#8B92A5] mb-1.5 block">VAST Ad URL</label>
+                      <input
+                        ref={vastUrlRef}
+                        defaultValue={detail.vastUrl ?? ""}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary font-mono text-xs"
+                        placeholder="https://example.com/vast.xml"
+                      />
+                    </div>
+
+                    {/* Banner HTML */}
+                    <div>
+                      <label className="text-xs text-[#8B92A5] mb-1.5 block">Banner HTML Code (Adsterra / Monetag)</label>
+                      <textarea
+                        ref={bannerHtmlRef}
+                        defaultValue={detail.bannerHtmlCode ?? ""}
+                        rows={4}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-primary font-mono resize-none"
+                        placeholder="<script>/* paste banner script here */</script>"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

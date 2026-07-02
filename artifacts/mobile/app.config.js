@@ -1,19 +1,6 @@
-// app.config.js — dynamic version of the former static app.json.
-//
-// Converted from app.json so the AdMob / AppLovin MAX native config plugins
-// (which need SDK keys / App IDs baked into AndroidManifest.xml & Info.plist)
-// can read those values from environment variables instead of being
-// hardcoded. Everything else is identical to the previous app.json.
-//
-// Env vars (set as needed before an `expo prebuild` / EAS build; safe test
-// IDs are used when unset so local dev / Expo Go never break):
-//   ADMOB_ANDROID_APP_ID   — AdMob Android Application ID (ca-app-pub-...~...)
-//   ADMOB_IOS_APP_ID       — AdMob iOS Application ID (ca-app-pub-...~...)
-//   APPLOVIN_SDK_KEY       — AppLovin MAX SDK key
-
-const ADMOB_ANDROID_APP_ID = 'ca-app-pub-9336332117032732~4352238150'; // Real Android App ID
-const ADMOB_IOS_APP_ID = 'ca-app-pub-3940256099942544~1458002511'; // Google test App ID (no real iOS ID)
-const APPLOVIN_SDK_KEY = null; // Not configured
+// app.config.js — dynamic Expo config.
+// Ad monetization is handled via lightweight WebView (Adsterra/Monetag banners)
+// and expo-web-browser Smartlinks. No native ad SDK plugins are required.
 
 module.exports = {
   expo: {
@@ -90,18 +77,6 @@ module.exports = {
           enablePictureInPicture: true,
         },
       ],
-      [
-        'react-native-google-mobile-ads',
-        {
-          androidAppId: ADMOB_ANDROID_APP_ID,
-          iosAppId: ADMOB_IOS_APP_ID,
-          userTrackingUsageDescription:
-            'This identifier will be used to deliver personalized ads to you.',
-          delayAppMeasurementInit: true,
-        },
-      ],
-      ['./plugins/withAdMobManifest', { androidAppId: ADMOB_ANDROID_APP_ID }],
-      ['./plugins/withAppLovinConfig', { sdkKey: APPLOVIN_SDK_KEY }],
       'expo-screen-orientation',
       './plugins/withPipSupport',
       './plugins/withPipNative',
@@ -133,8 +108,6 @@ module.exports = {
       easProjectId: '41ae0d59-922c-4851-8b9a-8b5d8c657d13',
       note:
         "Verify this EAS project ID matches an active project via 'eas project:info'. If placeholder, set updates.enabled=false.",
-      applovinSdkKey: APPLOVIN_SDK_KEY,
-      applovinConfigured: !!APPLOVIN_SDK_KEY,
     },
   },
 };

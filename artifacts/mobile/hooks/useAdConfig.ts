@@ -1,27 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
 
-export interface AdUnits {
-  banner?: string | null;
-  interstitial?: string | null;
-  rewarded?: string | null;
-  native?: string | null;
-  appOpen?: string | null;
-}
-
-export interface AdActiveProvider {
-  slug: string;
-  name: string;
-  appId?: string | null;
-  adUnits: AdUnits;
-  isTestMode: boolean;
+export interface AdPlacement {
+  enabled: boolean;
+  type: string;
+  screen?: string;
 }
 
 export interface AdRemoteConfig {
-  activeProvider: AdActiveProvider | null;
-  placements: Record<string, { enabled: boolean; type: string; screen?: string }>;
   adsEnabled: boolean;
   maintenanceMode: boolean;
+  placements: Record<string, AdPlacement>;
+  bannerHtmlCode?: string;
 }
 
 async function fetchAdConfig(): Promise<AdRemoteConfig | null> {
@@ -31,18 +21,12 @@ async function fetchAdConfig(): Promise<AdRemoteConfig | null> {
     });
     if (!res.ok) return null;
     const json = await res.json();
-    // API wraps response in { success, data: {...} } — unwrap it
     return (json?.data ?? json) as AdRemoteConfig;
   } catch {
     return null;
   }
 }
 
-/**
- * Fetches the admin-configured ad settings (`/v1/ads/config`).
- * Tells the UI which network is active (e.g. 'admob'), whether it's in test
- * mode, and which ad unit IDs to use for banner/interstitial/appOpen slots.
- */
 export function useAdConfig() {
   return useQuery({
     queryKey: ['ads-config'],
@@ -50,14 +34,4 @@ export function useAdConfig() {
     staleTime: 1000 * 60 * 10,
     retry: false,
   });
-}
-
-/** True when AdMob is the network selected in the admin panel. */
-export function isAdMobActive(config: AdRemoteConfig | null | undefined): boolean {
-  return !!config?.activeProvider && config.activeProvider.slug === 'admob' && !!config.adsEnabled;
-}
-
-/** True when AppLovin MAX is the network selected in the admin panel. */
-export function isAppLovinActive(config: AdRemoteConfig | null | undefined): boolean {
-  return !!config?.activeProvider && config.activeProvider.slug === 'applovin' && !!config.adsEnabled;
 }

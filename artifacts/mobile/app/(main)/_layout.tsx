@@ -11,8 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useFeatureFlagsContext } from '@/app/_layout';
 import { setUnauthenticatedHandler } from '@/lib/api';
-import { ChannelAdGateProvider, useChannelAdGateContext } from '@/lib/channel-ad-gate-context';
-import { AdRewarded } from '@/components/AdRewarded';
+import { ChannelAdGateProvider } from '@/lib/channel-ad-gate-context';
 
 function MainTabLayoutInner() {
   const insets = useSafeAreaInsets();
@@ -30,18 +29,8 @@ function MainTabLayoutInner() {
     });
   }, []);
 
-  const gate = useChannelAdGateContext();
-
   return (
     <>
-      {/* Pre-load AdRewarded here so the ad is ready before user picks a channel */}
-      <AdRewarded
-        placement="reward"
-        visible={gate.visible}
-        onClose={gate.onClose}
-        onRewardEarned={gate.onRewardEarned}
-        rewardSeconds={30}
-      />
       <Tabs
       screenOptions={{
         headerShown: false,

@@ -1,0 +1,2 @@
+- [Triple Combo ad system](triple-combo-ads.md) — replaced AdMob/AppLovin SDKs with WebView banners + Smartlink gate + VAST; all 4 ad fields live on the Channel model
+- [Prisma binary location](prisma-binary.md) — must run prisma commands from artifacts/api-server/ using local binary, not workspace root

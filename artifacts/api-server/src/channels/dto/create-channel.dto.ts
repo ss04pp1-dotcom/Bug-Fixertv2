@@ -110,4 +110,24 @@ export class CreateChannelDto {
   @IsOptional()
   @IsEnum(HealthOverride)
   healthOverride?: HealthOverride;
+
+  @ApiPropertyOptional({ description: 'Trigger a Smartlink ad before opening this channel' })
+  @IsOptional()
+  @IsBoolean()
+  isSmartlinkEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Monetag/Adsterra Smartlink URL opened via in-app browser before playback' })
+  @IsOptional()
+  @IsString()
+  smartlinkUrl?: string;
+
+  @ApiPropertyOptional({ description: 'VAST ad tag URL for pre-roll video ads in the player' })
+  @IsOptional()
+  @IsString()
+  vastUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Raw HTML/JS banner script from Adsterra or Monetag' })
+  @IsOptional()
+  @IsString()
+  bannerHtmlCode?: string;
 }

@@ -288,6 +288,12 @@ model Channel {
   updatedAt        DateTime   @updatedAt @map("updated_at")
   deletedAt        DateTime?  @map("deleted_at")
 
+  // Ad monetization fields
+  isSmartlinkEnabled    Boolean   @default(false) @map("is_smartlink_enabled")
+  smartlinkUrl          String?   @map("smartlink_url")
+  vastUrl               String?   @map("vast_url")
+  bannerHtmlCode        String?   @map("banner_html_code")
+
   // GitHub dedup & admin overrides
   normalizedName          String?    @map("normalized_name")
   githubChannelId         String?    @map("github_channel_id")

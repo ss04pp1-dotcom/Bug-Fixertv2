@@ -44,14 +44,16 @@ const GRADIENTS: [string, string][] = [
 
 function mapChannel(ch: any, i: number) {
   return {
-    id:        ch.id || String(i),
-    name:      ch.name || '',
-    cat:       ch.category?.name || ch.language || ch.country || 'Live TV',
-    color:     GRADIENTS[i % GRADIENTS.length] as [string, string],
-    letter:    (ch.name || 'C')[0].toUpperCase(),
-    logo:      ch.logoUrl || ch.logo || '',
-    isLive:    ch.isLive !== false,
-    streamUrl: ch.primaryStreamUrl || ch.streamUrl || '',
+    id:                 ch.id || String(i),
+    name:               ch.name || '',
+    cat:                ch.category?.name || ch.language || ch.country || 'Live TV',
+    color:              GRADIENTS[i % GRADIENTS.length] as [string, string],
+    letter:             (ch.name || 'C')[0].toUpperCase(),
+    logo:               ch.logoUrl || ch.logo || '',
+    isLive:             ch.isLive !== false,
+    streamUrl:          ch.primaryStreamUrl || ch.streamUrl || '',
+    isSmartlinkEnabled: ch.isSmartlinkEnabled === true,
+    smartlinkUrl:       ch.smartlinkUrl || '',
   };
 }
 
@@ -170,7 +172,14 @@ export default function LiveTVScreen() {
 
   const channelGate = useChannelAdGateContext();
   const handleSelectChannel = useCallback((item: ReturnType<typeof mapChannel>) => {
-    channelGate.requestChannel(item.id, { title: item.name, logo: item.logo, cat: item.cat, streamUrl: item.streamUrl });
+    channelGate.requestChannel(item.id, {
+      title: item.name,
+      logo: item.logo,
+      cat: item.cat,
+      streamUrl: item.streamUrl,
+      isSmartlinkEnabled: item.isSmartlinkEnabled,
+      smartlinkUrl: item.smartlinkUrl,
+    });
   }, [channelGate]);
 
   // numColumns must be stable — don't pass dynamic value

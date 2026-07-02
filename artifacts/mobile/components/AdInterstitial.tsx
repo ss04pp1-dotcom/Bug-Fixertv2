@@ -11,12 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '@/constants/config';
-import Constants from 'expo-constants';
-import { admobAvailable } from '@/lib/admob';
-import { appLovinAvailable, initAppLovin } from '@/lib/applovin';
-import { useAdConfig, isAdMobActive, isAppLovinActive } from '@/hooks/useAdConfig';
-import { useAdMobInterstitial } from '@/hooks/useAdMobInterstitial';
-import { useAppLovinInterstitial } from '@/hooks/useAppLovinInterstitial';
 import { useAuthStore } from '@/lib/auth-store';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -85,68 +79,14 @@ export function AdInterstitial({ placement, visible, onClose, skipAfterSeconds =
   const { user } = useAuthStore();
   const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
 
-  // If premium user, immediately close so navigation isn't blocked
+  // Premium users are never shown interstitials — close immediately so
+  // navigation is never blocked.
   useEffect(() => {
     if (isPremium && visible) onClose();
   }, [isPremium, visible, onClose]);
 
-  const { data: adConfig } = useAdConfig();
-  const admobActive = isAdMobActive(adConfig);
-  const applovinActive = isAppLovinActive(adConfig);
-  const interstitialUnitId = adConfig?.activeProvider?.adUnits?.interstitial;
-  const useRealAdMob = admobActive && admobAvailable && !!interstitialUnitId;
-  const useRealAppLovin = applovinActive && appLovinAvailable && !!interstitialUnitId;
-  const useRealNetwork = useRealAdMob || useRealAppLovin;
-  const admobInterstitial = useAdMobInterstitial(
-    useRealAdMob ? interstitialUnitId : null,
-    !!adConfig?.activeProvider?.isTestMode,
-  );
-  const applovinInterstitial = useAppLovinInterstitial(
-    useRealAppLovin ? interstitialUnitId : null,
-    true,
-  );
-  const shownRef = useRef(false);
-
   useEffect(() => {
-    const sdkKey = (Constants.expoConfig?.extra as any)?.applovinSdkKey;
-    if (useRealAppLovin) initAppLovin(sdkKey);
-  }, [useRealAppLovin]);
-
-  // Real network interstitial: shown natively via `.show()`, not the Modal below.
-  useEffect(() => {
-    if (!visible || !useRealNetwork) return;
-    shownRef.current = false;
-  }, [visible, useRealNetwork]);
-
-  useEffect(() => {
-    if (!visible || !useRealAdMob || isPremium) return;
-    if (admobInterstitial.loaded && !shownRef.current) {
-      shownRef.current = true;
-      const didShow = admobInterstitial.show();
-      if (!didShow) onClose();
-    }
-  }, [visible, useRealAdMob, isPremium, admobInterstitial.loaded, onClose]);
-
-  useEffect(() => {
-    if (!visible || !useRealAppLovin || isPremium) return;
-    if (applovinInterstitial.loaded && !shownRef.current) {
-      shownRef.current = true;
-      const didShow = applovinInterstitial.show();
-      if (!didShow) onClose();
-    }
-  }, [visible, useRealAppLovin, isPremium, applovinInterstitial.loaded, onClose]);
-
-  // Real network path never had an ad loaded in time — don't block navigation.
-  useEffect(() => {
-    if (!visible || !useRealNetwork || isPremium) return;
-    const timeout = setTimeout(() => {
-      if (!shownRef.current) onClose();
-    }, 4000);
-    return () => clearTimeout(timeout);
-  }, [visible, useRealNetwork, isPremium, onClose]);
-
-  useEffect(() => {
-    if (useRealNetwork || isPremium) return; // real network / premium — no fetch needed
+    if (isPremium) return;
     if (visible) {
       setFetchState('loading');
       impressionTracked.current = false;
@@ -158,15 +98,12 @@ export function AdInterstitial({ placement, visible, onClose, skipAfterSeconds =
       setAd(null);
       setFetchState('idle');
     }
-  }, [visible, placement, useRealNetwork, isPremium]);
+  }, [visible, placement, isPremium]);
 
-  // If ad fetch finished with no result, auto-close so channel switch proceeds
+  // Auto-close if no house ad is available so navigation proceeds.
   useEffect(() => {
-    if (useRealNetwork) return;
-    if (visible && fetchState === 'empty') {
-      onClose();
-    }
-  }, [visible, fetchState, onClose, useRealNetwork]);
+    if (visible && fetchState === 'empty') onClose();
+  }, [visible, fetchState, onClose]);
 
   useEffect(() => {
     if (visible && ad && !impressionTracked.current) {
@@ -192,12 +129,7 @@ export function AdInterstitial({ placement, visible, onClose, skipAfterSeconds =
     };
   }, [fetchState, skipAfterSeconds]);
 
-  // Real network interstitials render themselves natively via `.show()` — no JSX here.
-  if (useRealNetwork) return null;
-
-  // Premium users see no interstitials (onClose already called via useEffect above)
   if (isPremium) return null;
-
   if (!visible || fetchState !== 'ready' || !ad) return null;
 
   const handlePress = () => {

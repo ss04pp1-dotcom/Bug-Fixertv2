@@ -1,0 +1,39 @@
+Act as an expert Full-Stack Developer specializing in React Native (Expo), NestJS, and PostgreSQL. We need to overhaul the monetization system of our Video Streaming App and Admin Panel.
+
+We are completely removing all heavy, native Third-Party Ad SDKs (like AdMob, Unity Ads, AppLovin) from the React Native project to make it pure, clean, and lightweight. Instead, we will implement a "Triple Combo" ad system (Monetag & Adsterra) using lightweight Expo-compatible web components: Banners via WebViews, Smartlinks via Expo WebBrowser, and VAST ads.
+
+Please implement the following changes across the NestJS API, PostgreSQL database, and React Native Expo App:
+
+---
+
+### PART 1: BACKEND & DATABASE UPDATE (NestJS & PostgreSQL)
+1. **Database Migration:** Update the PostgreSQL database schema (identify if the project uses Prisma, TypeORM, or Sequelize). Add a new column to the Channels/Videos table: `isSmartlinkEnabled` (Boolean, default: false).
+2. **NestJS Entities & DTOs:** Update the Channel/Video entity and the corresponding Create/Update DTOs to include `isSmartlinkEnabled`, `smartlinkUrl`, `vastUrl`, and `bannerHtmlCode`.
+3. **Controller & Service:** Update the NestJS Controller and Service so the Admin Panel can toggle this boolean flag for specific channels. Ensure the API endpoint returning the channel list/details includes `isSmartlinkEnabled` in its JSON response.
+
+---
+
+### PART 2: FRONTEND CLEANUP (React Native Expo)
+1. Scan `package.json` and remove any native ad dependencies (e.g., `react-native-google-mobile-ads`, `expo-ads-admob`, etc.). Run `npm install` or `yarn` to clean up node_modules.
+2. Search the React Native project for any ad initialization code or native ad views and delete them entirely.
+
+---
+
+### PART 3: REACT NATIVE EXPO IMPLEMENTATION
+
+#### 1. Banner Ads (Via react-native-webview)
+- Install `react-native-webview` if not already installed.
+- In the Channel Details and Home Screen layouts, replace old ad views with a lightweight `<WebView>` component.
+- Write a reusable React component that takes raw HTML/JS ad banner code (from Adsterra/Monetag) and renders it beautifully within a fixed height (e.g., 50dp or 250dp) with scrolling disabled.
+
+#### 2. Channel Click Logic & Smartlink Integration (Via expo-web-browser)
+- When a user presses a streaming channel/video card:
+- Check the backend response flag: `isSmartlinkEnabled`.
+- If `isSmartlinkEnabled` is TRUE: Use `WebBrowser.openBrowserAsync(smartlinkUrl)` from `expo-web-browser` to open the Monetag Smartlink in an in-app browser overlay. After the user closes the browser session, seamlessly route them to the Video Player Screen.
+- If `isSmartlinkEnabled` is FALSE: Bypass the Smartlink entirely and open the Video Player Screen instantly.
+
+#### 3. Video Player & VAST Ads Integration
+- Since we are in a pure Expo environment without native SDKs, implement the streaming player using a full-screen `<WebView>` rendering an HTML5 Video Player (like Video.js or Fluid Player with built-in VAST/IMA support) OR configure our current video player component to handle the `vastUrl` as a pre-roll ad tag. 
+- Ensure that the HLS (.m3u8) stream starts buffering and playing flawlessly right after the VAST video advertisement concludes or is skipped.
+
+Please analyze our NestJS codebase, Prisma/TypeORM schemas, and Expo components, and guide me through modifying the files step-by-step. Let's make this setup robust and highly efficient.
