@@ -106,6 +106,7 @@ export default function Advertisements() {
   const [providerSaved, setProviderSaved] = useState(false);
   const [editPlacement, setEditPlacement] = useState<AdPlacement | null>(null);
   const [placementError, setPlacementError] = useState<string | null>(null);
+  const [slugPreview, setSlugPreview] = useState("");
   const [seedLoading, setSeedLoading] = useState(false);
   const [analyticsSeedLoading, setAnalyticsSeedLoading] = useState(false);
 
@@ -249,9 +250,13 @@ export default function Advertisements() {
     await call("delete", `/v1/advertisements/placements/${id}`);
     refetchPlacements();
   };
+  const toSlug = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
   const openEditPlacement = (p: AdPlacement) => {
     setEditPlacement(p);
     setPlacementError(null);
+    setSlugPreview(p.slug ?? toSlug(p.name));
     setShowModal(true);
     setTimeout(() => {
       if (placementNameRef.current)   placementNameRef.current.value   = p.name;
@@ -265,7 +270,7 @@ export default function Advertisements() {
     const name = placementNameRef.current?.value?.trim();
     if (!name) { setPlacementError("Name is required"); return; }
     setPlacementError(null);
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const slug = toSlug(name);
     const body = {
       name, slug,
       type:   placementTypeRef.current?.value || "banner",
@@ -281,6 +286,7 @@ export default function Advertisements() {
       setShowModal(false);
       setEditPlacement(null);
       setPlacementError(null);
+      setSlugPreview("");
       refetchPlacements();
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? "Failed to save placement";
@@ -320,7 +326,7 @@ export default function Advertisements() {
         </div>
         <div className="flex items-center gap-2">
           {tab === "placements" && (
-            <button onClick={() => { setEditPlacement(null); setPlacementError(null); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90">
+            <button onClick={() => { setEditPlacement(null); setPlacementError(null); setSlugPreview(""); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90">
               <Plus size={13} /> Add Placement
             </button>
           )}
@@ -1013,10 +1019,65 @@ export default function Advertisements() {
               <button onClick={() => setShowModal(false)} className="text-[#8B92A5] hover:text-white"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
+
+              {/* ── Predefined placements the app already supports ── */}
+              {!editPlacement && (
+                <div>
+                  <label className="text-xs text-[#8B92A5] mb-2 block">Quick Select (Recommended)</label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {([
+                      { name: "Home Banner",           slug: "home-banner",         type: "banner",       screen: "home"   },
+                      { name: "Reward (Channel Gate)",  slug: "reward",              type: "rewarded",     screen: "live"   },
+                      { name: "App Open",               slug: "app-open",            type: "app_open",     screen: "home"   },
+                      { name: "Channel Switch",         slug: "channel_switch",      type: "interstitial", screen: "player" },
+                      { name: "Live Hourly",            slug: "live_hourly",         type: "interstitial", screen: "player" },
+                      { name: "Live Rewarded",          slug: "live_rewarded",       type: "rewarded",     screen: "player" },
+                      { name: "Movie Rewarded",         slug: "movie_rewarded",      type: "rewarded",     screen: "movies" },
+                      { name: "Sports Interstitial",    slug: "sports_interstitial", type: "interstitial", screen: "search" },
+                    ] as { name: string; slug: string; type: string; screen: string }[]).map(preset => (
+                      <button
+                        key={preset.slug}
+                        type="button"
+                        onClick={() => {
+                          if (placementNameRef.current)   placementNameRef.current.value   = preset.name;
+                          if (placementTypeRef.current)   placementTypeRef.current.value   = preset.type;
+                          if (placementScreenRef.current) placementScreenRef.current.value = preset.screen;
+                          setSlugPreview(preset.slug);
+                        }}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors ${
+                          slugPreview === preset.slug
+                            ? "border-primary bg-primary/10 text-white"
+                            : "border-border bg-background text-[#8B92A5] hover:border-primary/50 hover:text-white"
+                        }`}
+                      >
+                        <span className="text-xs font-medium">{preset.name}</span>
+                        <code className="text-[10px] font-mono text-primary/70">{preset.slug}</code>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="text-[10px] text-[#8B92A5] mb-2">— অথবা নিজে নাম লিখুন —</p>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Placement Name</label>
-                <input ref={placementNameRef} type="text" placeholder="e.g. Home Banner"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]" />
+                <input
+                  ref={placementNameRef}
+                  type="text"
+                  placeholder="e.g. Home Banner"
+                  onChange={e => setSlugPreview(toSlug(e.target.value))}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary placeholder:text-[#8B92A5]"
+                />
+                {slugPreview && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#8B92A5]">Slug:</span>
+                    <code className="text-[11px] font-mono text-primary/90 bg-primary/10 px-2 py-0.5 rounded">
+                      {slugPreview}
+                    </code>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Ad Type</label>
