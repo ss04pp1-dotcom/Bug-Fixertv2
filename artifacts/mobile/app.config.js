@@ -11,11 +11,9 @@
 //   ADMOB_IOS_APP_ID       — AdMob iOS Application ID (ca-app-pub-...~...)
 //   APPLOVIN_SDK_KEY       — AppLovin MAX SDK key
 
-const ADMOB_ANDROID_APP_ID =
-  process.env.ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713'; // Google test App ID
-const ADMOB_IOS_APP_ID =
-  process.env.ADMOB_IOS_APP_ID || 'ca-app-pub-3940256099942544~1458002511'; // Google test App ID
-const APPLOVIN_SDK_KEY = process.env.APPLOVIN_SDK_KEY || null;
+const ADMOB_ANDROID_APP_ID = 'ca-app-pub-9336332117032732~4352238150'; // Real Android App ID
+const ADMOB_IOS_APP_ID = 'ca-app-pub-3940256099942544~1458002511'; // Google test App ID (no real iOS ID)
+const APPLOVIN_SDK_KEY = null; // Not configured
 
 module.exports = {
   expo: {
