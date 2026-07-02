@@ -36,6 +36,12 @@ module.exports = function withAdMobManifest(config) {
     const manifest = cfg.modResults.manifest;
     const application = manifest.application[0];
 
+    // Ensure xmlns:tools is declared on the root manifest element so
+    // tools:replace is a valid attribute during manifest merging.
+    if (!manifest.$['xmlns:tools']) {
+      manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+    }
+
     if (!application['meta-data']) {
       application['meta-data'] = [];
     }
@@ -47,11 +53,14 @@ module.exports = function withAdMobManifest(config) {
         m.$['android:name'] !== 'com.google.android.gms.ads.APPLICATION_ID',
     );
 
-    // Inject the correct APPLICATION_ID
+    // Inject the correct APPLICATION_ID.
+    // tools:replace="android:value" tells the manifest merger to override
+    // the empty value injected by react-native-google-mobile-ads library.
     application['meta-data'].push({
       $: {
         'android:name': 'com.google.android.gms.ads.APPLICATION_ID',
         'android:value': androidAppId,
+        'tools:replace': 'android:value',
       },
     });
 
