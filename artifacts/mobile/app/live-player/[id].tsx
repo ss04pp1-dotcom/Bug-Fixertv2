@@ -4,9 +4,11 @@
  * This screen NO LONGER mounts a video player.
  * The player is the SINGLETON GlobalVideoPlayer mounted at _layout.tsx.
  * This screen just:
- *   1. Fetches the channel's stream URL from the API
- *   2. Calls useGlobalPlayer.open({...}) to load it into the singleton
- *   3. Shows related channels + info below
+ *   1. Fetches the channel's stream URL + ad config from the API
+ *   2. If the channel has a vastUrl, shows the VastPlayer pre-roll first
+ *   3. Calls useGlobalPlayer.open({...}) to load it into the singleton
+ *   4. Shows related channels + info below
+ *   5. Shows banner HTML ad (from channel's bannerHtmlCode) if configured
  *
  * Back button → player enters native PiP (no reload, no rebuffer).
  * Mini mode has been fully removed — native OS PiP is used everywhere.
@@ -23,8 +25,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiClient from '@/lib/api';
 import { useLiveChannels } from '@/lib/api-hooks';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
-import { AdInterstitial } from '@/components/AdInterstitial';
-import { AdRewarded } from '@/components/AdRewarded';
+import { AdBanner } from '@/components/AdBanner';
+import { VastPlayer } from '@/components/VastPlayer';
 
 // ── Related channel card (3-col grid, white logo circle + onError fallback) ──
 function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
@@ -64,20 +66,6 @@ function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
   );
 }
 
-// ── Channel-switch ad gate ─────────────────────────────────────────────────
-// Module-level so counter persists across router.replace() remounts.
-// Show an interstitial after every AD_EVERY channel switches.
-const AD_EVERY = 3;
-let _switchCount = 0;
-
-// ── Hourly playback ad ─────────────────────────────────────────────────────
-// Show an interstitial every HOURLY_MS of continuous live playback.
-const HOURLY_MS = 60 * 60 * 1000; // 60 minutes
-
-// ── Rewarded playback ad ───────────────────────────────────────────────────
-// Show a 30-second rewarded ad every 30 minutes — higher eCPM than interstitial.
-const REWARDED_MS = 30 * 60 * 1000; // 30 minutes
-
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
   accent: '#EC4899', live: '#EF4444', text: '#fff', dim: '#9CA3AF',
@@ -110,6 +98,16 @@ export default function LivePlayerScreen() {
   const [fetchError, setFetchError]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
   const openPlayer = useGlobalPlayer((s) => s.open);
+
+  // ── Ad monetization state ──────────────────────────────────────────────────
+  // vastUrl and bannerHtmlCode are fetched from the channel API response.
+  // vastDone tracks whether the pre-roll has been shown for this channel visit
+  // so it doesn't re-trigger on re-renders.
+  const [channelVastUrl, setChannelVastUrl]     = useState<string | null>(null);
+  const [channelBannerHtml, setChannelBannerHtml] = useState<string | null>(null);
+  const [vastDone, setVastDone]                 = useState(false);
+  // Ref so the openPlayer effect can read the latest value without re-running
+  const vastDoneRef = useRef(false);
 
   // ── Current channel metadata (for related-channel ranking) ────────────────
   const [currentCatId, setCurrentCatId]     = useState<string | null>(null);
@@ -175,13 +173,6 @@ export default function LivePlayerScreen() {
       const sorted = [...ch.servers].sort((a: any, b: any) => a.priority - b.priority);
       sorted.forEach((srv: any, i: number) => {
         const cookieExpired = srv.cookieExpired === true;
-        // User-Agent keeps headers non-empty so DataSourceUtil.kt rebuilds its
-        // OkHttpDataSource.Factory singleton (prevents old headers leaking between
-        // channels). Default UA = Media3/AndroidX UA — whitelisted by IPTV panels.
-        // Overridden by the server-provided UA if set in admin.
-        //
-        // Do NOT add 'Icy-MetaData: 1': it causes Streamer-type servers to prepare
-        // audio metadata for 20-30 s before responding → ExoPlayer timeout → no play.
         const headers: Record<string, string> = {
           'User-Agent': srv.userAgent || 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0',
         };
@@ -212,37 +203,25 @@ export default function LivePlayerScreen() {
   }, []);
 
   // ── Load stream URL ────────────────────────────────────────────────────────
-  // Always uses /channels/:id/sources (authenticated endpoint) so ExoPlayer
-  // receives full server credential headers (cookie, userAgent, referer, origin).
-  //
-  // Fallback behaviour:
-  //  • If /sources fails with a 401/403 (auth error) → do NOT fall back to the
-  //    public endpoint, which strips all credentials.  Show a recoverable error
-  //    so the user can retry (which re-checks the stored JWT).
-  //  • If /sources fails with a non-auth error (404, 5xx, network) → fall back
-  //    to the public endpoint only when the channel has no credential-protected
-  //    servers (safe because those streams don't need headers).
-  //  • Last resort: use the URL passed in route params (no headers).
   const loadStream = useCallback(async () => {
     setFetchLoad(true); setFetchError(false); setSources([]);
+    // Reset ad state for new channel load
+    setChannelVastUrl(null);
+    setChannelBannerHtml(null);
+    setVastDone(false);
+    vastDoneRef.current = false;
+
     try {
       let ch: any = null;
       let authFailed = false;
       try {
-        // Authenticated call — returns servers WITH cookie/userAgent/referer/origin
         const res = await apiClient.get(`/channels/${id}/sources`);
         ch = res.data?.data || res.data;
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 401 || status === 403) {
-          // Auth error: falling back to public endpoint would silently drop all
-          // credentials and make protected streams fail inside ExoPlayer.
-          // Surface the error so the user can retry with a refreshed token.
           authFailed = true;
         } else {
-          // Non-auth error (404, 5xx, network): safe to try the public endpoint.
-          // Streams that need credentials will simply have null headers here and
-          // will fail fast in ExoPlayer — no worse than before.
           try {
             const res = await apiClient.get(`/channels/${id}`);
             ch = res.data?.data || res.data;
@@ -253,7 +232,6 @@ export default function LivePlayerScreen() {
       }
 
       if (authFailed) {
-        // Retry with URL from route params if available; otherwise error.
         if (passedUrl) {
           setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
         } else {
@@ -265,6 +243,13 @@ export default function LivePlayerScreen() {
       setCurrentCatId(ch?.categoryId || ch?.category?.id || null);
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
       setCurrentLang((ch?.language || '').trim().toLowerCase() || null);
+
+      // Extract ad monetization fields from channel response
+      const vastUrl = ch?.vastUrl || null;
+      const bannerHtml = ch?.bannerHtmlCode || null;
+      setChannelVastUrl(vastUrl);
+      setChannelBannerHtml(bannerHtml);
+
       const srcs = buildSources(ch, passedUrl || undefined);
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
@@ -282,10 +267,14 @@ export default function LivePlayerScreen() {
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
   // ── Open the singleton player once sources are ready ───────────────────────
-  // startInTop: true → player renders at top portion only (video-at-top layout).
-  // User can press the landscape button to expand to true fullscreen + landscape.
+  // If there is a VAST pre-roll, we wait until the ad is done before opening
+  // the player so the ad plays in silence and the channel doesn't start yet.
   useEffect(() => {
     if (sources.length === 0) return;
+    // If a VAST url is configured and we haven't finished showing it yet,
+    // hold off — VastPlayer will call handleVastComplete which sets vastDone.
+    if (channelVastUrl && !vastDone) return;
+
     openPlayer({
       title: contentTitle,
       logo: logoUrl,
@@ -296,11 +285,15 @@ export default function LivePlayerScreen() {
       startInTop: true,
       playerRoute: `/live-player/${id}`,
     });
-  }, [sources, contentTitle, logoUrl, id, openPlayer]);
+  }, [sources, channelVastUrl, vastDone, contentTitle, logoUrl, id, openPlayer]);
+
+  // ── VAST pre-roll complete handler ─────────────────────────────────────────
+  const handleVastComplete = useCallback(() => {
+    vastDoneRef.current = true;
+    setVastDone(true);
+  }, []);
 
   // ── Focus management: top mode only on this screen ─────────────────────────
-  // When user navigates away → shrink to mini player (YouTube-like).
-  // When user navigates back → restore top mode.
   useFocusEffect(
     useCallback(() => {
       const { mode, enterTop } = useGlobalPlayer.getState();
@@ -313,45 +306,13 @@ export default function LivePlayerScreen() {
     }, [])
   );
 
-  // ── Ad gate state ───────────────────────────────────────────────────────────
-  const [adVisible, setAdVisible]               = useState(false);
-  const [hourlyAdVisible, setHourlyAdVisible]   = useState(false);
-  const [rewardedAdVisible, setRewardedAdVisible] = useState(false);
+  // ── Channel-switch ad state ─────────────────────────────────────────────────
+  // Channel-switch interstitial removed in favour of the per-channel VAST pre-roll
+  // and Smartlink gate (which fires before this screen is even mounted).
+  // AdInterstitial and AdRewarded (house ads) are kept for future use but the
+  // timed triggers have been removed to keep the experience clean and
+  // non-intrusive.
   const pendingChannel   = useRef<typeof related[0] | null>(null);
-  const hourlyTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rewardedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const scheduleHourlyAd = useCallback(() => {
-    if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
-    hourlyTimerRef.current = setTimeout(() => setHourlyAdVisible(true), HOURLY_MS);
-  }, []);
-
-  const scheduleRewardedAd = useCallback(() => {
-    if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current);
-    rewardedTimerRef.current = setTimeout(() => setRewardedAdVisible(true), REWARDED_MS);
-  }, []);
-
-  // Start hourly + rewarded timers once the stream is loaded; restart on channel change
-  useEffect(() => {
-    if (sources.length > 0) {
-      scheduleHourlyAd();
-      scheduleRewardedAd();
-    }
-    return () => {
-      if (hourlyTimerRef.current) clearTimeout(hourlyTimerRef.current);
-      if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current);
-    };
-  }, [sources, scheduleHourlyAd, scheduleRewardedAd]);
-
-  const handleHourlyAdClose = useCallback(() => {
-    setHourlyAdVisible(false);
-    scheduleHourlyAd(); // restart 60-minute clock after ad closes
-  }, [scheduleHourlyAd]);
-
-  const handleRewardedAdClose = useCallback(() => {
-    setRewardedAdVisible(false);
-    scheduleRewardedAd(); // restart 30-minute clock after ad closes
-  }, [scheduleRewardedAd]);
 
   const doSwitchChannel = useCallback((ch: typeof related[0]) => {
     router.replace({
@@ -365,25 +326,8 @@ export default function LivePlayerScreen() {
     });
   }, []);
 
-  // ── Switch channel ─────────────────────────────────────────────────────────
-  // Every AD_EVERY switches → show interstitial first, then navigate.
   const switchChannel = useCallback((ch: typeof related[0]) => {
-    _switchCount += 1;
-    if (_switchCount % AD_EVERY === 0) {
-      pendingChannel.current = ch;
-      setAdVisible(true);
-    } else {
-      doSwitchChannel(ch);
-    }
-  }, [doSwitchChannel]);
-
-  const handleAdClose = useCallback(() => {
-    setAdVisible(false);
-    if (pendingChannel.current) {
-      const ch = pendingChannel.current;
-      pendingChannel.current = null;
-      doSwitchChannel(ch);
-    }
+    doSwitchChannel(ch);
   }, [doSwitchChannel]);
 
   // ── Loading / error state for the metadata area ────────────────────────────
@@ -413,56 +357,48 @@ export default function LivePlayerScreen() {
     );
   }
 
-  // ── Cookie-expired banner: shown if ANY loaded server has an expired cookie ──
+  // ── Cookie-expired banner ──────────────────────────────────────────────────
   const hasCookieExpired = sources.some((s) => s.cookieExpired === true);
 
-  // ── Render metadata below the (singleton) player ───────────────────────────
+  // ── VAST pre-roll overlay ──────────────────────────────────────────────────
+  // Show VastPlayer as a fullscreen modal when:
+  //  • Sources are ready (we know what to play next)
+  //  • This channel has a vastUrl configured
+  //  • We haven't already shown it this visit
+  const showVast = sources.length > 0 && !!channelVastUrl && !vastDone;
+
   return (
     <View style={s.root}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* Channel-switch interstitial ad — fires every 3 channel changes */}
-      <AdInterstitial
-        placement="channel_switch"
-        visible={adVisible}
-        onClose={handleAdClose}
-      />
+      {/* VAST pre-roll — shown as a fullscreen modal before the main stream starts */}
+      {showVast && (
+        <VastPlayer
+          vastUrl={channelVastUrl}
+          onComplete={handleVastComplete}
+          defaultSkipSec={5}
+        />
+      )}
 
-      {/* Hourly playback ad — fires every 60 minutes of continuous live viewing */}
-      <AdInterstitial
-        placement="live_hourly"
-        visible={hourlyAdVisible}
-        onClose={handleHourlyAdClose}
-      />
-
-      {/* Rewarded playback ad — fires every 30 minutes, 30-second watch required */}
-      <AdRewarded
-        placement="live_rewarded"
-        visible={rewardedAdVisible}
-        onClose={handleRewardedAdClose}
-        onRewardEarned={handleRewardedAdClose}
-        rewardSeconds={30}
-      />
-
-      {/* Spacer for the video area — includes status bar height so it matches
-          the GlobalVideoPlayer surface which starts at top:0 with height = insets.top + topH */}
+      {/* Spacer for the video area */}
       <View style={{ height: isLandscape ? 0 : insets.top + Math.round(W * 9 / 16), backgroundColor: '#000' }} />
 
       <View style={{ flex: 1, backgroundColor: C.bg }}>
 
-      {/* Cookie-expired warning banner */}
-      {hasCookieExpired && (
-        <View style={{
-          backgroundColor: '#78350f', borderLeftWidth: 3, borderLeftColor: '#f59e0b',
-          marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 8,
-          flexDirection: 'row', alignItems: 'center', gap: 8,
-        }}>
-          <Ionicons name="warning-outline" size={18} color="#f59e0b" />
-          <Text style={{ color: '#fde68a', fontSize: 12, flex: 1, lineHeight: 17 }}>
-            Stream credential (cookie) has expired. Please contact admin to refresh the channel credentials.
-          </Text>
-        </View>
-      )}
+        {/* Cookie-expired warning banner */}
+        {hasCookieExpired && (
+          <View style={{
+            backgroundColor: '#78350f', borderLeftWidth: 3, borderLeftColor: '#f59e0b',
+            marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 8,
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+          }}>
+            <Ionicons name="warning-outline" size={18} color="#f59e0b" />
+            <Text style={{ color: '#fde68a', fontSize: 12, flex: 1, lineHeight: 17 }}>
+              Stream credential (cookie) has expired. Please contact admin to refresh the channel credentials.
+            </Text>
+          </View>
+        )}
+
         {/* Channel header */}
         <View style={s.channelHeader}>
           {logoUrl && !headerImgErr ? (
@@ -488,6 +424,15 @@ export default function LivePlayerScreen() {
             <Ionicons name="refresh-outline" size={20} color={C.dim} />
           </TouchableOpacity>
         </View>
+
+        {/* HTML Banner Ad — rendered below the player header if configured */}
+        {!!channelBannerHtml && (
+          <AdBanner
+            placement="channel_banner"
+            htmlCode={channelBannerHtml}
+            bannerHeight={90}
+          />
+        )}
 
         {/* Tab bar */}
         <View style={s.tabBar}>
@@ -561,7 +506,6 @@ export default function LivePlayerScreen() {
 
 const { width: SW } = Dimensions.get('window');
 
-// 3-column grid — matches live-tv.tsx card style
 const REL_H_PAD  = 10;
 const REL_GAP    = 8;
 const REL_COLS   = 3;
@@ -571,7 +515,6 @@ const REL_LOGO_D = Math.round(REL_CARD_W * 0.56);
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
 
-  // Channel header below player
   channelHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
   channelLogo:  { width: 52, height: 52, borderRadius: 26, overflow: 'hidden', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   channelInfo:  { flex: 1 },
@@ -581,18 +524,15 @@ const s = StyleSheet.create({
   liveDotSmall:  { width: 6, height: 6, borderRadius: 3, backgroundColor: C.live },
   liveTxtSmall:  { color: C.dim, fontSize: 12 },
 
-  // Tab bar
   tabBar:    { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 14 },
   tabItem:   { paddingVertical: 10, marginRight: 20, position: 'relative' },
   tabTxt:    { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
   tabTxtActive: { color: '#fff' },
   tabLine:   { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: C.primary, borderRadius: 1 },
 
-  // 3-column related-channels grid
   grid:          { paddingHorizontal: REL_H_PAD, paddingVertical: 12, paddingBottom: 100 },
   columnWrapper: { gap: REL_GAP, marginBottom: REL_GAP },
 
-  // Card — same look as live-tv.tsx
   chCard: {
     width: REL_CARD_W,
     backgroundColor: '#141418',
@@ -606,7 +546,6 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Logo circle (white, like screenshot)
   chLogoCircle: {
     width: REL_LOGO_D,
     height: REL_LOGO_D,
@@ -631,10 +570,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Channel name
   chName: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', width: '100%' },
 
-  // LIVE badge
   chLiveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(255,59,48,0.18)', borderRadius: 5,
@@ -644,14 +581,11 @@ const s = StyleSheet.create({
   chLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.live },
   chLiveTxt: { color: C.live, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
-  // "Same category" accent dot
   chSameCatBadge: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: C.primary },
 
-  // Related header
   relatedHeader:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
   relatedHeaderTxt: { color: C.dim, fontSize: 12 },
 
-  // Empty / info
   emptyBox: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt: { color: C.dim, fontSize: 14 },
   infoPad:  { padding: 14, gap: 2 },

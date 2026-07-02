@@ -5,7 +5,7 @@
     "scripts": {
         "dev": "pnpm exec prisma generate && pnpm exec nest start --watch",
         "build": "pnpm exec prisma generate && pnpm exec nest build",
-        "start": "node dist/main",
+        "start": "prisma migrate deploy && node dist/main",
         "typecheck": "tsc --noEmit",
         "test": "jest --passWithNoTests --forceExit",
         "test:watch": "jest --watch",

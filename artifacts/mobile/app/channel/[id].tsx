@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannel, useToggleFavorite, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
+import { useChannelAdGate } from '@/hooks/useChannelAdGate';
 
 const C = {
   bg: '#0A0A0F',
@@ -25,7 +26,8 @@ const C = {
   border: 'rgba(255,255,255,0.06)',
 };
 
-const getImageUrl = (path?: string) => path ? Config.imageUrl(path) : 'https://images.unsplash.com/photo-1616530940355-351fabd9524b?w=400&h=400&fit=crop';
+const getImageUrl = (path?: string) =>
+  path ? Config.imageUrl(path) : 'https://images.unsplash.com/photo-1616530940355-351fabd9524b?w=400&h=400&fit=crop';
 
 // M-003: backend sometimes returns channel.category as an object ({name, ...}) —
 // never render that as a Text child.
@@ -38,30 +40,37 @@ const getCategoryName = (cat: any): string => {
 export default function ChannelDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  
+
   const { data: channel, isLoading } = useChannel(id as string);
   const { data: favorites } = useFavorites();
   const toggleFav = useToggleFavorite();
+
+  // Smartlink gate — opens the configured Smartlink URL in an in-app browser
+  // before navigating to the live player (if isSmartlinkEnabled is true).
+  // Use the hook directly here because this screen lives outside the (main)
+  // route group and therefore outside ChannelAdGateProvider's scope.
+  const channelGate = useChannelAdGate();
 
   // M-027: derive favorite state from server data instead of always sending 'add'.
   const isFav = useMemo(() => (favorites || []).some((f: any) => f.id === id), [favorites, id]);
 
   const handleWatchLive = () => {
     if (!channel) return;
-    router.push({
-      pathname: `/live-player/${id}` as any,
-      params: {
-        title:     (channel as any).name || '',
-        streamUrl: (channel as any).primaryStreamUrl || (channel as any).streamUrl || '',
-        logo:      (channel as any).logoUrl || (channel as any).logo || '',
-        cat:       (channel as any).category?.name || (channel as any).category || 'Live TV',
-      },
+    const ch = channel as any;
+    channelGate.requestChannel(ch.id || (id as string), {
+      title:              ch.name || '',
+      streamUrl:          ch.primaryStreamUrl || ch.streamUrl || '',
+      logo:               ch.logoUrl || ch.logo || '',
+      cat:                getCategoryName(ch.category),
+      // Pass smartlink fields so the gate hook can open the Smartlink before playback
+      isSmartlinkEnabled: ch.isSmartlinkEnabled === true,
+      smartlinkUrl:       ch.smartlinkUrl || '',
     });
   };
 
   const handleToggleFav = () => {
     if (!channel) return;
-    toggleFav.mutate({ type: 'channel', id: channel.id, action: isFav ? 'remove' : 'add' });
+    toggleFav.mutate({ type: 'channel', id: (channel as any).id, action: isFav ? 'remove' : 'add' });
   };
 
   if (isLoading) {
@@ -80,117 +89,144 @@ export default function ChannelDetailScreen() {
     );
   }
 
+  const ch = channel as any;
+  const categoryName = getCategoryName(ch.category);
+  const bannerUri = getImageUrl(ch.banner || ch.thumbnail || ch.logo);
+  const logoUri   = getImageUrl(ch.logo);
+
   return (
-    <View style={s.screen}>
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        {/* Banner Area */}
-        <View style={s.bannerArea}>
-          <LinearGradient colors={['rgba(0,0,0,0.8)', 'transparent', C.bg]} style={s.bannerGradient} />
-          
-          {/* Header over banner */}
-          <View style={[s.header, { paddingTop: insets.top + 12 }]}>
-            <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
-              <Ionicons name="chevron-back" size={24} color={C.text} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleToggleFav} style={s.iconBtn}>
-              <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={24} color={isFav ? '#FF3B30' : C.text} />
-            </TouchableOpacity>
+    <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+      {/* Banner */}
+      <View style={s.bannerWrap}>
+        <Image source={{ uri: bannerUri }} style={s.bannerImg} resizeMode="cover" />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,10,15,0.85)', C.bg]}
+          style={s.bannerGrad}
+        />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[s.backBtn, { top: insets.top + 8 }]}
+        >
+          <Ionicons name="chevron-back" size={24} color={C.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      <View style={s.content}>
+        {/* Logo + Title row */}
+        <View style={s.titleRow}>
+          <Image source={{ uri: logoUri }} style={s.logo} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>{ch.name}</Text>
+            <Text style={s.subtitle}>{categoryName}</Text>
           </View>
-          
-          <View style={s.logoContainer}>
-            {channel.logoUrl ? (
-              <Image source={{ uri: getImageUrl(channel.logoUrl) }} style={s.logo} />
-            ) : (
-              <LinearGradient colors={[C.primary, C.accent]} style={s.logoFallback}>
-                <Text style={s.logoFallbackTxt}>{channel.name.slice(0, 2).toUpperCase()}</Text>
-              </LinearGradient>
-            )}
-            <View style={s.liveBadge}>
-              <View style={s.liveDot} />
-              <Text style={s.liveTxt}>LIVE</Text>
-            </View>
-          </View>
+          <TouchableOpacity onPress={handleToggleFav} style={s.iconBtn}>
+            <Ionicons
+              name={isFav ? 'heart' : 'heart-outline'}
+              size={22}
+              color={isFav ? '#EF4444' : C.textSec}
+            />
+          </TouchableOpacity>
         </View>
 
-        <View style={s.contentArea}>
-          <Text style={s.channelName}>{channel.name}</Text>
-          <Text style={s.channelCategory}>{getCategoryName(channel.category)} • Bangladesh</Text>
-          <Text style={s.description}>{channel.description || 'Watch live broadcasting 24/7.'}</Text>
-          
-          {/* Program Guide */}
-          <Text style={s.sectionTitle}>Schedule</Text>
-          
-          <View style={s.programCard}>
-            <View style={s.programTime}>
-              <Text style={s.timeTxt}>Now</Text>
-              <View style={s.activeLine} />
-            </View>
-            <View style={s.programInfo}>
-              <Text style={s.programTitle}>{channel.currentProgram || 'Current Program'}</Text>
-              <Text style={s.programDesc}>Live Broadcast</Text>
-            </View>
-          </View>
-          
-          <View style={[s.programCard, { opacity: 0.6 }]}>
-            <View style={s.programTime}>
-              <Text style={s.timeTxt}>Next</Text>
-              <View style={[s.activeLine, { backgroundColor: 'transparent' }]} />
-            </View>
-            <View style={s.programInfo}>
-              <Text style={s.programTitle}>{channel.nextProgram || 'Upcoming Program'}</Text>
-              <Text style={s.programDesc}>Scheduled</Text>
-            </View>
-          </View>
+        {/* LIVE badge */}
+        <View style={s.liveBadge}>
+          <View style={s.liveDot} />
+          <Text style={s.liveTxt}>LIVE NOW</Text>
         </View>
-      </ScrollView>
 
-      {/* Sticky Bottom Button */}
-      <View style={[s.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
-        <TouchableOpacity onPress={handleWatchLive} style={s.watchBtn}>
-          <LinearGradient colors={[C.primary, C.accent]} start={{x:0,y:0}} end={{x:1,y:0}} style={s.watchBtnGrad}>
-            <Ionicons name="play" size={20} color="#fff" />
+        {/* Watch button */}
+        <TouchableOpacity style={s.watchBtn} onPress={handleWatchLive} activeOpacity={0.85}>
+          <LinearGradient
+            colors={[C.primary, C.accent]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={s.watchBtnGrad}
+          >
+            <Ionicons name="play" size={18} color="#fff" />
             <Text style={s.watchBtnTxt}>Watch Live</Text>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Description */}
+        {!!ch.description && (
+          <Text style={s.description}>{ch.description}</Text>
+        )}
+
+        {/* Meta */}
+        <View style={s.metaGrid}>
+          {!!ch.language && (
+            <View style={s.metaItem}>
+              <Ionicons name="language-outline" size={15} color={C.textSec} />
+              <Text style={s.metaTxt}>{ch.language}</Text>
+            </View>
+          )}
+          {!!ch.country && (
+            <View style={s.metaItem}>
+              <Ionicons name="flag-outline" size={15} color={C.textSec} />
+              <Text style={s.metaTxt}>{ch.country}</Text>
+            </View>
+          )}
+          {!!ch.streamType && (
+            <View style={s.metaItem}>
+              <Ionicons name="radio-outline" size={15} color={C.textSec} />
+              <Text style={s.metaTxt}>{ch.streamType}</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
-  loader: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
-  
-  bannerArea: { height: 320, backgroundColor: '#1E1E2E', justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  bannerGradient: { ...StyleSheet.absoluteFillObject },
-  header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, zIndex: 10 },
-  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  
-  logoContainer: { alignItems: 'center', marginTop: 40 },
-  logo: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: 'rgba(255,255,255,0.1)' },
-  logoFallback: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: 'rgba(255,255,255,0.1)' },
-  logoFallbackTxt: { fontSize: 40, fontWeight: '800', color: '#fff', fontFamily: 'Outfit' },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FF3B30', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -14, borderWidth: 2, borderColor: C.bg },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff', marginRight: 6 },
-  liveTxt: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 1 },
-  
-  contentArea: { padding: 24, paddingBottom: 100 },
-  channelName: { fontSize: 28, fontWeight: '800', color: C.text, fontFamily: 'Outfit', textAlign: 'center', marginBottom: 6 },
-  channelCategory: { fontSize: 14, color: C.textSec, fontFamily: 'Inter', textAlign: 'center', marginBottom: 20 },
-  description: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontFamily: 'Inter', lineHeight: 22, textAlign: 'center', marginBottom: 32 },
-  
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: C.text, fontFamily: 'Outfit', marginBottom: 16 },
-  
-  programCard: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border },
-  programTime: { width: 60, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: C.border, marginRight: 16 },
-  timeTxt: { fontSize: 14, fontWeight: '700', color: C.primary, fontFamily: 'Inter', marginBottom: 8 },
-  activeLine: { width: 2, height: 20, backgroundColor: C.primary, borderRadius: 1 },
-  programInfo: { flex: 1, justifyContent: 'center' },
-  programTitle: { fontSize: 16, fontWeight: '600', color: C.text, fontFamily: 'Inter', marginBottom: 4 },
-  programDesc: { fontSize: 13, color: C.textSec, fontFamily: 'Inter' },
-  
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(10,10,15,0.9)', paddingHorizontal: 24, paddingTop: 16 },
-  watchBtn: { borderRadius: 16, overflow: 'hidden' },
-  watchBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 },
-  watchBtnTxt: { fontSize: 18, fontWeight: '700', color: '#fff', fontFamily: 'Inter' },
+  container:  { flex: 1, backgroundColor: C.bg },
+  loader:     { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
+
+  bannerWrap: { width: '100%', height: 260, position: 'relative' },
+  bannerImg:  { width: '100%', height: '100%' },
+  bannerGrad: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 130 },
+  backBtn: {
+    position: 'absolute', left: 16,
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  iconBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  content:  { paddingHorizontal: 20, paddingTop: 16 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
+  logo:     { width: 60, height: 60, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  title:    { color: C.text, fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  subtitle: { color: C.textSec, fontSize: 13 },
+
+  liveBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, marginBottom: 18,
+  },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444' },
+  liveTxt: { color: '#EF4444', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+
+  watchBtn:     { borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
+  watchBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
+  watchBtnTxt:  { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  description: { color: C.textSec, fontSize: 14, lineHeight: 21, marginBottom: 20 },
+
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  metaItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20,
+  },
+  metaTxt: { color: C.textSec, fontSize: 13 },
 });
