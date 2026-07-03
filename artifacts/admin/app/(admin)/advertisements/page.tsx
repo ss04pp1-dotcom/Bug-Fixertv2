@@ -141,6 +141,18 @@ function StatCard({ label, value, icon: Icon, color }: {
   );
 }
 
+function HealthStat({ label, value, color, sub }: {
+  label: string; value: string | number; color: string; sub?: string;
+}) {
+  return (
+    <div className="bg-[#0A0B0F] border border-white/8 rounded-lg p-3">
+      <span className="text-[11px] text-white/35 uppercase tracking-wide">{label}</span>
+      <p className={cn("text-lg font-bold mt-1", color)}>{Number(value).toLocaleString()}</p>
+      {sub && <p className="text-[10px] text-white/25 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 // ─── Tab type ────────────────────────────────────────────────────────────────
 
 type Tab = "global" | "frequency" | "banners" | "analytics" | "house-ads";
@@ -153,6 +165,7 @@ export default function AdvertisementsPage() {
   const [saving, setSaving]       = useState(false);
   const [houseAds, setHouseAds]   = useState<HouseAd[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [health, setHealth]       = useState<any>(null);
 
   // New house-ad form state
   const [newTitle,      setNewTitle]      = useState('');
@@ -201,6 +214,16 @@ export default function AdvertisementsPage() {
     apiClient.get('/v1/advertisements/analytics').then(res => {
       setAnalytics(res.data?.data ?? res.data);
     }).catch(() => {});
+
+    // Ad health check — polls every 15s so admins see fresh event data live
+    const loadHealth = () => {
+      apiClient.get('/v1/advertisements/health').then(res => {
+        setHealth(res.data?.data ?? res.data);
+      }).catch(() => {});
+    };
+    loadHealth();
+    const healthInterval = setInterval(loadHealth, 15000);
+    return () => clearInterval(healthInterval);
   }, []);
 
   // ── Save ─────────────────────────────────────────────────────────────────
@@ -631,6 +654,70 @@ export default function AdvertisementsPage() {
               </p>
             </div>
           )
+        )}
+
+        {/* ════ Ad Health Check ═══════════════════════════════════════════════ */}
+        {activeTab === 'analytics' && health && (
+          <div className="bg-[#13131C] border border-white/8 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Ad Health Check</h3>
+                <p className="text-xs text-white/35 mt-0.5">
+                  Live event breakdown (last 24h) — refreshes every 15s
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  health.lastEventAt && (Date.now() - new Date(health.lastEventAt).getTime()) < 15 * 60 * 1000
+                    ? "bg-green-400" : "bg-white/15",
+                )} />
+                <span className="text-[11px] text-white/35">
+                  {health.lastEventAt
+                    ? `Last event ${new Date(health.lastEventAt).toLocaleTimeString()}`
+                    : 'No events yet'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
+              <HealthStat label="Impressions" value={health.last24h?.impression ?? 0} color="text-blue-400" />
+              <HealthStat label="Clicks"      value={health.last24h?.click ?? 0}      color="text-green-400" />
+              <HealthStat label="Sessions"    value={health.last24h?.session ?? 0}    color="text-purple-400" />
+              <HealthStat label="Revenue evts" value={health.last24h?.revenue ?? 0}   color="text-pink-400" />
+              <HealthStat
+                label="Errors"
+                value={health.last24h?.error ?? 0}
+                color={Number(health.last24h?.error ?? 0) > 0 ? "text-red-400" : "text-white/40"}
+                sub={`${health.errorRatePct ?? '0.00%'} rate`}
+              />
+            </div>
+
+            {(health.recentErrors?.length ?? 0) > 0 && (
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wide mb-2">
+                  Recent Errors ({health.recentErrors.length})
+                </h4>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {health.recentErrors.map((e: any) => (
+                    <div key={e.id} className="flex items-start justify-between gap-3 py-1.5 px-2.5 rounded-lg bg-red-500/5 border border-red-500/10">
+                      <div className="min-w-0">
+                        <p className="text-xs text-red-300 font-mono truncate">
+                          {e.errorCode ?? 'unknown_error'} — {e.errorMsg ?? 'no message'}
+                        </p>
+                        <p className="text-[11px] text-white/30 mt-0.5">
+                          {e.placement ?? 'unknown placement'}{e.os ? ` • ${e.os}` : ''}{e.device ? ` • ${e.device}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-white/25 flex-shrink-0">
+                        {new Date(e.createdAt).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ════ House Ads ════════════════════════════════════════════════════ */}

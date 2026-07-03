@@ -87,6 +87,9 @@ export class AdvertisementsController {
     return this.svc.getAnalytics(from, to);
   }
 
+  @Get('health') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Ad event health check (last 24h counts + recent errors)' })
+  getEventHealth() { return this.svc.getEventHealth(); }
+
   @Post('analytics/seed-demo') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Seed demo analytics data (30 days)' })
   seedDemoAnalytics() { return this.svc.seedDemoAnalytics(); }
 

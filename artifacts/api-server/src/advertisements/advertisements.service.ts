@@ -465,6 +465,43 @@ export class AdvertisementsService {
     return { deletedEvents: events.count, deletedRevenueRows: revenue.count };
   }
 
+  async getEventHealth() {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [byType, recentErrors, lastEvent] = await Promise.all([
+      this.prisma.adEvent.groupBy({
+        by: ['eventType'],
+        _count: { _all: true },
+        where: { createdAt: { gte: since24h } },
+      }),
+      this.prisma.adEvent.findMany({
+        where: { eventType: 'error', createdAt: { gte: since24h } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true, placement: true, providerId: true,
+          errorCode: true, errorMsg: true, device: true, os: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.adEvent.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    ]);
+
+    const counts: Record<string, number> = { impression: 0, click: 0, error: 0, session: 0, revenue: 0 };
+    for (const row of byType) counts[row.eventType] = row._count._all;
+
+    const errorRate = counts.impression > 0
+      ? ((counts.error / (counts.impression + counts.error)) * 100).toFixed(2)
+      : '0.00';
+
+    return {
+      last24h: counts,
+      errorRatePct: `${errorRate}%`,
+      lastEventAt: lastEvent?.createdAt ?? null,
+      recentErrors,
+    };
+  }
+
   async getAnalytics(from?: string, to?: string) {
     const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const toDate = to ? new Date(to) : new Date();
