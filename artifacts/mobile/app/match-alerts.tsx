@@ -68,10 +68,15 @@ export default function MatchAlertsScreen() {
         } catch { timeStr = ''; }
       }
       const isEnabled = a.id in localEnabled ? localEnabled[a.id] : (a.isEnabled ?? a.enabled ?? true);
+      // FIX: API may return sport as an object {id, name, slug} instead of a
+      // plain string (same shape mismatch fixed on the sports/match-detail
+      // screens). Normalize here so item.sport.charAt() below never throws.
+      const rawSport = a.sport || a.match?.sport || 'cricket';
+      const sportName = (typeof rawSport === 'object' ? rawSport?.name : rawSport) || 'cricket';
       return {
         id: a.matchId || a.id,
         match: displayLabel,
-        sport: a.sport || a.match?.sport || 'cricket',
+        sport: String(sportName).toLowerCase(),
         isLive,
         time: timeStr,
         enabled: isEnabled,
