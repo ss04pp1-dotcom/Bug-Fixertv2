@@ -342,13 +342,13 @@ export default function SportsScreen() {
                 })
                 .map((m: any, i: number) => ({
                   id: m.id || String(i),
-                  title: m.title || `${m.homeTeam?.name || 'Team A'} vs ${m.awayTeam?.name || 'Team B'}`,
+                  title: normalizeName(m.title) || `${m.homeTeam?.name || 'Team A'} vs ${m.awayTeam?.name || 'Team B'}`,
                   team1: m.homeTeam?.name || m.team1 || 'Team A',
                   team2: m.awayTeam?.name || m.team2 || 'Team B',
                   score1: m.homeTeam?.score ?? m.score1 ?? '—',
                   score2: m.awayTeam?.score ?? m.score2 ?? '—',
-                  sport: m.sport?.name || m.sportName || '',
-                  icon: SPORTS_FILTER.find(s => (m.sport?.name || '').toLowerCase().includes(s.id))?.emoji || '🏅',
+                  sport: normalizeName(m.sport) || m.sportName || '',
+                  icon: SPORTS_FILTER.find(s => (normalizeName(m.sport) || '').toLowerCase().includes(s.id))?.emoji || '🏅',
                   date: m.startTime || m.scheduledAt || m.date,
                 }));
               return highlights.length === 0 ? (
@@ -391,8 +391,8 @@ export default function SportsScreen() {
                   team2: m.awayTeam?.name || m.team2 || 'Team B',
                   score1: m.homeTeam?.score ?? m.score1 ?? '—',
                   score2: m.awayTeam?.score ?? m.score2 ?? '—',
-                  sport: m.sport?.name || m.sportName || '',
-                  icon: SPORTS_FILTER.find(s => (m.sport?.name || '').toLowerCase().includes(s.id))?.emoji || '🏅',
+                  sport: normalizeName(m.sport) || m.sportName || '',
+                  icon: SPORTS_FILTER.find(s => (normalizeName(m.sport) || '').toLowerCase().includes(s.id))?.emoji || '🏅',
                   date: m.startTime || m.scheduledAt || m.date,
                 }));
               return results.length === 0 ? (
