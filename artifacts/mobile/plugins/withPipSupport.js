@@ -8,14 +8,11 @@
  * minSdkVersion=24 builds even with compileSdk=35, because AAPT validates
  * attributes against minSdkVersion at resource-link time.
  *
- * The tools:targetApi="31" workaround relies on xml2js correctly serializing
- * prefixed attributes through expo's withAndroidManifest, which is not
- * guaranteed across EAS build environments.
- *
- * Functional equivalence is achieved via the AppState 'background' listener
- * in GlobalVideoPlayer.tsx, which calls setPip(true) programmatically when
- * the app goes to background — the same result as the OS auto-enter flag,
- * with no manifest attribute needed.
+ * Auto-enter PiP is also intentionally disabled in withPipNative.js
+ * (setAutoEnterEnabled=false, no enterPictureInPictureMode call).
+ * PiP is controlled exclusively from JS via react-native-video's `pip` prop,
+ * toggled only when the user taps the PiP button inside the video player.
+ * This prevents non-video screens (Home, Sign Up, etc.) from entering PiP.
  *
  * Attributes applied:
  *   android:supportsPictureInPicture="true"   — enables PiP (API 24+)

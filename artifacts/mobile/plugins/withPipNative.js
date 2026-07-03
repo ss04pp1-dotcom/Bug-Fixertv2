@@ -1,14 +1,13 @@
 /**
  * withPipNative — Expo config plugin
  *
- * Injects Android 12+ (API 31+) seamless auto-enter PiP into MainActivity.
- * Detects whether MainActivity is Java or Kotlin and injects the correct syntax.
+ * Registers PiP params on API 31+ so react-native-video can enter PiP
+ * programmatically when the user taps the PiP button in the player.
  *
- * Why native instead of manifest attribute:
- *   android:autoEnterPictureInPicture requires API 31 and AAPT2 hard-fails
- *   when minSdkVersion < 31. The native approach calls the API at runtime
- *   with a Build.VERSION.SDK_INT >= 31 guard, so it compiles and runs safely
- *   on all API levels (24+).
+ * Auto-enter (onUserLeaveHint → enterPictureInPictureMode) is intentionally
+ * DISABLED because it caused the entire app — including non-video screens like
+ * Sign Up and Home — to enter PiP whenever the user pressed the Home button.
+ * PiP is now controlled exclusively from JS via react-native-video's `pip` prop.
  */
 const { withMainActivity } = require('expo/config-plugins');
 
@@ -22,13 +21,15 @@ const KT_IMPORTS = [
 const KT_ON_USER_LEAVE_HINT = `
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
+    // Register PiP params so react-native-video can enter PiP from JS.
+    // Do NOT call enterPictureInPictureMode() here — that caused the whole
+    // app (including non-video screens) to enter PiP on every Home press.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       val params = PictureInPictureParams.Builder()
-        .setAutoEnterEnabled(true)
+        .setAutoEnterEnabled(false)
         .setAspectRatio(Rational(16, 9))
         .build()
       setPictureInPictureParams(params)
-      enterPictureInPictureMode(params)
     }
   }
 `;
@@ -44,13 +45,15 @@ const JAVA_ON_USER_LEAVE_HINT = `
   @Override
   public void onUserLeaveHint() {
     super.onUserLeaveHint();
+    // Register PiP params so react-native-video can enter PiP from JS.
+    // Do NOT call enterPictureInPictureMode() here — that caused the whole
+    // app (including non-video screens) to enter PiP on every Home press.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       PictureInPictureParams params = new PictureInPictureParams.Builder()
-          .setAutoEnterEnabled(true)
+          .setAutoEnterEnabled(false)
           .setAspectRatio(new Rational(16, 9))
           .build();
       setPictureInPictureParams(params);
-      enterPictureInPictureMode(params);
     }
   }
 `;
