@@ -407,7 +407,7 @@ export default function SportsScreen() {
         <Text style={styles.sectionTitle}>Live Matches</Text>
         <FlatList
           data={liveMatches.filter(
-            (m) => activeName === 'All' || m.sport === activeName,
+            (m) => activeName === 'All' || m.sport.toLowerCase() === activeName.toLowerCase(),
           )}
           keyExtractor={(m) => m.id}
           horizontal
@@ -439,7 +439,7 @@ export default function SportsScreen() {
         <Text style={styles.sectionTitle}>Upcoming</Text>
         <FlatList
           data={upcomingMatches.filter(
-            (m) => activeName === 'All' || m.sport === activeName,
+            (m) => activeName === 'All' || m.sport.toLowerCase() === activeName.toLowerCase(),
           )}
           keyExtractor={(m) => m.id}
           scrollEnabled={false}

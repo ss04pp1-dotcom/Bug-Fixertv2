@@ -160,6 +160,11 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
   }, [placement, isPremium, isGlobalEnabled, isPositionEnabled, dismissed, propHtmlCode, globalHtml]);
 
   // ── Impression tracking ───────────────────────────────────────────────────
+  // Reset tracked flag when the ad itself changes so a new ad always fires an impression.
+  useEffect(() => {
+    impressionTracked.current = false;
+  }, [houseAd?.id]);
+
   useEffect(() => {
     if (houseAd && !impressionTracked.current) {
       impressionTracked.current = true;

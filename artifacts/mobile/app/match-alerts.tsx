@@ -56,7 +56,7 @@ export default function MatchAlertsScreen() {
     return items.map((a: any) => {
       const teamAName = a.match?.teamA?.name || a.teamA?.name || '';
       const teamBName = a.match?.teamB?.name || a.teamB?.name || '';
-      const tournamentName = typeof a.match?.tournament === 'string' ? a.match.tournament : a.match?.tournament?.name || a.tournament?.name || '';
+      const tournamentName = normalizeName(a.match?.tournament) || normalizeName(a.tournament);
       const matchLabel = teamAName && teamBName ? `${teamAName} vs ${teamBName}` : a.matchTitle || a.title || 'Match';
       const displayLabel = tournamentName ? `${matchLabel} - ${tournamentName}` : matchLabel;
       const isLive = a.match?.status === 'live' || a.status === 'live';
@@ -102,8 +102,8 @@ export default function MatchAlertsScreen() {
 
   const renderItem = ({ item }: { item: Alert }) => (
     <View style={styles.alertRow}>
-      <View style={[styles.sportIcon, { backgroundColor: `${sportColors[item.sport]}20` }]}>
-        <MaterialCommunityIcons name={sportIcons[item.sport]} size={18} color={sportColors[item.sport]} />
+      <View style={[styles.sportIcon, { backgroundColor: `${sportColors[item.sport] ?? '#6B7280'}20` }]}>
+        <MaterialCommunityIcons name={sportIcons[item.sport] ?? 'trophy-outline'} size={18} color={sportColors[item.sport] ?? '#6B7280'} />
       </View>
       <View style={styles.alertInfo}>
         <Text style={styles.alertMatch}>{item.match}</Text>

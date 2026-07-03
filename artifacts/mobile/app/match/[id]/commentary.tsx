@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMatch, useMatchCommentary } from '@/lib/api-hooks';
+import { normalizeName } from '@/lib/normalize';
 
 // ─── Design Tokens ───────────────────────────────────────────
 const colors = {
@@ -264,7 +265,7 @@ export default function CommentaryScreen() {
           <Ionicons name="chevron-back" size={28} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{typeof matchData?.tournament === 'string' ? matchData.tournament : matchData?.tournament?.name || 'Match'}</Text>
+          <Text style={styles.headerTitle}>{normalizeName(matchData?.tournament, 'Match')}</Text>
           <View style={styles.headerLiveBadge}>
             <PulsingDot />
             <Text style={styles.headerLiveText}>LIVE</Text>

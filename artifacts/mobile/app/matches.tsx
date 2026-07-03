@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMatches, useLiveMatches } from '@/lib/api-hooks';
+import { normalizeName } from '@/lib/normalize';
 
 // ─── Design Tokens ───────────────────────────────────────────
 const colors = {
@@ -182,12 +183,12 @@ export default function MatchesScreen() {
     return items.map((m: any) => ({
       id: m.id,
       type: (m.status === 'live' ? 'live' : m.status === 'completed' || m.status === 'finished' ? 'completed' : 'upcoming') as TabType,
-      sport: m.sport || '',
+      sport: normalizeName(m.sport),
       teamA: { name: m.teamA?.name || '', score: m.teamAScore || undefined, abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
       teamB: { name: m.teamB?.name || '', score: m.teamBScore || undefined, abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
       status: m.status || '',
       description: m.description || '',
-      tournament: typeof m.tournament === 'string' ? m.tournament : m.tournament?.name || '',
+      tournament: normalizeName(m.tournament),
     }));
   }, [matchesData]);
 
