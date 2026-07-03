@@ -9,7 +9,6 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "ADMOB_ANDROID_APP_ID": "ca-app-pub-9336332117032732~4352238150",
         "EXPO_ROUTER_APP_ROOT": "app"
       }
     },
@@ -17,7 +16,6 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "ADMOB_ANDROID_APP_ID": "ca-app-pub-9336332117032732~4352238150",
         "EXPO_ROUTER_APP_ROOT": "app"
       }
     },
@@ -25,7 +23,6 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "ADMOB_ANDROID_APP_ID": "ca-app-pub-9336332117032732~4352238150",
         "EXPO_ROUTER_APP_ROOT": "app"
       }
     }
