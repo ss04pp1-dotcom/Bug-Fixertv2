@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLiveMatches, useUpcomingMatches, useMatches, useToggleMatchAlert } from '@/lib/api-hooks';
 import { AdBanner } from '@/components/AdBanner';
+import { normalizeName } from '@/lib/normalize';
 import { Config } from '@/constants/config';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -89,7 +90,7 @@ export default function SportsScreen() {
     if (!liveData || !Array.isArray(liveData)) return [];
     return liveData.map((m: any, i: number) => ({
       id: m.id || String(i),
-      tournament: m.tournament || m.title || 'Live Match',
+      tournament: normalizeName(m.tournament) || normalizeName(m.title) || 'Live Match',
       team1: m.homeTeam?.name || m.team1 || 'Team A',
       team2: m.awayTeam?.name || m.team2 || 'Team B',
       score1: m.homeTeam?.score ?? m.score1 ?? '',
@@ -98,7 +99,7 @@ export default function SportsScreen() {
       logo1: m.homeTeam?.logo || '',
       logo2: m.awayTeam?.logo || '',
       status: m.status || 'LIVE',
-      sport: m.sport?.name || m.sportName || '',
+      sport: normalizeName(m.sport) || m.sportName || '',
     }));
   }, [liveData]);
 
@@ -111,12 +112,12 @@ export default function SportsScreen() {
       if (!groups[dateStr]) groups[dateStr] = [];
       groups[dateStr].push({
         id: m.id || String(i),
-        title: m.title || `${m.homeTeam?.name || 'Team A'} vs ${m.awayTeam?.name || 'Team B'}`,
+        title: normalizeName(m.title) || `${m.homeTeam?.name || 'Team A'} vs ${m.awayTeam?.name || 'Team B'}`,
         team1: m.homeTeam?.name || m.team1 || 'Team A',
         team2: m.awayTeam?.name || m.team2 || 'Team B',
         timeStr: d ? new Date(d).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-        sport: m.sport?.name || m.sportName || '',
-        icon: SPORTS_FILTER.find(s => (m.sport?.name || '').toLowerCase().includes(s.id))?.emoji || '🏅',
+        sport: normalizeName(m.sport) || m.sportName || '',
+        icon: SPORTS_FILTER.find(s => (normalizeName(m.sport) || '').toLowerCase().includes(s.id))?.emoji || '🏅',
       });
     });
     return Object.entries(groups).map(([date, matches]) => ({ date, matches }));
