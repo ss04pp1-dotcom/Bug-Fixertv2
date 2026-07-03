@@ -1,0 +1,37 @@
+Notun build deuyar por puro app pip mood e jasse.. Abar create account failed ashse...amar render api use kora ase to? Naki onno ta use korse? Naki onno kono problem
+
+দুটো আলাদা সমস্যা পেয়েছি। PiP-এর কোডও দেখছি একসাথে:
+
+দুটো সমস্যা আছে — API suspended + auto-PiP। PiP plugin চেক করছি:
+
+দুটো সমস্যা খুব স্পষ্ট:
+
+সমস্যা ১ — Render API Suspended: bug-fixertv2.onrender.com সার্ভার Render dashboard থেকে suspend করা আছে — তাই account create হচ্ছে না।
+
+সমস্যা ২ — পুরো App PiP হয়ে যাচ্ছে: withPipNative.js plugin onUserLeaveHint() এ unconditionally enterPictureInPictureMode() call করছে — মানে Home বাটন চাপলে যেকোনো screen থেকেই PiP হয়। এটা fix করছি:
+
+Pass: the code change in artifacts/mobile/plugins/withPipNative.js successfully disables native auto-enter PiP on Home, and GlobalVideoPlayer.tsx no longer has an AppState background path that calls setPip(true).
+
+Critical findings / analysis:
+
+withPipNative.js now sets PiP params without forcing entry:
+setAutoEnterEnabled(false) is used in both Kotlin and Java injected onUserLeaveHint() implementations.
+enterPictureInPictureMode(params) was removed from both paths.
+This directly addresses the prior bug where non-video screens entered PiP when Home was pressed.
+GlobalVideoPlayer.tsx appears aligned with manual-only PiP:
+Explicit comment states “PiP is MANUAL ONLY — no auto-PiP on home/background” (around line 814).
+No AppState import/use and no setPip(true) call exists in the file (verified via search).
+PiP is toggled via UI state and onPipChange, not app-background events.
+Important inconsistency to note:
+withPipSupport.js comments still claim functional equivalence via an AppState background listener in GlobalVideoPlayer.tsx calling setPip(true) (lines 15–17, 50–51), but that listener is not present anymore. This is a documentation mismatch (not a runtime regression), but it can mislead future maintainers.
+Security:
+
+None observed relevant to this task.
+Next actions:
+
+Update withPipSupport.js comments to remove the outdated AppState/setPip(true) explanation and reflect manual PiP control.
+Run a quick Android device validation: press Home from non-video screens and from active video playback to confirm PiP only activates via player PiP button.
+Keep withPipNative.js behavior as-is unless product intentionally reintroduces auto-PiP with stricter route/content guards.
+Code review-এ একটা stale comment ধরা পড়েছে। সেটা ঠিক করছি:
+
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.

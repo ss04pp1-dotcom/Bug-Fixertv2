@@ -98,7 +98,14 @@ export default function OtaUpdateBanner() {
 
       reloadTimerRef.current = setTimeout(async () => {
         try {
-          await Updates.reloadAsync();
+          // Race reloadAsync against a 10-second timeout so the modal can
+          // never be stuck in 'done' state if the reload hangs indefinitely.
+          await Promise.race([
+            Updates.reloadAsync(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('reloadAsync timed out')), 10_000),
+            ),
+          ]);
         } catch (e: any) {
           console.warn('[OTA] reloadAsync failed:', e?.message ?? e);
           // reloadAsync failed — let the user retry instead of being stuck forever.

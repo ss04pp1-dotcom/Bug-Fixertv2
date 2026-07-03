@@ -159,7 +159,12 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
     // Don't fetch if: premium, disabled, hidden position, or we already have HTML
     if (isPremium || !isGlobalEnabled || !isPositionEnabled || dismissed) return;
     if (propHtmlCode || globalHtml) return; // Global/prop HTML takes priority — skip fetch
-    fetchHouseAd(placement).then(setHouseAd);
+
+    let cancelled = false;
+    fetchHouseAd(placement)
+      .then((ad) => { if (!cancelled) setHouseAd(ad); })
+      .catch((e: any) => { console.warn('[AdBanner] fetchHouseAd failed:', e?.message ?? e); });
+    return () => { cancelled = true; };
   }, [placement, isPremium, isGlobalEnabled, isPositionEnabled, dismissed, propHtmlCode, globalHtml]);
 
   // ── Impression tracking ───────────────────────────────────────────────────

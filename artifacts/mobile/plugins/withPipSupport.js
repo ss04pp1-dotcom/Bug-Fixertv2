@@ -44,8 +44,9 @@ module.exports = function withPipSupport(config) {
 
     // DO NOT SET android:autoEnterPictureInPicture here.
     // It requires API 31 and AAPT rejects it for minSdkVersion=24.
-    // The AppState 'background' listener in GlobalVideoPlayer.tsx handles
-    // this programmatically via setPip(true) on every Android version.
+    // Auto-enter PiP is intentionally disabled in withPipNative.js
+    // (setAutoEnterEnabled=false). PiP is triggered exclusively from JS
+    // via react-native-video's `pip` prop when the user taps the PiP button.
 
     // ── configChanges — prevent activity restart on PiP resize ───────────────
     const required = [

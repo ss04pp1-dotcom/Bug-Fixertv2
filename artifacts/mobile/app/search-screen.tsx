@@ -166,7 +166,7 @@ export default function SearchScreen() {
     else if (item.type === 'series') router.push(`/series/${item.id}`);
     // Channels are gated behind the global ad engine — Smartlink/VAST
     // may play before navigation depending on the frequency config.
-    else requestChannel(item.id, { title: item.title });
+    else requestChannel(item.id, { title: item.title }).catch((e: any) => console.warn('[Search] requestChannel failed:', e?.message ?? e));
   }, [requestChannel]);
 
   const showPlaceholder = !isFetching && debouncedQuery.length === 0;
