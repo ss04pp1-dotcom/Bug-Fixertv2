@@ -26,6 +26,8 @@ import { YouTubeVideoBox, isYouTubeUrl, extractYouTubeStream } from '@/component
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { AdBanner } from '@/components/AdBanner';
 import { AdRewarded } from '@/components/AdRewarded';
+import { VastPlayer } from '@/components/VastPlayer';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -104,6 +106,12 @@ export default function PlayerScreen() {
   }, [type, id, titleParam]);
 
   const cType = (type || 'movie') as 'movie' | 'series';
+
+  // ── Global ad config (for VAST pre-roll) ───────────────────────────────────
+  const globalAdConfig = useGlobalAdConfig();
+  const vastEnabled    = globalAdConfig.vast.enabled && !!globalAdConfig.vast.url;
+  const [vastDone, setVastDone] = useState(false);
+  const handleVastComplete = useCallback(() => setVastDone(true), []);
 
   // ── Stream sources ──────────────────────────────────────────────────────────
   const [sources, setSources]       = useState<PlayerSource[]>([]);
@@ -224,7 +232,9 @@ export default function PlayerScreen() {
   const setNextEpisode   = useGlobalPlayer((s) => s.setNextEpisode);
 
   useEffect(() => {
+    // Wait for VAST pre-roll to complete before opening the player
     if (sources.length === 0 || youtubeUrl) return;
+    if (vastEnabled && !vastDone) return;
     openPlayer({
       title: contentTitle,
       logo: poster,
@@ -251,7 +261,7 @@ export default function PlayerScreen() {
     } else {
       setNextEpisode(null);
     }
-  }, [sources, youtubeUrl, contentTitle, poster, id, cType, openPlayer, episodes, epIdx, setNextEpisode]);
+  }, [sources, youtubeUrl, vastEnabled, vastDone, contentTitle, poster, id, cType, openPlayer, episodes, epIdx, setNextEpisode]);
 
   // ── Focus management: top mode only on this screen (YouTube-like) ──────────
   // When user navigates away → shrink to mini. When they come back → restore top.
@@ -420,6 +430,15 @@ export default function PlayerScreen() {
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+      {/* VAST pre-roll — shown once before playback starts when global VAST is enabled */}
+      {vastEnabled && !vastDone && sources.length > 0 && (
+        <VastPlayer
+          vastUrl={globalAdConfig.vast.url}
+          onComplete={handleVastComplete}
+          defaultSkipSec={globalAdConfig.vast.skipAfterSeconds ?? 5}
+        />
+      )}
 
       {/* 30-second rewarded ad — fires every 30 min during movie/series playback */}
       <AdRewarded
