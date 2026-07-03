@@ -152,6 +152,9 @@ export default function LiveTVScreen() {
     isFetchingNextPage, isLoading, refetch: refetchBrowse,
   } = useLiveChannelsInfinite(hookParams);
 
+  // ── Ad gate context (must be declared before any usage of globalConfig) ──────
+  const { requestChannel, globalConfig } = useChannelAdGateContext();
+
   const allChannels = useMemo(() => {
     if (!infiniteData?.pages) return [];
     return infiniteData.pages.flatMap((page: any, pi: number) =>
@@ -197,8 +200,6 @@ export default function LiveTVScreen() {
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const { requestChannel, globalConfig } = useChannelAdGateContext();
   const handleSelectChannel = useCallback((item: ReturnType<typeof mapChannel>) => {
     requestChannel(item.id, {
       title:     item.name,

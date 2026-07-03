@@ -1,3 +1,18 @@
+/**
+ * AdBanner — Global Config-Aware Banner Component
+ *
+ * Priority for banner HTML:
+ *   1. `htmlCode` prop (passed directly by caller, e.g. channel-grid)
+ *   2. Global ad config's `banner.htmlCode` (Adsterra / Monetag global script)
+ *   3. House ad fetched from API (image or HTML)
+ *
+ * Visibility rules (all must pass):
+ *   a. User is NOT premium
+ *   b. globalConfig.isEnabled === true
+ *   c. globalConfig.banner.enabled === true
+ *   d. If placement maps to a position key → that position is enabled in global config
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -11,6 +26,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { Config } from '@/constants/config';
 import { useAuthStore } from '@/lib/auth-store';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+
+// ─── Placement → banner position key mapping ──────────────────────────────────
+
+const PLACEMENT_TO_POSITION: Record<string, string> = {
+  'home-banner':            'home',
+  'home_banner':            'home',
+  'browse-banner':          'categories',
+  'browse_banner':          'categories',
+  'channel-grid-banner':    'channelGrid',
+  'channel_grid_banner':    'channelGrid',
+  'player_banner':          'player',
+  'channel_banner':         'player',
+  'movies_banner':          'movies',
+  'movies-banner':          'movies',
+  'live_banner':            'sports',
+  'sports-banner':          'sports',
+  'sports_banner':          'sports',
+  'search_banner':          'search',
+  'search-banner':          'search',
+  'series_episodes_banner': 'movies',
+  'series-banner':          'movies',
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AdItem {
   id: string;
@@ -23,18 +63,15 @@ interface AdItem {
 
 interface AdBannerProps {
   placement: string;
-  /** Optional raw HTML/JS code from Adsterra or Monetag — rendered in a WebView. */
+  /** Override HTML — if provided, skips global config check for HTML (but still applies enabled/position checks). */
   htmlCode?: string;
-  /** Height for the WebView banner. Default: 90. */
+  /** Override banner height. Falls back to global config's `banner.height` or 90px. */
   bannerHeight?: number;
   style?: object;
 }
 
-/**
- * Wraps raw ad HTML/JS into a full-page document optimised for WebView:
- * - Resets margin/padding, hides scrollbars, transparent background.
- * - Disables user-select so taps don't accidentally highlight text.
- */
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function wrapHtml(script: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -49,7 +86,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-
 </html>`;
 }
 
-async function fetchAd(placement: string): Promise<AdItem | null> {
+async function fetchHouseAd(placement: string): Promise<AdItem | null> {
   try {
     const res = await fetch(
       `${Config.API_BASE}/advertisements/placements/public?slug=${encodeURIComponent(placement)}`,
@@ -58,22 +95,19 @@ async function fetchAd(placement: string): Promise<AdItem | null> {
     if (!res.ok) return null;
     const data = await res.json();
     const items: any[] = Array.isArray(data) ? data : data?.data ?? [];
-    const placement_item = items.find((p: any) => p.slug === placement || p.name === placement) ?? items[0];
-    if (!placement_item) return null;
-
-    const ads: any[] = Array.isArray(placement_item.advertisements)
-      ? placement_item.advertisements
-      : [];
+    const placementItem = items.find((p: any) => p.slug === placement || p.name === placement) ?? items[0];
+    if (!placementItem) return null;
+    const ads: any[] = Array.isArray(placementItem.advertisements) ? placementItem.advertisements : [];
     const active = ads.filter((a: any) => a.isActive !== false);
     if (active.length === 0) return null;
-
     const pick = active[Math.floor(Math.random() * active.length)];
     return {
-      id: pick.id,
-      name: pick.title || pick.name || '',
+      id:       pick.id,
+      name:     pick.title || pick.name || '',
       imageUrl: pick.imageUrl || pick.bannerUrl || '',
       clickUrl: pick.targetUrl || pick.clickUrl || pick.destinationUrl || '',
-      type: pick.type || 'house_ad',
+      htmlCode: pick.htmlCode || '',
+      type:     pick.type || 'house_ad',
     };
   } catch {
     return null;
@@ -87,46 +121,60 @@ async function trackEvent(adId: string, event: 'impression' | 'click', placement
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adId, eventType: event, placement }),
     });
-  } catch {
-  }
+  } catch {}
 }
 
-/**
- * Renders a banner ad.
- *
- * Priority order:
- *  1. If `htmlCode` prop is passed directly (per-channel Adsterra/Monetag script) → WebView.
- *  2. If house-ad from API has an `htmlCode` field → WebView.
- *  3. If house-ad has an `imageUrl` → Image tap target.
- *  4. Nothing visible if none of the above resolves.
- */
-export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight = 90, style }: AdBannerProps) {
-  const [ad, setAd] = useState<AdItem | null>(null);
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, style }: AdBannerProps) {
+  const [houseAd, setHouseAd]   = useState<AdItem | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const impressionTracked = useRef(false);
-  const { user } = useAuthStore();
-  const isPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
+  const [imgError, setImgError]   = useState(false);
+  const impressionTracked         = useRef(false);
 
-  useEffect(() => {
-    if (isPremium || propHtmlCode) return;
-    fetchAd(placement).then(setAd);
-  }, [placement, isPremium, propHtmlCode]);
+  const { user }    = useAuthStore();
+  const isPremium   = !!user?.plan && user.plan.toLowerCase() !== 'free';
+  const globalConfig = useGlobalAdConfig();
 
+  // ── Visibility checks ──────────────────────────────────────────────────────
+  const isGlobalEnabled = globalConfig.isEnabled && globalConfig.banner.enabled;
+  const posKey = PLACEMENT_TO_POSITION[placement];
+  const isPositionEnabled = posKey
+    ? !!(globalConfig.banner.positions as any)[posKey]
+    : true; // Unknown placement → allow by default
+
+  // Effective height
+  const effectiveHeight = bannerHeight ?? globalConfig.banner.height ?? 90;
+
+  // Resolved HTML source (prop → global config → house ad)
+  const globalHtml = globalConfig.banner.htmlCode?.trim() || '';
+  const houseHtml  = houseAd?.htmlCode?.trim() || '';
+  const activeHtml = propHtmlCode?.trim() || globalHtml || houseHtml || '';
+
+  // ── Fetch house ad only when needed ───────────────────────────────────────
   useEffect(() => {
-    if (ad && !impressionTracked.current) {
+    // Don't fetch if: premium, disabled, hidden position, or we already have HTML
+    if (isPremium || !isGlobalEnabled || !isPositionEnabled || dismissed) return;
+    if (propHtmlCode || globalHtml) return; // Global/prop HTML takes priority — skip fetch
+    fetchHouseAd(placement).then(setHouseAd);
+  }, [placement, isPremium, isGlobalEnabled, isPositionEnabled, dismissed, propHtmlCode, globalHtml]);
+
+  // ── Impression tracking ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (houseAd && !impressionTracked.current) {
       impressionTracked.current = true;
-      trackEvent(ad.id, 'impression', placement);
+      trackEvent(houseAd.id, 'impression', placement);
     }
-  }, [ad, placement]);
+  }, [houseAd, placement]);
 
+  // ── Gate checks ───────────────────────────────────────────────────────────
   if (isPremium || dismissed) return null;
+  if (!isGlobalEnabled || !isPositionEnabled) return null;
 
-  const activeHtml = propHtmlCode || ad?.htmlCode;
-
+  // ── Render WebView banner ─────────────────────────────────────────────────
   if (activeHtml) {
     return (
-      <View style={[styles.container, { height: bannerHeight }, style]}>
+      <View style={[styles.container, { height: effectiveHeight }, style]}>
         <View style={styles.adLabel}>
           <Text style={styles.adLabelText}>AD</Text>
         </View>
@@ -147,11 +195,12 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight = 90,
     );
   }
 
-  if (!ad || (ad.imageUrl && imgError)) return null;
+  // ── Render image banner (house ad) ────────────────────────────────────────
+  if (!houseAd || (houseAd.imageUrl && imgError)) return null;
 
   const handlePress = () => {
-    trackEvent(ad.id, 'click', placement);
-    if (ad.clickUrl) Linking.openURL(ad.clickUrl).catch(() => {});
+    trackEvent(houseAd.id, 'click', placement);
+    if (houseAd.clickUrl) Linking.openURL(houseAd.clickUrl).catch(() => {});
   };
 
   return (
@@ -160,17 +209,17 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight = 90,
         <Text style={styles.adLabelText}>AD</Text>
       </View>
       <TouchableOpacity activeOpacity={0.85} onPress={handlePress} style={styles.bannerTouch}>
-        {ad.imageUrl ? (
+        {houseAd.imageUrl ? (
           <Image
-            source={{ uri: Config.imageUrl(ad.imageUrl) }}
-            style={[styles.bannerImage, { height: bannerHeight }]}
+            source={{ uri: Config.imageUrl(houseAd.imageUrl) }}
+            style={[styles.bannerImage, { height: effectiveHeight }]}
             resizeMode="cover"
             onError={() => setImgError(true)}
           />
         ) : (
-          <View style={[styles.fallbackBanner, { height: bannerHeight }]}>
+          <View style={[styles.fallbackBanner, { height: effectiveHeight }]}>
             <Ionicons name="megaphone-outline" size={24} color="#6B7280" />
-            <Text style={styles.fallbackText}>{ad.name}</Text>
+            <Text style={styles.fallbackText}>{houseAd.name}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -180,6 +229,8 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight = 90,
     </View>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {

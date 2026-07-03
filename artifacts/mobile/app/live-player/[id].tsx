@@ -8,7 +8,7 @@
  *   2. If the channel has a vastUrl, shows the VastPlayer pre-roll first
  *   3. Calls useGlobalPlayer.open({...}) to load it into the singleton
  *   4. Shows related channels + info below
- *   5. Shows banner HTML ad (from channel's bannerHtmlCode) if configured
+ *   5. Shows banner HTML ad driven by the global ad config (not per-channel)
  *
  * Back button → player enters native PiP (no reload, no rebuffer).
  * Mini mode has been fully removed — native OS PiP is used everywhere.
@@ -413,14 +413,8 @@ export default function LivePlayerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* HTML Banner Ad — rendered below the player header if configured */}
-        {!!channelBannerHtml && (
-          <AdBanner
-            placement="channel_banner"
-            htmlCode={channelBannerHtml}
-            bannerHeight={90}
-          />
-        )}
+        {/* HTML Banner Ad — position & HTML driven by global ad config */}
+        <AdBanner placement="channel_banner" />
 
         {/* Tab bar */}
         <View style={s.tabBar}>

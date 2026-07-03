@@ -109,53 +109,24 @@ export default function SettingsScreen() {
   };
 
   const handleOpenAdInspector = () => {
-    if (!admobAvailable || !mobileAds) {
+    if (!admobAvailable) {
       Alert.alert('Not available', 'Ad Inspector only works in a real build (EAS build), not in Expo Go.');
       return;
     }
-    initAdMob().then(() => {
-      mobileAds()
-        .openAdInspector()
-        .catch((err: unknown) => {
-          Alert.alert(
-            'Could not open Ad Inspector',
-            err instanceof Error ? err.message : 'Unknown error.',
-          );
-        });
-    });
+    // No-op: mobileAds is always null in the current WebView-based ad system
+    Alert.alert('Not available', 'Ad Inspector is not supported in the current ad system.');
   };
 
   const handleTestAd = () => {
-    if (!admobAvailable || !InterstitialAd || !AdEventType || !TestIds) {
+    if (!admobAvailable) {
       Alert.alert(
         'Not available',
         'Test ad requires a real APK build (not Expo Go). Native AdMob module is not loaded.',
       );
       return;
     }
-    initAdMob().then(() => {
-      try {
-        const ad = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL, {
-          requestNonPersonalizedAdsOnly: false,
-        });
-        const unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
-          unsubLoaded();
-          unsubError();
-          ad.show();
-        });
-        const unsubError = ad.addAdEventListener(AdEventType.ERROR, (e: unknown) => {
-          unsubLoaded();
-          unsubError();
-          Alert.alert(
-            'Test Ad Failed',
-            `AdMob returned an error:\n${e instanceof Error ? e.message : JSON.stringify(e)}\n\nMake sure the device has internet access and the AdMob App ID in app.config.js is correct.`,
-          );
-        });
-        ad.load();
-      } catch (e: unknown) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Unknown error loading test ad.');
-      }
-    });
+    // No-op: InterstitialAd is always null in the current WebView-based ad system
+    Alert.alert('Not available', 'Test ad is not supported in the current ad system.');
   };
 
   const handleLogout = () => {
