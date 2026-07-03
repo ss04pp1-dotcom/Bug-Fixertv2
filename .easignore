@@ -1,0 +1,29 @@
+# ── Workspace-root node_modules (1.6 GB — EAS builds install deps fresh) ──────
+node_modules/
+
+# ── Other artifact packages — mobile build-এ দরকার নেই ──────────────────────
+artifacts/admin/
+artifacts/api-server/
+artifacts/mockup-sandbox/
+artifacts/admin/node_modules/
+artifacts/api-server/node_modules/
+artifacts/mockup-sandbox/node_modules/
+
+# ── Attached assets / screenshots — build-এ দরকার নেই ───────────────────────
+attached_assets/
+.migration-backup/
+
+# ── Replit-specific ───────────────────────────────────────────────────────────
+.cache/
+.local/
+.agents/
+
+# ── Expo / Metro cache ────────────────────────────────────────────────────────
+artifacts/mobile/.expo/
+artifacts/mobile/.expo-shared/
+artifacts/mobile/dist/
+
+# ── Dev / editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.log

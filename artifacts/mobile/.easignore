@@ -1,4 +1,4 @@
-# ── node_modules (সব level) ──────────────────────────────────────────────────
+# ── node_modules ──────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
 
@@ -16,15 +16,6 @@ assetmap.json
 
 # ── Server / backend (mobile build-এ দরকার নেই) ─────────────────────────────
 server/
-
-# ── Workspace root — monorepo packages মোবাইল বিল্ডে দরকার নেই ─────────────
-../../node_modules/
-../../lib/
-../../scripts/
-../../artifacts/admin-panel/
-../../artifacts/api-server/
-../../artifacts/api-spec/
-../../artifacts/db/
 
 # ── Dev tools & editor files ──────────────────────────────────────────────────
 .vscode/
@@ -48,9 +39,3 @@ coverage/
 # ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# ── Replit-specific ───────────────────────────────────────────────────────────
-.replit
-replit.nix
-.local/
-attached_assets/
