@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Req, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AdvertisementsService } from './advertisements.service';
@@ -28,8 +28,11 @@ export class AdvertisementsController {
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Create ad' })
   create(@Body() dto: CreateAdDto) { return this.svc.create(dto); }
 
-  @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad' })
+  @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad (full)' })
   update(@Param('id') id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
+
+  @Patch(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Partial update ad (e.g. toggle isActive)' })
+  partialUpdate(@Param('id') id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
 
   @Delete(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete ad' })
   remove(@Param('id') id: string) { return this.svc.remove(id); }
