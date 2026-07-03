@@ -60,7 +60,9 @@ async function resolveVastMedia(
     let xml: string;
     try {
       const res = await fetch(url, {
-        signal: AbortSignal.timeout ? AbortSignal.timeout(10_000) : undefined,
+        // 15s (was 10s) — gives slow/mobile-data connections more room to
+        // fetch the VAST tag before we give up and skip the ad.
+        signal: AbortSignal.timeout ? AbortSignal.timeout(15_000) : undefined,
       });
       if (!res.ok) return null;
       xml = await res.text();
@@ -119,8 +121,14 @@ export function VastPlayer({ vastUrl, onComplete, defaultSkipSec = 5 }: VastPlay
   const [mediaUrl, setMediaUrl]     = useState<string | null>(null);
   const [skipSec, setSkipSec]       = useState(defaultSkipSec);
   const [elapsed, setElapsed]       = useState(0);
+  const [videoKey, setVideoKey]     = useState(0);
   const doneRef                     = useRef(false);
   const timerRef                    = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Slow/flaky networks can throw a transient playback error mid-buffer.
+  // Give the ad one remount-and-retry before giving up and skipping it,
+  // instead of treating every network blip as a hard failure.
+  const retryRef                    = useRef(0);
+  const retryTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Resolve VAST XML → media URL ─────────────────────────────────────────
   useEffect(() => {
@@ -143,12 +151,32 @@ export function VastPlayer({ vastUrl, onComplete, defaultSkipSec = 5 }: VastPlay
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [phase]);
 
+  useEffect(() => {
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
+  }, []);
+
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     onComplete();
   }, [onComplete]);
+
+  // Network hiccups (slow WiFi/mobile data) can throw a playback error mid-
+  // buffer even though the stream would recover on its own. Retry once with
+  // a short delay (clean remount, same media URL) before treating it as a
+  // real failure — mirrors the main player's network-error tolerance.
+  const handleVideoError = useCallback(() => {
+    if (retryRef.current < 1) {
+      retryRef.current += 1;
+      retryTimerRef.current = setTimeout(() => {
+        setVideoKey(k => k + 1);
+      }, 2000);
+    } else {
+      finish();
+    }
+  }, [finish]);
 
   const canSkip = elapsed >= skipSec;
 
@@ -195,6 +223,7 @@ export function VastPlayer({ vastUrl, onComplete, defaultSkipSec = 5 }: VastPlay
           <>
             {VideoComponent ? (
               <VideoComponent
+                key={videoKey}
                 source={{ uri: mediaUrl }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="contain"
@@ -205,8 +234,18 @@ export function VastPlayer({ vastUrl, onComplete, defaultSkipSec = 5 }: VastPlay
                 playInBackground={false}
                 useTextureView={true}
                 hideShutterView={true}
+                // More forgiving buffer + retry budget so a slow/flaky
+                // connection buffers instead of throwing an error outright.
+                bufferConfig={{
+                  minBufferMs: 10_000,
+                  maxBufferMs: 30_000,
+                  bufferForPlaybackMs: 1_500,
+                  bufferForPlaybackAfterRebufferMs: 3_000,
+                }}
+                preferredForwardBufferDuration={10}
+                minLoadRetryCount={5}
                 onEnd={finish}
-                onError={finish}
+                onError={handleVideoError}
               />
             ) : (
               // Expo Go fallback — no native module

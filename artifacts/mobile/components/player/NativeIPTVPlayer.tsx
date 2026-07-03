@@ -113,7 +113,7 @@ export const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
         // highest sustainable quality. ExoPlayer measures real bandwidth
         // and ramps up automatically after the first few seconds.
         maxBitRate={0}
-        minLoadRetryCount={5}
+        minLoadRetryCount={8}
 
         // ── External playback (iOS AirPlay) ──────────────────────────────
         allowsExternalPlayback={Platform.OS === 'ios'}

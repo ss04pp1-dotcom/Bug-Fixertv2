@@ -204,7 +204,9 @@ async function loadWatchPosition(contentId: string): Promise<number> {
 // Progressive backoff schedule for same-source network-error retries (ms).
 // Increasing gaps give transient network drops a real chance to clear before
 // we give up on the current server and switch to the next one.
-const NETWORK_RETRY_DELAYS_MS = [1_500, 3_000, 5_000];
+// Widened (was [1_500, 3_000, 5_000]) so slow/unstable connections get more
+// breathing room to recover mid-buffer instead of surfacing an error.
+const NETWORK_RETRY_DELAYS_MS = [2_000, 4_000, 7_000, 10_000];
 
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN GLOBAL VIDEO PLAYER
@@ -872,8 +874,10 @@ export default function GlobalVideoPlayer() {
   // (was outside causing stale closure when isLive changed mid-play).
   useEffect(() => {
     if (mode === 'hidden') return;
-    // Phase 1: faster stall detection (7s live / 8s VOD vs old 15s / 25s)
-    const STALL_MS = isLive ? 7_000 : 8_000;
+    // Stall detection window before we intervene. Widened (was 7s/8s) to
+    // tolerate normal network buffering on slow connections without
+    // prematurely declaring the stream stalled/erroring out.
+    const STALL_MS = isLive ? 12_000 : 15_000;
     if (buffering && !playerError && src && !ended) {
       stallTimerRef.current = setTimeout(() => {
         const srcs = sourcesRef.current;
@@ -1070,7 +1074,7 @@ export default function GlobalVideoPlayer() {
       retryTimerRef.current = setTimeout(() => {
         setSrcIdx(srcIdx + 1);
         setVideoKey(k => k + 1);
-      }, 2500);
+      }, 4000);
       setBuffering(true); setError(null);
     } else {
       setError(desc);

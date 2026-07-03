@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings, useUpdateSetting } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
 import { Config } from '@/constants/config';
-import { admobAvailable, mobileAds, initAdMob, InterstitialAd, AdEventType, TestIds } from '@/lib/admob';
 
 const C = {
   bg: '#0A0A0F',
@@ -71,15 +70,6 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline' as const, iconColor: '#8B5CF6', type: 'nav' as const, route: '/iptv-report' },
     ] as SettingItem[],
   }] : []),
-  {
-    title: 'Ads',
-    items: [
-      { id: 'test-ad', label: 'Show Test Ad', icon: 'play-circle-outline' as const, iconColor: '#22C55E', type: 'nav' as const },
-      ...(admobAvailable ? [
-        { id: 'ad-inspector', label: 'Open Ad Inspector', icon: 'bug-outline' as const, iconColor: '#F59E0B', type: 'nav' as const },
-      ] as SettingItem[] : []),
-    ] as SettingItem[],
-  },
 ];
 
 export default function SettingsScreen() {
@@ -106,27 +96,6 @@ export default function SettingsScreen() {
           Alert.alert('Saved locally', 'Couldn\u2019t sync preference to the server — saved on this device for now.'),
       },
     );
-  };
-
-  const handleOpenAdInspector = () => {
-    if (!admobAvailable) {
-      Alert.alert('Not available', 'Ad Inspector only works in a real build (EAS build), not in Expo Go.');
-      return;
-    }
-    // No-op: mobileAds is always null in the current WebView-based ad system
-    Alert.alert('Not available', 'Ad Inspector is not supported in the current ad system.');
-  };
-
-  const handleTestAd = () => {
-    if (!admobAvailable) {
-      Alert.alert(
-        'Not available',
-        'Test ad requires a real APK build (not Expo Go). Native AdMob module is not loaded.',
-      );
-      return;
-    }
-    // No-op: InterstitialAd is always null in the current WebView-based ad system
-    Alert.alert('Not available', 'Test ad is not supported in the current ad system.');
   };
 
   const handleLogout = () => {
@@ -171,11 +140,7 @@ export default function SettingsScreen() {
                     key={item.id}
                     style={[s.settingRow, idx < group.items.length - 1 && s.settingRowBorder]}
                     onPress={() => {
-                      if (item.id === 'test-ad') {
-                        handleTestAd();
-                      } else if (item.id === 'ad-inspector') {
-                        handleOpenAdInspector();
-                      } else if (item.route) {
+                      if (item.route) {
                         router.push(item.route as any);
                       }
                     }}
