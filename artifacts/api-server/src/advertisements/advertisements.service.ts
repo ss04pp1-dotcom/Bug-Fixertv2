@@ -54,16 +54,6 @@ export class AdvertisementsService {
     return { message: 'Advertisement deleted' };
   }
 
-  async trackImpression(id: string) {
-    await this.prisma.advertisement.update({ where: { id }, data: { impressions: { increment: 1 } } });
-    return { tracked: true };
-  }
-
-  async trackClick(id: string) {
-    await this.prisma.advertisement.update({ where: { id }, data: { clicks: { increment: 1 } } });
-    return { tracked: true };
-  }
-
   // Slugs must match the adProviders array in prisma/seed.ts exactly
   private static readonly DEFAULT_PROVIDERS = [
     { name: 'Google AdMob',              slug: 'admob'      },

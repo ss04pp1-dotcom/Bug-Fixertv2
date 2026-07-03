@@ -39,11 +39,8 @@ export class SubscriptionsController {
   @Roles('super_admin', 'admin') @Post('verify') @ApiBearerAuth() @ApiOperation({ summary: 'Verify payment and activate subscription' })
   verify(@Body() dto: VerifySubscriptionDto, @CurrentUser('id') userId: string) { return this.svc.verifyAndActivate(dto, userId, true); }
 
-  @Get('my') @ApiBearerAuth() @ApiOperation({ summary: 'Get my subscription' })
+  @Get('me') @ApiBearerAuth() @ApiOperation({ summary: 'Get my subscription' })
   getMySubscription(@CurrentUser('id') userId: string) { return this.svc.getUserSubscription(userId); }
-
-  @Get('me') @ApiBearerAuth() @ApiOperation({ summary: 'Get my subscription (alias for /my)' })
-  getMySubscriptionAlias(@CurrentUser('id') userId: string) { return this.svc.getUserSubscription(userId); }
 
   @Post('cancel') @ApiBearerAuth() @ApiOperation({ summary: 'Cancel my subscription' })
   cancelMySubscription(@CurrentUser('id') userId: string) { return this.svc.cancelSubscription(userId); }

@@ -28,20 +28,14 @@ export class AdvertisementsController {
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Create ad' })
   create(@Body() dto: CreateAdDto) { return this.svc.create(dto); }
 
-  @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad (full)' })
-  update(@Param('id') id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
+  @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad (full replace)' })
+  update(@Param('id') id: string, @Body() dto: CreateAdDto) { return this.svc.update(id, dto); }
 
   @Patch(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Partial update ad (e.g. toggle isActive)' })
   partialUpdate(@Param('id') id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
 
   @Delete(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete ad' })
   remove(@Param('id') id: string) { return this.svc.remove(id); }
-
-  @Public() @Post(':id/impression') @Throttle({ default: { limit: 30, ttl: 60000 } }) @ApiOperation({ summary: 'Track impression (legacy)' })
-  trackImpression(@Param('id') id: string) { return this.svc.trackImpression(id); }
-
-  @Public() @Post(':id/click') @Throttle({ default: { limit: 20, ttl: 60000 } }) @ApiOperation({ summary: 'Track click (legacy)' })
-  trackClick(@Param('id') id: string) { return this.svc.trackClick(id); }
 
   @Public() @Post('event') @Throttle({ default: { limit: 60, ttl: 60000 } }) @ApiOperation({ summary: 'Track ad event — impression, click, revenue, error, skip, close' })
   trackEvent(@Body() dto: AdEventDto, @Req() req: Request) {
