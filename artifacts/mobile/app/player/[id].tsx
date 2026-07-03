@@ -25,6 +25,7 @@ import { useMovie, useSeries, useRelatedMovies, useRecommendations } from '@/lib
 import { YouTubeVideoBox, isYouTubeUrl, extractYouTubeStream } from '@/components/YouTubePlayer';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { AdBanner } from '@/components/AdBanner';
+import { AdRewarded } from '@/components/AdRewarded';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -269,6 +270,26 @@ export default function PlayerScreen() {
   // ── When episode changes, reload stream (the open effect will fire again) ──
   // epIdx already in loadStream deps, so it auto-reloads.
 
+  // ── Rewarded ad — fires every 30 minutes during playback ──────────────────
+  const PLAYER_REWARDED_MS = 30 * 60 * 1000;
+  const [rewardedAdVisible, setRewardedAdVisible] = useState(false);
+  const rewardedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleRewardedAd = useCallback(() => {
+    if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current);
+    rewardedTimerRef.current = setTimeout(() => setRewardedAdVisible(true), PLAYER_REWARDED_MS);
+  }, []);
+
+  useEffect(() => {
+    if (sources.length > 0 || youtubeUrl) scheduleRewardedAd();
+    return () => { if (rewardedTimerRef.current) clearTimeout(rewardedTimerRef.current); };
+  }, [sources, youtubeUrl, scheduleRewardedAd]);
+
+  const handleRewardedAdClose = useCallback(() => {
+    setRewardedAdVisible(false);
+    scheduleRewardedAd(); // restart 30-minute clock
+  }, [scheduleRewardedAd]);
+
   // ── Back button → triggers PiP via GlobalVideoPlayer's back handler ─────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -399,6 +420,16 @@ export default function PlayerScreen() {
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+      {/* 30-second rewarded ad — fires every 30 min during movie/series playback */}
+      <AdRewarded
+        placement="player_rewarded"
+        visible={rewardedAdVisible}
+        onClose={handleRewardedAdClose}
+        onRewardEarned={handleRewardedAdClose}
+        rewardSeconds={30}
+      />
+
       {/* Spacer for the video area (singleton covers it visually) */}
       <View style={{ height: Math.round(SW * 9 / 16), backgroundColor: '#000' }} />
       {belowPlayer}

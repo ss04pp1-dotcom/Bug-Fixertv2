@@ -1,0 +1,120 @@
+Ad Monetization System Redesign (Premium Flow)
+বর্তমান per-channel configuration থাকবে, কিন্তু এটাকে Global Rule Engine-এ রূপান্তর করতে হবে যাতে আমাকে ৫০০+ চ্যানেল আলাদা আলাদা করে কনফিগার করতে না হয়।
+1. Global Frequency Rules
+নতুন Settings যোগ করো:
+Smartlink Frequency
+Every X channel switches
+Default: 3
+VAST Frequency
+Every X channel switches
+Default: 3
+Banner Frequency
+Always
+Every X channels
+Disabled
+অর্থাৎ:
+Channel 1 → No Ad
+Channel 2 → No Ad
+Channel 3 → Smartlink
+Channel 4 → No Ad
+Channel 5 → No Ad
+Channel 6 → VAST
+তারপর আবার একই cycle চলবে।
+2. Remove Per-Channel Fields
+Channel Edit Screen থেকে নিচের ফিল্ডগুলো সরিয়ে দাও:
+Smartlink URL
+VAST URL
+Banner HTML
+এসব আর Channel Edit-এ থাকবে না।
+Channel Edit-এ শুধুমাত্র একটি Optional Override Toggle থাকতে পারে:
+Enable Custom Ads (Optional)
+যদি Off থাকে তাহলে Global Settings ব্যবহার হবে।
+3. Global Ad Manager
+Advertisements Panel-এ একটি Premium Manager বানাও যেখানে থাকবে:
+Smartlink
+Enable
+Smartlink URL
+Frequency
+Delay
+Cooldown
+VAST
+Enable
+VAST URL
+Skip After X Seconds
+Frequency
+Timeout
+Banner
+Enable
+HTML/JS Code
+Position:
+Home Screen
+Player Screen
+Category Screen
+Search
+Bottom
+Between Channel Cards
+4. Home Screen Banner
+Banner শুধুমাত্র Player Screen-এ নয়।
+Show করতে হবে:
+Home Screen
+Categories
+Movies
+Series
+Sports
+Search
+Channel Grid
+এছাড়া Channel Grid-এর মধ্যে Every X Cards পরপর Banner Card Insert করতে হবে।
+উদাহরণ:
+Channel
+Channel
+Channel
+Banner
+Channel
+Channel
+Channel
+Banner
+5. Player Banner
+Player Screen-এ Banner Position configurable হবে।
+যেমন:
+Below Player
+Above Player
+Floating Bottom
+Floating Top
+6. Frequency Engine
+Smartlink এবং VAST একসাথে চলবে না।
+Rule Engine উদাহরণ:
+Switch 1 → Nothing
+Switch 2 → Nothing
+Switch 3 → Smartlink
+Switch 4 → Nothing
+Switch 5 → Nothing
+Switch 6 → VAST
+Switch 7 → Nothing
+Switch 8 → Nothing
+Switch 9 → Smartlink
+...
+এই Counter App Restart হলেও Reset হবে না। Persistent Counter ব্যবহার করতে হবে।
+7. House Ads
+House Ads System রাখো।
+নিজের Promotion, Subscription অথবা Announcement Banner Show করা যাবে।
+8. Analytics
+Dashboard-এ দেখাবে:
+Smartlink Opens
+VAST Plays
+VAST Completed
+Banner Impressions
+Banner Clicks
+CTR
+Revenue Estimate
+9. Premium UX
+পুরো Advertisement Panel-কে Enterprise Level বানাও:
+Global Settings
+Frequency Rules
+Analytics
+House Ads
+Banner Positions
+Schedule
+Enable/Disable
+Test Mode
+Live Preview
+যাতে ৫০০+ Channel-এর জন্য আলাদা আলাদা Configuration করার প্রয়োজন না হয় এবং একটি Global Configuration থেকেই পুরো App-এর Monetization Control করা যায়।

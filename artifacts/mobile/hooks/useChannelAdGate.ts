@@ -24,7 +24,7 @@ import {
 
 export function useChannelAdGate(config: GlobalAdConfig) {
   const requestChannel = useCallback(
-    async (id: string, params?: Record<string, any>) => {
+    async (id: string, params?: Record<string, any>, opts?: { replace?: boolean }) => {
       // Strip out legacy per-channel ad fields so they don't pollute route params
       const {
         isSmartlinkEnabled: _sl,
@@ -57,7 +57,8 @@ export function useChannelAdGate(config: GlobalAdConfig) {
       // ── Navigate to player ─────────────────────────────────────────────────
       // If VAST was selected, pass the URL and skip config as route params so
       // the live-player screen shows the pre-roll before opening the stream.
-      router.push({
+      const navigate = opts?.replace ? router.replace : router.push;
+      navigate({
         pathname: `/live-player/${id}` as any,
         params: {
           ...playerParams,

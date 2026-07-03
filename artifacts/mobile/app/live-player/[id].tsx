@@ -27,6 +27,8 @@ import { useLiveChannels } from '@/lib/api-hooks';
 import { useGlobalPlayer, type PlayerSource } from '@/lib/player-store';
 import { AdBanner } from '@/components/AdBanner';
 import { VastPlayer } from '@/components/VastPlayer';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+import { useChannelAdGate } from '@/hooks/useChannelAdGate';
 
 // ── Related channel card (3-col grid, white logo circle + onError fallback) ──
 function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
@@ -293,29 +295,19 @@ export default function LivePlayerScreen() {
     }, [])
   );
 
-  // ── Channel-switch ad state ─────────────────────────────────────────────────
-  // Channel-switch interstitial removed in favour of the per-channel VAST pre-roll
-  // and Smartlink gate (which fires before this screen is even mounted).
-  // AdInterstitial and AdRewarded (house ads) are kept for future use but the
-  // timed triggers have been removed to keep the experience clean and
-  // non-intrusive.
-  const pendingChannel   = useRef<typeof related[0] | null>(null);
+  // ── Global ad engine — drives VAST pre-roll + Smartlink on channel switches ─
+  const globalAdConfig  = useGlobalAdConfig();
+  const channelAdGate   = useChannelAdGate(globalAdConfig);
 
-  const doSwitchChannel = useCallback((ch: typeof related[0]) => {
-    router.replace({
-      pathname: `/live-player/${ch.id}` as any,
-      params: {
-        title:     ch.name,
-        streamUrl: ch.streamUrl,
-        logo:      ch.logo,
-        cat:       ch.cat,
-      },
-    });
-  }, []);
-
+  // Switch to another channel — always goes through the global ad engine so
+  // Smartlink / VAST fire according to the persistent switch counter.
   const switchChannel = useCallback((ch: typeof related[0]) => {
-    doSwitchChannel(ch);
-  }, [doSwitchChannel]);
+    channelAdGate.requestChannel(
+      ch.id,
+      { title: ch.name, streamUrl: ch.streamUrl ?? '', logo: ch.logo ?? '', cat: ch.cat ?? '' },
+      { replace: true }, // replace so back button doesn't loop between channels
+    );
+  }, [channelAdGate]);
 
   // ── Loading / error state for the metadata area ────────────────────────────
   if (fetchLoading && sources.length === 0) {
