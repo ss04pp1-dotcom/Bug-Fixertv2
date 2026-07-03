@@ -133,8 +133,11 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
   const impressionTracked         = useRef(false);
 
   const { user }    = useAuthStore();
-  const isPremium   = !!user?.plan && user.plan.toLowerCase() !== 'free';
+  const rawIsPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
   const globalConfig = useGlobalAdConfig();
+
+  // Test Mode: bypass premium check so admins can verify ads work in real devices.
+  const isPremium = rawIsPremium && !globalConfig.testMode;
 
   // ── Visibility checks ──────────────────────────────────────────────────────
   const isGlobalEnabled = globalConfig.isEnabled && globalConfig.banner.enabled;

@@ -332,7 +332,7 @@ export default function SportsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-        <ActivityIndicator />
+        <RNActivityIndicator color={colors.primary} />
       </View>
     );
   }

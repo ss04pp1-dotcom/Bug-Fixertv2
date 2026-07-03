@@ -10,7 +10,8 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { Config } from '@/constants/config';
 import { AdBanner } from '@/components/AdBanner';
-import { useChannelAdGateContext } from '@/lib/channel-ad-gate-context';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+import { useChannelAdGate } from '@/hooks/useChannelAdGate';
 
 const C = {
   bg: '#0A0A0F', card: '#13131C', primary: '#8B5CF6',
@@ -155,7 +156,10 @@ export default function SearchScreen() {
     enabled: debouncedQuery.trim().length > 1,  // API requires at least 2 chars
   });
 
-  const { requestChannel } = useChannelAdGateContext();
+  // search-screen is outside (main)/ so ChannelAdGateProvider is not available.
+  // Use the hooks directly — same pattern as channel/[id].tsx and live-player/[id].tsx.
+  const globalAdConfig = useGlobalAdConfig();
+  const { requestChannel } = useChannelAdGate(globalAdConfig);
 
   const handleSelect = useCallback((item: ResultItem) => {
     if (item.type === 'movie') router.push(`/movie/${item.id}`);
