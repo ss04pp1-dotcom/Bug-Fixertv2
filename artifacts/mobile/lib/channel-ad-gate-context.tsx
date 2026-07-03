@@ -18,7 +18,7 @@ export function ChannelAdGateProvider({ children }: { children: React.ReactNode 
   const [config, setConfig] = useState<GlobalAdConfig>(DEFAULT_GLOBAL_AD_CONFIG);
 
   useEffect(() => {
-    fetchGlobalAdConfig().then(setConfig);
+    fetchGlobalAdConfig().then(setConfig).catch((e) => console.warn('[AdGate] config fetch failed:', e));
   }, []);
 
   const gate = useChannelAdGate(config);
