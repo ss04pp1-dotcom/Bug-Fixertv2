@@ -136,23 +136,49 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
   // Try network
   try {
     const res = await fetch(`${Config.API_BASE}/ads/config`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000), // 10s — Render.com free tier can take time to wake up
     });
     if (res.ok) {
       const json = await res.json();
-      const raw =
+      const raw: Partial<GlobalAdConfig> | null =
         json?.data?.globalConfig ??
         json?.globalConfig ??
         null;
-      if (raw && typeof raw === 'object') {
-        _cachedConfig = mergeWithDefaults(raw as Partial<GlobalAdConfig>);
-        _configFetchedAt = now;
-        // Persist for offline use
-        try {
-          await AsyncStorage.setItem(KEY_CONFIG_CACHE, JSON.stringify({ config: _cachedConfig, ts: now }));
-        } catch {}
-        return _cachedConfig;
+
+      // `adsEnabled` is the top-level master toggle stored separately in AdSetting.isEnabled.
+      // It controls the whole ad system independently of the globalConfig JSON blob.
+      // Read it and fold it into the merged config so the mobile always respects the
+      // admin's master on/off switch even when globalConfig has never been explicitly saved.
+      const adsEnabled: boolean | null =
+        json?.data?.adsEnabled ??
+        json?.adsEnabled ??
+        null;
+
+      const base: Partial<GlobalAdConfig> = raw && typeof raw === 'object' ? { ...raw } : {};
+
+      // Override isEnabled with the server-side master toggle when present
+      if (typeof adsEnabled === 'boolean') {
+        base.isEnabled = adsEnabled;
+        // If ads are enabled server-side but banner.enabled was never explicitly saved
+        // in globalConfig (undefined, not false), default banner.enabled to true so
+        // house ads and HTML banners can be displayed.
+        // We must NOT override an explicit false — admin may want ads on but banner off.
+        if (adsEnabled && raw?.banner?.enabled === undefined) {
+          base.banner = {
+            ...DEFAULT_GLOBAL_AD_CONFIG.banner,
+            ...(raw?.banner ?? {}),
+            enabled: true,
+          };
+        }
       }
+
+      _cachedConfig = mergeWithDefaults(base);
+      _configFetchedAt = now;
+      // Persist for offline use
+      try {
+        await AsyncStorage.setItem(KEY_CONFIG_CACHE, JSON.stringify({ config: _cachedConfig, ts: now }));
+      } catch {}
+      return _cachedConfig;
     }
   } catch {}
 
