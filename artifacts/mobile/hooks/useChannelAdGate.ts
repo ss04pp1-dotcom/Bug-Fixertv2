@@ -1,48 +1,76 @@
+/**
+ * Global-engine-backed channel gate.
+ *
+ * On each channel switch the persistent counter is incremented and the
+ * engine decides which ad to show based on the cycle:
+ *
+ *   pos 1..slFreq-1  → nothing
+ *   pos slFreq       → Smartlink  (opens global URL in browser)
+ *   pos slFreq+1..N-1→ nothing
+ *   pos 0 (cycle end)→ VAST pre-roll (passed to live-player via route param)
+ *
+ * Per-channel isSmartlinkEnabled / smartlinkUrl / vastUrl fields are ignored —
+ * all ad config comes from GlobalAdConfig.
+ */
 import { useCallback } from 'react';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import {
+  GlobalAdConfig,
+  AdAction,
+  recordChannelSwitch,
+  trackAdEvent,
+} from '@/lib/global-ad-engine';
 
-interface ChannelParams extends Record<string, any> {
-  isSmartlinkEnabled?: boolean;
-  smartlinkUrl?: string;
-}
-
-/**
- * Gates channel playback behind an optional Monetag/Adsterra Smartlink.
- *
- * Flow:
- *  1. User taps a channel card — caller passes channel data including
- *     isSmartlinkEnabled + smartlinkUrl returned by the API.
- *  2. If isSmartlinkEnabled is true and smartlinkUrl is set, opens the
- *     Smartlink in an in-app browser (Chrome Custom Tab) via expo-web-browser.
- *  3. After the user closes the browser (or instantly if disabled), the
- *     live-player screen opens.
- *
- * Fail-safe: if WebBrowser throws for any reason, playback still proceeds
- * so a broken ad URL never blocks channel access.
- */
-export function useChannelAdGate() {
+export function useChannelAdGate(config: GlobalAdConfig) {
   const requestChannel = useCallback(
-    async (id: string, params?: ChannelParams) => {
-      const { isSmartlinkEnabled, smartlinkUrl, ...playerParams } = params ?? {};
+    async (id: string, params?: Record<string, any>) => {
+      // Strip out legacy per-channel ad fields so they don't pollute route params
+      const {
+        isSmartlinkEnabled: _sl,
+        smartlinkUrl: _slUrl,
+        vastUrl: _va,
+        bannerHtmlCode: _ba,
+        ...playerParams
+      } = params ?? {};
 
-      if (isSmartlinkEnabled && smartlinkUrl) {
+      let action: AdAction = null;
+      try {
+        action = await recordChannelSwitch(config);
+      } catch {}
+
+      // ── Smartlink ──────────────────────────────────────────────────────────
+      if (action === 'smartlink' && config.smartlink.url) {
+        if (config.smartlink.delaySeconds > 0) {
+          await new Promise<void>(r => setTimeout(r, config.smartlink.delaySeconds * 1000));
+        }
         try {
-          await WebBrowser.openBrowserAsync(smartlinkUrl, {
+          await WebBrowser.openBrowserAsync(config.smartlink.url, {
             presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
             showTitle: false,
             enableBarCollapsing: true,
           });
-        } catch {
-        }
+          trackAdEvent('impression', 'smartlink');
+        } catch {}
       }
 
+      // ── Navigate to player ─────────────────────────────────────────────────
+      // If VAST was selected, pass the URL and skip config as route params so
+      // the live-player screen shows the pre-roll before opening the stream.
       router.push({
         pathname: `/live-player/${id}` as any,
-        params: playerParams,
+        params: {
+          ...playerParams,
+          ...(action === 'vast' && config.vast.url
+            ? {
+                globalVastUrl:  config.vast.url,
+                globalVastSkip: String(config.vast.skipAfterSeconds ?? 5),
+              }
+            : {}),
+        },
       });
     },
-    [],
+    [config],
   );
 
   return { requestChannel };

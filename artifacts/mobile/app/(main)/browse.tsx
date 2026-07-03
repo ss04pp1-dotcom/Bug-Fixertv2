@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMovies, useSeriesList, useCategories } from '@/lib/api-hooks';
+import { AdBanner } from '@/components/AdBanner';
 import { Config } from '@/constants/config';
 
 const C = {
@@ -170,6 +171,8 @@ export default function BrowseScreen() {
           </Pressable>
         </View>
       </View>
+
+      <AdBanner placement="browse-banner" style={{ marginBottom: 4 }} />
 
       {/* Top Tabs */}
       <View style={s.tabContainer}>

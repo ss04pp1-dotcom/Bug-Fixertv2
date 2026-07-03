@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannel, useToggleFavorite, useFavorites } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 import { useChannelAdGate } from '@/hooks/useChannelAdGate';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 
 const C = {
   bg: '#0A0A0F',
@@ -45,11 +46,10 @@ export default function ChannelDetailScreen() {
   const { data: favorites } = useFavorites();
   const toggleFav = useToggleFavorite();
 
-  // Smartlink gate — opens the configured Smartlink URL in an in-app browser
-  // before navigating to the live player (if isSmartlinkEnabled is true).
-  // Use the hook directly here because this screen lives outside the (main)
-  // route group and therefore outside ChannelAdGateProvider's scope.
-  const channelGate = useChannelAdGate();
+  // Global ad gate — uses the global frequency engine (not per-channel config).
+  // This screen lives outside the (main) group so we use the hooks directly.
+  const globalConfig = useGlobalAdConfig();
+  const channelGate  = useChannelAdGate(globalConfig);
 
   // M-027: derive favorite state from server data instead of always sending 'add'.
   const isFav = useMemo(() => (favorites || []).some((f: any) => f.id === id), [favorites, id]);
@@ -58,13 +58,10 @@ export default function ChannelDetailScreen() {
     if (!channel) return;
     const ch = channel as any;
     channelGate.requestChannel(ch.id || (id as string), {
-      title:              ch.name || '',
-      streamUrl:          ch.primaryStreamUrl || ch.streamUrl || '',
-      logo:               ch.logoUrl || ch.logo || '',
-      cat:                getCategoryName(ch.category),
-      // Pass smartlink fields so the gate hook can open the Smartlink before playback
-      isSmartlinkEnabled: ch.isSmartlinkEnabled === true,
-      smartlinkUrl:       ch.smartlinkUrl || '',
+      title:     ch.name || '',
+      streamUrl: ch.primaryStreamUrl || ch.streamUrl || '',
+      logo:      ch.logoUrl || ch.logo || '',
+      cat:       getCategoryName(ch.category),
     });
   };
 

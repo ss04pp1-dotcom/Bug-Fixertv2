@@ -122,10 +122,6 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
   const tvgRef       = useRef<HTMLInputElement>(null);
   const catRef       = useRef<HTMLSelectElement>(null);
   const [editLogo, setEditLogo] = useState("");
-  const [isSmartlinkEnabled, setIsSmartlinkEnabled] = useState(false);
-  const smartlinkUrlRef  = useRef<HTMLInputElement>(null);
-  const vastUrlRef       = useRef<HTMLInputElement>(null);
-  const bannerHtmlRef    = useRef<HTMLTextAreaElement>(null);
 
   // ── Override state ────────────────────────────────────────────────────────
   const [overrideName,   setOverrideName]   = useState("");
@@ -170,7 +166,7 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
       const ch: ChannelDetail = chRes.data?.data ?? chRes.data;
       setDetail(ch);
       setEditLogo(ch.logo ?? "");
-      setIsSmartlinkEnabled(ch.isSmartlinkEnabled ?? false);
+
       setOverrideName(ch.adminNameOverride ?? "");
       setOverrideLogo(ch.adminLogoOverride ?? "");
       setOverrideCatId(ch.adminCategoryIdOverride ?? "");
@@ -200,10 +196,6 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
         epgChannelId:       tvgRef.current?.value || null,
         categoryId:         catRef.current?.value || null,
         logo:               editLogo || null,
-        isSmartlinkEnabled,
-        smartlinkUrl:       smartlinkUrlRef.current?.value?.trim() || null,
-        vastUrl:            vastUrlRef.current?.value?.trim() || null,
-        bannerHtmlCode:     bannerHtmlRef.current?.value?.trim() || null,
       });
       await loadDetail();
       onSaved();
@@ -516,58 +508,16 @@ export function ChannelDetailModal({ channelId, categories, onClose, onSaved }: 
                   />
 
                   {/* ── Ad Monetization ── */}
-                  <div className="border-t border-border pt-4 space-y-3">
-                    <p className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wide">Ad Monetization</p>
-
-                    {/* Smartlink toggle */}
-                    <div className="flex items-center justify-between px-3 py-2.5 bg-background/60 border border-border rounded-lg">
-                      <div>
-                        <p className="text-sm text-white font-medium">Smartlink Gate</p>
-                        <p className="text-xs text-[#8B92A5]">Open a Smartlink in the browser before the channel loads</p>
+                  <div className="border-t border-border pt-4">
+                    <div className="flex items-start gap-3 px-3 py-3 bg-primary/8 border border-primary/20 rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-white/80 mb-0.5">Ad Monetization — Global Rule Engine</p>
+                        <p className="text-xs text-white/45 leading-relaxed">
+                          Smartlink, VAST, and Banner settings are now managed globally for all channels.
+                          Configure them in{' '}
+                          <span className="text-primary font-medium">Advertisements → Global Settings</span>.
+                        </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsSmartlinkEnabled(v => !v)}
-                        className="flex-shrink-0 ml-4"
-                      >
-                        {isSmartlinkEnabled
-                          ? <ToggleRight size={28} className="text-primary" />
-                          : <ToggleLeft  size={28} className="text-[#8B92A5]" />}
-                      </button>
-                    </div>
-
-                    {/* Smartlink URL */}
-                    <div>
-                      <label className="text-xs text-[#8B92A5] mb-1.5 block">Smartlink URL</label>
-                      <input
-                        ref={smartlinkUrlRef}
-                        defaultValue={detail.smartlinkUrl ?? ""}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary font-mono text-xs"
-                        placeholder="https://example.com/smartlink"
-                      />
-                    </div>
-
-                    {/* VAST URL */}
-                    <div>
-                      <label className="text-xs text-[#8B92A5] mb-1.5 block">VAST Ad URL</label>
-                      <input
-                        ref={vastUrlRef}
-                        defaultValue={detail.vastUrl ?? ""}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary font-mono text-xs"
-                        placeholder="https://example.com/vast.xml"
-                      />
-                    </div>
-
-                    {/* Banner HTML */}
-                    <div>
-                      <label className="text-xs text-[#8B92A5] mb-1.5 block">Banner HTML Code (Adsterra / Monetag)</label>
-                      <textarea
-                        ref={bannerHtmlRef}
-                        defaultValue={detail.bannerHtmlCode ?? ""}
-                        rows={4}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-primary font-mono resize-none"
-                        placeholder="<script>/* paste banner script here */</script>"
-                      />
                     </div>
                   </div>
                 </div>

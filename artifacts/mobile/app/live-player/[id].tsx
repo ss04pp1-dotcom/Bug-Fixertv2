@@ -78,9 +78,13 @@ export default function LivePlayerScreen() {
     streamUrl: passedUrl,
     logo: passedLogo,
     cat: passedCat,
+    globalVastUrl,
+    globalVastSkip,
   } = useLocalSearchParams<{
     id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
+    globalVastUrl?: string; globalVastSkip?: string;
   }>();
+  const vastSkipSec = globalVastSkip ? parseInt(globalVastSkip, 10) : 5;
 
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
@@ -99,15 +103,10 @@ export default function LivePlayerScreen() {
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
   const openPlayer = useGlobalPlayer((s) => s.open);
 
-  // ── Ad monetization state ──────────────────────────────────────────────────
-  // vastUrl and bannerHtmlCode are fetched from the channel API response.
-  // vastDone tracks whether the pre-roll has been shown for this channel visit
-  // so it doesn't re-trigger on re-renders.
-  const [channelVastUrl, setChannelVastUrl]     = useState<string | null>(null);
-  const [channelBannerHtml, setChannelBannerHtml] = useState<string | null>(null);
-  const [vastDone, setVastDone]                 = useState(false);
-  // Ref so the openPlayer effect can read the latest value without re-running
-  const vastDoneRef = useRef(false);
+  // ── VAST pre-roll state ────────────────────────────────────────────────────
+  // globalVastUrl comes from route params (set by the global ad engine before
+  // navigation). vastDone prevents re-showing after the user skips/completes.
+  const [vastDone, setVastDone] = useState(false);
 
   // ── Current channel metadata (for related-channel ranking) ────────────────
   const [currentCatId, setCurrentCatId]     = useState<string | null>(null);
@@ -205,11 +204,6 @@ export default function LivePlayerScreen() {
   // ── Load stream URL ────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
     setFetchLoad(true); setFetchError(false); setSources([]);
-    // Reset ad state for new channel load
-    setChannelVastUrl(null);
-    setChannelBannerHtml(null);
-    setVastDone(false);
-    vastDoneRef.current = false;
 
     try {
       let ch: any = null;
@@ -244,12 +238,6 @@ export default function LivePlayerScreen() {
       setCurrentCatName(ch?.category?.name || ch?.category || passedCat || null);
       setCurrentLang((ch?.language || '').trim().toLowerCase() || null);
 
-      // Extract ad monetization fields from channel response
-      const vastUrl = ch?.vastUrl || null;
-      const bannerHtml = ch?.bannerHtmlCode || null;
-      setChannelVastUrl(vastUrl);
-      setChannelBannerHtml(bannerHtml);
-
       const srcs = buildSources(ch, passedUrl || undefined);
       if (srcs.length === 0) setFetchError(true);
       else setSources(srcs);
@@ -271,9 +259,9 @@ export default function LivePlayerScreen() {
   // the player so the ad plays in silence and the channel doesn't start yet.
   useEffect(() => {
     if (sources.length === 0) return;
-    // If a VAST url is configured and we haven't finished showing it yet,
-    // hold off — VastPlayer will call handleVastComplete which sets vastDone.
-    if (channelVastUrl && !vastDone) return;
+    // If VAST was triggered by the global ad engine (globalVastUrl in route params),
+    // hold off until the pre-roll finishes before opening the stream player.
+    if (globalVastUrl && !vastDone) return;
 
     openPlayer({
       title: contentTitle,
@@ -285,11 +273,10 @@ export default function LivePlayerScreen() {
       startInTop: true,
       playerRoute: `/live-player/${id}`,
     });
-  }, [sources, channelVastUrl, vastDone, contentTitle, logoUrl, id, openPlayer]);
+  }, [sources, globalVastUrl, vastDone, contentTitle, logoUrl, id, openPlayer]);
 
   // ── VAST pre-roll complete handler ─────────────────────────────────────────
   const handleVastComplete = useCallback(() => {
-    vastDoneRef.current = true;
     setVastDone(true);
   }, []);
 
@@ -365,18 +352,19 @@ export default function LivePlayerScreen() {
   //  • Sources are ready (we know what to play next)
   //  • This channel has a vastUrl configured
   //  • We haven't already shown it this visit
-  const showVast = sources.length > 0 && !!channelVastUrl && !vastDone;
+  // VAST is triggered by the global ad engine — the URL arrives via route params.
+  const showVast = sources.length > 0 && !!globalVastUrl && !vastDone;
 
   return (
     <View style={s.root}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* VAST pre-roll — shown as a fullscreen modal before the main stream starts */}
+      {/* VAST pre-roll — fullscreen modal driven by global ad engine */}
       {showVast && (
         <VastPlayer
-          vastUrl={channelVastUrl}
+          vastUrl={globalVastUrl as string}
           onComplete={handleVastComplete}
-          defaultSkipSec={5}
+          defaultSkipSec={vastSkipSec}
         />
       )}
 

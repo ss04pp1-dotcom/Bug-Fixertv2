@@ -162,6 +162,27 @@ export default function LiveTVScreen() {
   // Server handles both search and category filtering — no client-side filter needed
   const filtered = allChannels;
 
+  // ── Chunked grid rows (enables banner injection between channel rows) ────────
+  type RowItem =
+    | { kind: 'ch-row'; chs: ReturnType<typeof mapChannel>[]; key: string }
+    | { kind: 'banner'; key: string };
+
+  const bannerEnabled    = globalConfig.banner.enabled && globalConfig.banner.positions.channelGrid;
+  const bannerEveryNRows = Math.max(1, Math.ceil((globalConfig.banner.positions.channelGridFrequency || 6) / COLS));
+
+  const chunkedFiltered = useMemo<RowItem[]>(() => {
+    const rows: RowItem[] = [];
+    let chRowCount = 0;
+    for (let i = 0; i < filtered.length; i += COLS) {
+      rows.push({ kind: 'ch-row', chs: filtered.slice(i, i + COLS), key: `row-${i}` });
+      chRowCount++;
+      if (bannerEnabled && chRowCount % bannerEveryNRows === 0) {
+        rows.push({ kind: 'banner', key: `banner-${i}` });
+      }
+    }
+    return rows;
+  }, [filtered, bannerEnabled, bannerEveryNRows]);
+
   // Reset active tab to 'All' if its category disappears from the list
   useEffect(() => {
     if (activeTab !== 'All' && tabs.length > 1 && !tabs.includes(activeTab)) setActiveTab('All');
@@ -177,24 +198,43 @@ export default function LiveTVScreen() {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const channelGate = useChannelAdGateContext();
+  const { requestChannel, globalConfig } = useChannelAdGateContext();
   const handleSelectChannel = useCallback((item: ReturnType<typeof mapChannel>) => {
-    channelGate.requestChannel(item.id, {
-      title: item.name,
-      logo: item.logo,
-      cat: item.cat,
+    requestChannel(item.id, {
+      title:     item.name,
+      logo:      item.logo,
+      cat:       item.cat,
       streamUrl: item.streamUrl,
-      isSmartlinkEnabled: item.isSmartlinkEnabled,
-      smartlinkUrl: item.smartlinkUrl,
     });
-  }, [channelGate]);
+  }, [requestChannel]);
 
-  // numColumns must be stable — don't pass dynamic value
-  const renderItem = useCallback(({ item }: { item: ReturnType<typeof mapChannel> }) => (
-    <ChannelCard item={item} onSelect={handleSelectChannel} />
-  ), [handleSelectChannel]);
+  const renderRow = useCallback(({ item }: { item: RowItem }) => {
+    if (item.kind === 'banner') {
+      return (
+        <AdBanner
+          placement="channel-grid-banner"
+          htmlCode={globalConfig.banner.enabled && globalConfig.banner.htmlCode ? globalConfig.banner.htmlCode : undefined}
+          style={{ marginBottom: COL_GAP }}
+        />
+      );
+    }
+    return (
+      <View style={{ flexDirection: 'row', gap: COL_GAP, marginBottom: COL_GAP }}>
+        {item.chs.map(ch => (
+          <ChannelCard key={ch.id} item={ch} onSelect={handleSelectChannel} />
+        ))}
+        {item.chs.length < COLS && Array.from({ length: COLS - item.chs.length }, (_, j) => (
+          <View key={`empty-${j}`} style={{ width: CARD_W }} />
+        ))}
+      </View>
+    );
+  }, [handleSelectChannel, globalConfig.banner.enabled, globalConfig.banner.htmlCode]);
 
-  const renderSkeleton = useCallback(({ item }: any) => <SkeletonCard />, []);
+  const renderSkelRow = useCallback(() => (
+    <View style={{ flexDirection: 'row', gap: COL_GAP, marginBottom: COL_GAP }}>
+      <SkeletonCard /><SkeletonCard /><SkeletonCard />
+    </View>
+  ), []);
 
   const ListFooter = useMemo(() => {
     if (isFetchingNextPage) return (
@@ -290,12 +330,10 @@ export default function LiveTVScreen() {
       {/* ── Grid content ───────────────────────────────────────── */}
       {isLoading ? (
         <FlatList
-          data={[1, 2, 3, 4, 5, 6, 7, 8, 9, 12]}
-          keyExtractor={i => String(i)}
-          numColumns={COLS}
-          renderItem={renderSkeleton}
+          data={[0, 1, 2]}
+          keyExtractor={i => `skel-${i}`}
+          renderItem={renderSkelRow}
           contentContainerStyle={s.gridContent}
-          columnWrapperStyle={s.columnWrapper}
           showsVerticalScrollIndicator={false}
         />
       ) : filtered.length === 0 ? (
@@ -323,15 +361,13 @@ export default function LiveTVScreen() {
         </View>
       ) : (
         <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          numColumns={COLS}
-          renderItem={renderItem}
+          data={chunkedFiltered}
+          keyExtractor={item => item.key}
+          renderItem={renderRow}
           contentContainerStyle={s.gridContent}
-          columnWrapperStyle={s.columnWrapper}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={18}
-          maxToRenderPerBatch={30}
+          initialNumToRender={6}
+          maxToRenderPerBatch={10}
           windowSize={10}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}

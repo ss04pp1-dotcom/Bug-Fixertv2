@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLiveMatches, useUpcomingMatches, useMatches, useToggleMatchAlert } from '@/lib/api-hooks';
+import { AdBanner } from '@/components/AdBanner';
 import { Config } from '@/constants/config';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -251,6 +252,8 @@ export default function SportsScreen() {
           />
         </View>
       )}
+
+      <AdBanner placement="sports-banner" style={{ marginBottom: 4 }} />
 
       {/* Top Tabs */}
       <View style={s.tabScrollContainer}>

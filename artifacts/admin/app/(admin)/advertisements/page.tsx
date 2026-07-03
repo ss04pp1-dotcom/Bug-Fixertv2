@@ -1,769 +1,739 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/axios-client";
+import { toast } from "sonner";
 import {
-  BarChart2, TrendingUp, DollarSign, Eye, RefreshCw, Plus,
-  Zap, Check, Tv, Link2, Play, Code2, ExternalLink, Search,
-  ChevronRight, Shield, Wifi, BookOpen, Trash2, Save,
+  Link2, Play, Image as ImageIcon, BarChart2, Megaphone,
+  Settings, Zap, RefreshCw, Save, Plus, Trash2,
+  ToggleLeft, ToggleRight, Eye, MousePointer, DollarSign,
+  Tv, Home, Film, Search, Layers, Trophy,
 } from "lucide-react";
-import { useApi, useApiCallState } from "@/lib/use-api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "channel-ads" | "house-ads" | "analytics";
-
-interface Channel {
-  id: string;
-  name: string;
-  logoUrl?: string;
-  logo?: string;
-  isSmartlinkEnabled?: boolean;
-  smartlinkUrl?: string;
-  vastUrl?: string;
-  bannerHtmlCode?: string;
-  category?: { name: string } | string;
-  isActive?: boolean;
+interface SmartlinkConfig {
+  enabled: boolean; url: string; frequency: number;
+  delaySeconds: number; cooldownMinutes: number;
 }
-
-interface ChannelsResponse {
-  data?: Channel[];
-  items?: Channel[];
+interface VastConfig {
+  enabled: boolean; url: string; skipAfterSeconds: number;
+  frequency: number; timeoutSeconds: number;
 }
-
-interface AdAnalytics {
-  summary: { totalImpressions: number; totalClicks: number; ctr: string; totalRevenue: number; ecpm: string };
-  byPlacement: { placement: string; _sum: { revenue: number; impressions: number; clicks: number } }[];
+interface BannerPositions {
+  home: boolean; player: boolean; playerPosition: string;
+  categories: boolean; movies: boolean; sports: boolean;
+  search: boolean; channelGrid: boolean; channelGridFrequency: number;
 }
-
+interface BannerConfig {
+  enabled: boolean; htmlCode: string; height: number;
+  positions: BannerPositions;
+}
+interface GlobalAdConfig {
+  isEnabled: boolean; testMode: boolean;
+  smartlink: SmartlinkConfig; vast: VastConfig; banner: BannerConfig;
+}
 interface HouseAd {
   id: string; title: string; type?: string; isActive?: boolean;
-  imageUrl?: string; targetUrl?: string; createdAt?: string;
+  imageUrl?: string; targetUrl?: string; htmlCode?: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Default config ───────────────────────────────────────────────────────────
 
-function fmtNum(n?: number) {
-  if (n == null) return "0";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-function fmtMoney(dollars?: number) {
-  if (!dollars) return "$0";
-  return `$${dollars.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-function getCatName(cat?: Channel["category"]): string {
-  if (!cat) return "—";
-  if (typeof cat === "string") return cat;
-  return cat.name ?? "—";
-}
+const DEFAULT: GlobalAdConfig = {
+  isEnabled: true,
+  testMode: false,
+  smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30 },
+  vast:      { enabled: false, url: '', skipAfterSeconds: 5, frequency: 3, timeoutSeconds: 10 },
+  banner: {
+    enabled: false, htmlCode: '', height: 90,
+    positions: {
+      home: true, player: true, playerPosition: 'below',
+      categories: false, movies: true, sports: false,
+      search: false, channelGrid: false, channelGridFrequency: 6,
+    },
+  },
+};
 
-// ─── AdTypeBadge ─────────────────────────────────────────────────────────────
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 
-function AdTypeBadge({ active, icon: Icon, label, color }: {
-  active: boolean; icon: React.ElementType; label: string; color: string;
-}) {
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <span className={cn(
-      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border",
-      active ? color : "border-white/8 text-white/25 bg-transparent",
-    )}>
-      <Icon size={9} />
-      {label}
-    </span>
-  );
-}
-
-// ─── Toggle ──────────────────────────────────────────────────────────────────
-
-function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      className={cn(
-        "w-10 h-5 rounded-full flex items-center px-0.5 transition-colors duration-200",
-        on ? "bg-primary" : "bg-white/10",
-        disabled && "opacity-40 pointer-events-none",
-      )}
-    >
-      <div className={cn("w-4 h-4 rounded-full bg-white transition-transform duration-200", on ? "translate-x-5" : "translate-x-0")} />
+    <button type="button" onClick={() => onChange(!on)} className="flex-shrink-0">
+      {on
+        ? <ToggleRight size={26} className="text-primary" />
+        : <ToggleLeft  size={26} className="text-white/25" />}
     </button>
   );
 }
 
-// ─── Stat card ───────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub, icon: Icon, gradient, loading }: {
-  label: string; value: string | number; sub?: string;
-  icon: React.ElementType; gradient: string; loading?: boolean;
-}) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4">
-      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center mb-3 bg-gradient-to-br", gradient)}>
-        <Icon size={16} className="text-white" />
-      </div>
-      <div className="text-xl font-bold text-white">{loading ? "…" : value}</div>
-      <div className="text-xs text-[#8B92A5] mt-0.5">{label}</div>
-      {sub && <div className="text-[10px] text-[#8B92A5] mt-1">{sub}</div>}
+    <div>
+      <label className="text-xs font-semibold text-white/45 uppercase tracking-wide mb-1.5 block">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-white/25 mt-1">{hint}</p>}
     </div>
   );
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+function TextInput({ value, onChange, placeholder, type = "text", mono }: {
+  value: string | number; onChange: (v: string) => void;
+  placeholder?: string; type?: string; mono?: boolean;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={cn(
+        "w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2.5 text-sm text-white",
+        "outline-none focus:border-primary/50 transition-colors",
+        mono && "font-mono text-xs",
+      )}
+    />
+  );
+}
 
-export default function Advertisements() {
-  const [tab, setTab]           = useState<Tab>("overview");
-  const [search, setSearch]     = useState("");
-  const [filter, setFilter]     = useState<"all" | "smartlink" | "vast" | "banner" | "none">("all");
+function Section({ title, icon: Icon, children, accent = "bg-primary/15" }: {
+  title: string; icon: React.ElementType; children: React.ReactNode; accent?: string;
+}) {
+  return (
+    <div className="bg-[#13131C] border border-white/8 rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2.5">
+        <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center", accent)}>
+          <Icon size={14} className="text-white/80" />
+        </div>
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
 
-  // House ad quick-create
-  const [quickForm, setQuickForm]   = useState({ title: "", imageUrl: "", targetUrl: "", type: "interstitial" });
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [quickResult, setQuickResult] = useState<{ ok: boolean; msg: string } | null>(null);
+function ToggleRow({ label, hint, value, onChange }: {
+  label: string; hint?: string; value: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1">
+      <div>
+        <p className="text-sm text-white">{label}</p>
+        {hint && <p className="text-xs text-white/35 mt-0.5">{hint}</p>}
+      </div>
+      <Toggle on={value} onChange={onChange} />
+    </div>
+  );
+}
 
-  // Analytics seed/reset
-  const [seedLoading, setSeedLoading]   = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const [seedResult, setSeedResult]     = useState<string | null>(null);
+function StatCard({ label, value, icon: Icon, color }: {
+  label: string; value: string | number; icon: React.ElementType; color: string;
+}) {
+  return (
+    <div className="bg-[#13131C] border border-white/8 rounded-xl p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <Icon size={14} className={color} />
+        <span className="text-xs text-white/40 uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
 
-  const { call, loading: mutating } = useApiCallState();
+// ─── Tab type ────────────────────────────────────────────────────────────────
 
-  // ── Data fetching ──────────────────────────────────────────────────────────
+type Tab = "global" | "frequency" | "banners" | "analytics" | "house-ads";
 
-  const { data: channelsRaw, isLoading: chLoading, refetch: refetchCh } =
-    useApi<Channel[] | ChannelsResponse>("/v1/channels?limit=500&isActive=true");
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
-  const { data: houseAdsRaw, isLoading: houseLoading, refetch: refetchHouse } =
-    useApi<HouseAd[] | { data?: HouseAd[] }>("/v1/advertisements");
+export default function AdvertisementsPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("global");
+  const [config, setConfig]       = useState<GlobalAdConfig>(DEFAULT);
+  const [saving, setSaving]       = useState(false);
+  const [houseAds, setHouseAds]   = useState<HouseAd[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
 
-  const { data: analytics, isLoading: analyticsLoading, refetch: refetchAnalytics } =
-    useApi<AdAnalytics>("/v1/advertisements/analytics");
+  // New house-ad form state
+  const [newTitle,      setNewTitle]      = useState('');
+  const [newType,       setNewType]       = useState('banner');
+  const [newTargetUrl,  setNewTargetUrl]  = useState('');
+  const [newHtml,       setNewHtml]       = useState('');
+  const [creatingAd,    setCreatingAd]    = useState(false);
 
-  // Normalise channels
-  const channels: Channel[] = (() => {
-    if (!channelsRaw) return [];
-    if (Array.isArray(channelsRaw)) return channelsRaw;
-    const r = channelsRaw as ChannelsResponse;
-    return r.data ?? r.items ?? [];
-  })();
+  // ── Shorthand updaters ────────────────────────────────────────────────────
 
-  // Normalise house ads
-  const houseAds: HouseAd[] = (() => {
-    if (!houseAdsRaw) return [];
-    if (Array.isArray(houseAdsRaw)) return houseAdsRaw;
-    return (houseAdsRaw as { data?: HouseAd[] }).data ?? [];
-  })();
+  const setSL  = (fn: (s: SmartlinkConfig)  => SmartlinkConfig)  =>
+    setConfig(c => ({ ...c, smartlink: fn(c.smartlink) }));
+  const setVA  = (fn: (v: VastConfig)       => VastConfig)       =>
+    setConfig(c => ({ ...c, vast:      fn(c.vast)      }));
+  const setBN  = (fn: (b: BannerConfig)     => BannerConfig)     =>
+    setConfig(c => ({ ...c, banner:    fn(c.banner)    }));
+  const setBNP = (fn: (p: BannerPositions)  => BannerPositions)  =>
+    setBN(b => ({ ...b, positions: fn(b.positions) }));
 
-  const summary    = analytics?.summary;
-  const byPlacement = analytics?.byPlacement ?? [];
-  const barMax = byPlacement.length ? Math.max(...byPlacement.map(p => p._sum?.revenue ?? 0), 1) : 1;
+  // ── Load data ─────────────────────────────────────────────────────────────
 
-  // ── Derived stats ──────────────────────────────────────────────────────────
-  const total          = channels.length;
-  const withSmartlink  = channels.filter(c => c.isSmartlinkEnabled).length;
-  const withVast       = channels.filter(c => !!c.vastUrl).length;
-  const withBanner     = channels.filter(c => !!c.bannerHtmlCode).length;
-  const withAny        = channels.filter(c => c.isSmartlinkEnabled || !!c.vastUrl || !!c.bannerHtmlCode).length;
-  const withNone       = total - withAny;
+  useEffect(() => {
+    // Global ad config
+    apiClient.get('/v1/ads/config').then(res => {
+      const gc = res.data?.data?.globalConfig ?? res.data?.globalConfig;
+      if (gc && typeof gc === 'object') {
+        setConfig(prev => ({
+          ...prev, ...gc,
+          smartlink: { ...prev.smartlink, ...(gc.smartlink ?? {}) },
+          vast:      { ...prev.vast,      ...(gc.vast      ?? {}) },
+          banner: {
+            ...prev.banner, ...(gc.banner ?? {}),
+            positions: { ...prev.banner.positions, ...(gc.banner?.positions ?? {}) },
+          },
+        }));
+      }
+    }).catch(() => {});
 
-  // ── Filtered channel list ──────────────────────────────────────────────────
-  const filtered = channels.filter(c => {
-    const q = search.toLowerCase();
-    if (q && !c.name.toLowerCase().includes(q)) return false;
-    if (filter === "smartlink") return c.isSmartlinkEnabled;
-    if (filter === "vast")      return !!c.vastUrl;
-    if (filter === "banner")    return !!c.bannerHtmlCode;
-    if (filter === "none")      return !c.isSmartlinkEnabled && !c.vastUrl && !c.bannerHtmlCode;
-    return true;
-  });
+    // House ads
+    apiClient.get('/v1/advertisements?limit=100').then(res => {
+      const raw = res.data?.data?.data ?? res.data?.data ?? res.data;
+      setHouseAds(Array.isArray(raw) ? raw : []);
+    }).catch(() => {});
 
-  // ── House ad actions ───────────────────────────────────────────────────────
-  const handleQuickSave = async () => {
-    if (!quickForm.title.trim()) { setQuickResult({ ok: false, msg: "Title is required" }); return; }
-    setQuickSaving(true); setQuickResult(null);
+    // Analytics
+    apiClient.get('/v1/advertisements/analytics').then(res => {
+      setAnalytics(res.data?.data ?? res.data);
+    }).catch(() => {});
+  }, []);
+
+  // ── Save ─────────────────────────────────────────────────────────────────
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
     try {
-      await call("post", "/v1/advertisements", {
-        title: quickForm.title.trim(),
-        imageUrl: quickForm.imageUrl.trim() || undefined,
-        targetUrl: quickForm.targetUrl.trim() || undefined,
-        type: quickForm.type,
-        isActive: true,
-      });
-      setQuickResult({ ok: true, msg: "House ad created ✓" });
-      setQuickForm({ title: "", imageUrl: "", targetUrl: "", type: "interstitial" });
-      refetchHouse();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.message ?? "Failed";
-      setQuickResult({ ok: false, msg: Array.isArray(msg) ? msg.join(", ") : String(msg) });
-    } finally { setQuickSaving(false); }
-  };
-
-  const handleToggleHouseAd = async (id: string, isActive: boolean) => {
-    await call("put", `/v1/advertisements/${id}`, { isActive: !isActive });
-    refetchHouse();
-  };
-
-  const handleDeleteHouseAd = async (id: string) => {
-    if (!confirm("Delete this house ad?")) return;
-    await call("delete", `/v1/advertisements/${id}`);
-    refetchHouse();
-  };
-
-  // ── Analytics actions ──────────────────────────────────────────────────────
-  const handleSeedDemo = async () => {
-    setSeedLoading(true); setSeedResult(null);
-    const res = await call("post", "/v1/advertisements/analytics/seed-demo", {});
-    setSeedLoading(false);
-    if (res && typeof res === "object") {
-      const r = res as { revenueRowsInserted?: number; eventRowsInserted?: number; daysSeeded?: number };
-      setSeedResult(`✓ Seeded ${(r.revenueRowsInserted ?? 0).toLocaleString()} revenue rows + ${(r.eventRowsInserted ?? 0).toLocaleString()} events across ${r.daysSeeded ?? 0} days`);
+      await apiClient.put('/v1/ads/global-config', config);
+      toast.success('Ad configuration saved');
+    } catch {
+      toast.error('Failed to save configuration');
+    } finally {
+      setSaving(false);
     }
-    refetchAnalytics();
-  };
+  }, [config]);
 
-  const handleResetAnalytics = async () => {
-    if (!confirm("Permanently delete ALL analytics data? This cannot be undone.")) return;
-    setResetLoading(true); setSeedResult(null);
-    const res = await call("delete", "/v1/advertisements/analytics/reset");
-    setResetLoading(false);
-    if (res && typeof res === "object") {
-      const r = res as { deletedEvents?: number };
-      setSeedResult(`🗑 Reset — deleted ${(r.deletedEvents ?? 0).toLocaleString()} events`);
-    }
-    refetchAnalytics();
-  };
+  // ── House Ads CRUD ────────────────────────────────────────────────────────
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: "overview",    label: "Overview"     },
-    { id: "channel-ads", label: "Channel Ads"  },
-    { id: "house-ads",   label: "House Ads"    },
-    { id: "analytics",   label: "Analytics"    },
+  const handleCreateAd = useCallback(async () => {
+    if (!newTitle.trim()) return;
+    setCreatingAd(true);
+    try {
+      const body: any = { title: newTitle.trim(), type: newType, isActive: true };
+      if (newTargetUrl) body.targetUrl = newTargetUrl.trim();
+      if (newHtml)      body.htmlCode  = newHtml.trim();
+      const res = await apiClient.post('/v1/advertisements', body);
+      const ad  = res.data?.data ?? res.data;
+      if (ad?.id) setHouseAds(prev => [ad, ...prev]);
+      setNewTitle(''); setNewTargetUrl(''); setNewHtml('');
+      toast.success('House ad created');
+    } catch { toast.error('Failed to create ad'); }
+    finally { setCreatingAd(false); }
+  }, [newTitle, newType, newTargetUrl, newHtml]);
+
+  const handleDeleteAd = useCallback(async (id: string) => {
+    try {
+      await apiClient.delete(`/v1/advertisements/${id}`);
+      setHouseAds(prev => prev.filter(a => a.id !== id));
+    } catch { toast.error('Failed to delete'); }
+  }, []);
+
+  const handleToggleAd = useCallback(async (id: string, active: boolean) => {
+    try {
+      await apiClient.patch(`/v1/advertisements/${id}`, { isActive: active });
+      setHouseAds(prev => prev.map(a => a.id === id ? { ...a, isActive: active } : a));
+    } catch { toast.error('Failed to update'); }
+  }, []);
+
+  // ── Cycle preview values ──────────────────────────────────────────────────
+
+  const slFreq   = Math.max(1, config.smartlink.frequency);
+  const vaFreq   = Math.max(1, config.vast.frequency);
+  const cycleLen = slFreq + vaFreq;
+
+  // ── Tab config ────────────────────────────────────────────────────────────
+
+  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'global',    label: 'Global Settings',  icon: Settings  },
+    { id: 'frequency', label: 'Frequency Rules',  icon: Zap       },
+    { id: 'banners',   label: 'Banner Positions', icon: Layers    },
+    { id: 'analytics', label: 'Analytics',        icon: BarChart2 },
+    { id: 'house-ads', label: 'House Ads',        icon: Megaphone },
   ];
 
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
-    <>
-      {/* ── HEADER ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-[13px] border-b border-border">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-bold text-white">Ad Monetization</h1>
-          {(chLoading || analyticsLoading) && <RefreshCw size={12} className="text-[#8B92A5] animate-spin" />}
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-semibold border border-violet-500/20">
-            SDK-Free · Per-Channel
-          </span>
+    <div className="min-h-screen bg-[#0A0B0F] text-white">
+
+      {/* ── Sticky header ──────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 bg-[#0A0B0F]/95 backdrop-blur-sm border-b border-white/8">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold">Ad Monetization</h1>
+            <p className="text-xs text-white/35 mt-0.5">
+              Global Rule Engine — configure once for all channels
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Master enable */}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/4 border border-white/8">
+              <span className="text-xs text-white/50">Ads Enabled</span>
+              <Toggle on={config.isEnabled} onChange={v => setConfig(c => ({ ...c, isEnabled: v }))} />
+            </div>
+            {/* Test mode */}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-400/8 border border-amber-400/20">
+              <span className="text-xs text-amber-400">Test Mode</span>
+              <Toggle on={config.testMode} onChange={v => setConfig(c => ({ ...c, testMode: v }))} />
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+            >
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+              Save Changes
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => { refetchCh(); refetchAnalytics(); refetchHouse(); }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs text-[#8B92A5] hover:text-white hover:bg-white/5"
-        >
-          <RefreshCw size={12} /> Refresh
-        </button>
-      </div>
 
-      {/* ── TABS ──────────────────────────────────────────────────────────── */}
-      <div className="flex gap-0 px-6 border-b border-border">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={cn("px-4 py-3 text-xs font-medium border-b-2 transition-colors",
-              tab === t.id ? "border-primary text-white" : "border-transparent text-[#8B92A5] hover:text-white"
-            )}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-        {/* ── OVERVIEW ──────────────────────────────────────────────────────── */}
-        {tab === "overview" && (
-          <>
-            {/* How it works */}
-            <div className="bg-gradient-to-r from-violet-900/30 to-fuchsia-900/20 border border-violet-500/20 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield size={15} className="text-violet-400" />
-                <h3 className="text-sm font-semibold text-white">SDK-Free · Per-Channel Ad System</h3>
-              </div>
-              <p className="text-[12px] text-[#8B92A5] leading-relaxed mb-4">
-                Each channel can have up to 3 ad types configured independently — no native SDK, no app store re-review required.
-                All ads are rendered via WebView and controlled from this panel.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { icon: Link2,  color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", title: "Smartlink Gate",  desc: "Opens a Smartlink URL in-app before the channel loads. Great for CPA/CPC affiliate traffic." },
-                  { icon: Play,   color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20",       title: "VAST Pre-Roll",   desc: "Plays a standard VAST video ad before the stream starts. Skip button appears after your configured delay." },
-                  { icon: Code2,  color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/20",     title: "HTML Banner",     desc: "Injects an HTML banner (300×90 or custom) below the player. Paste any ad tag or custom HTML." },
-                ].map(item => {
-                  const Icon = item.icon;
-                  return (
-                    <div key={item.title} className={cn("rounded-lg border p-3", item.bg)}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Icon size={13} className={item.color} />
-                        <span className="text-xs font-semibold text-white">{item.title}</span>
-                      </div>
-                      <p className="text-[11px] text-[#8B92A5] leading-relaxed">{item.desc}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Coverage stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatCard label="Channels with Ads" value={withAny} sub={`of ${total} total channels`} icon={Tv} gradient="from-violet-600 to-violet-800" loading={chLoading} />
-              <StatCard label="Smartlink Gates"   value={withSmartlink} sub="channels"               icon={Link2} gradient="from-emerald-600 to-emerald-800" loading={chLoading} />
-              <StatCard label="VAST Pre-Rolls"    value={withVast}      sub="channels"               icon={Play} gradient="from-blue-600 to-blue-800" loading={chLoading} />
-              <StatCard label="HTML Banners"      value={withBanner}    sub="channels"               icon={Code2} gradient="from-amber-600 to-amber-800" loading={chLoading} />
-            </div>
-
-            {/* Coverage breakdown */}
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Channel Ad Coverage</h3>
-              <div className="space-y-3">
-                {[
-                  { label: "No ads configured",    count: withNone,       total, color: "bg-white/10" },
-                  { label: "Smartlink enabled",     count: withSmartlink,  total, color: "bg-emerald-500" },
-                  { label: "VAST pre-roll set",     count: withVast,       total, color: "bg-blue-500" },
-                  { label: "HTML banner set",       count: withBanner,     total, color: "bg-amber-500" },
-                ].map(row => {
-                  const pct = total > 0 ? (row.count / total) * 100 : 0;
-                  return (
-                    <div key={row.label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-[#8B92A5]">{row.label}</span>
-                        <span className="text-xs font-semibold text-white">{row.count} <span className="text-[#8B92A5] font-normal">/ {row.total}</span></span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <div className={cn("h-full rounded-full transition-all", row.color)} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-[#8B92A5] mt-4">
-                To configure ads on a channel, go to <strong className="text-white/60">Channels → edit channel → Ad Monetization tab</strong>.
-              </p>
-            </div>
-
-            {/* House Ads summary */}
-            <div className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Zap size={14} className="text-primary" />
-                  <h3 className="text-sm font-semibold text-white">House Ads</h3>
-                </div>
-                <button onClick={() => setTab("house-ads")} className="text-[11px] text-primary hover:underline flex items-center gap-1">
-                  Manage <ChevronRight size={11} />
-                </button>
-              </div>
-              {houseLoading ? (
-                <div className="flex items-center justify-center py-6"><RefreshCw size={16} className="text-primary animate-spin" /></div>
-              ) : houseAds.length === 0 ? (
-                <div className="text-center py-6 text-xs text-[#8B92A5]">No house ads yet — go to House Ads tab to create one</div>
-              ) : (
-                <div className="space-y-2">
-                  {houseAds.slice(0, 4).map(ad => (
-                    <div key={ad.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                      <div>
-                        <span className="text-xs font-medium text-white">{ad.title}</span>
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#8B92A5] capitalize">{ad.type}</span>
-                      </div>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold", ad.isActive ? "bg-green-500/15 text-green-400" : "bg-white/5 text-[#8B92A5]")}>
-                        {ad.isActive ? "Active" : "Off"}
-                      </span>
-                    </div>
-                  ))}
-                  {houseAds.length > 4 && (
-                    <p className="text-[11px] text-[#8B92A5] pt-1">+{houseAds.length - 4} more</p>
-                  )}
-                </div>
+        {/* Tab bar */}
+        <div className="max-w-5xl mx-auto px-4 flex gap-0 overflow-x-auto">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap",
+                "border-b-2 transition-colors",
+                activeTab === t.id
+                  ? "border-primary text-white"
+                  : "border-transparent text-white/35 hover:text-white/60",
               )}
+            >
+              <t.icon size={13} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Page content ───────────────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
+
+        {/* ════ Global Settings ══════════════════════════════════════════════ */}
+        {activeTab === 'global' && (
+          <>
+            {/* Smartlink */}
+            <Section title="Smartlink Gate" icon={Link2} accent="bg-blue-500/15">
+              <ToggleRow
+                label="Enable Smartlink Gate"
+                hint="Opens an affiliate URL in-browser before the channel loads (counts per cycle)"
+                value={config.smartlink.enabled}
+                onChange={v => setSL(s => ({ ...s, enabled: v }))}
+              />
+              <div className="pt-3 border-t border-white/5 space-y-3">
+                <Field label="Smartlink URL">
+                  <TextInput
+                    value={config.smartlink.url}
+                    onChange={v => setSL(s => ({ ...s, url: v }))}
+                    placeholder="https://smartlink.example.com/go"
+                    mono
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Open Delay (seconds)" hint="Wait before opening browser">
+                    <TextInput type="number" value={config.smartlink.delaySeconds}
+                      onChange={v => setSL(s => ({ ...s, delaySeconds: Number(v) }))} />
+                  </Field>
+                  <Field label="Cooldown (minutes)" hint="Min time between Smartlinks">
+                    <TextInput type="number" value={config.smartlink.cooldownMinutes}
+                      onChange={v => setSL(s => ({ ...s, cooldownMinutes: Number(v) }))} />
+                  </Field>
+                </div>
+              </div>
+            </Section>
+
+            {/* VAST */}
+            <Section title="VAST Pre-roll" icon={Play} accent="bg-green-500/15">
+              <ToggleRow
+                label="Enable VAST Pre-roll"
+                hint="Shows a video ad before the channel stream starts"
+                value={config.vast.enabled}
+                onChange={v => setVA(s => ({ ...s, enabled: v }))}
+              />
+              <div className="pt-3 border-t border-white/5 space-y-3">
+                <Field label="VAST Tag URL">
+                  <TextInput
+                    value={config.vast.url}
+                    onChange={v => setVA(s => ({ ...s, url: v }))}
+                    placeholder="https://example.com/vast.xml"
+                    mono
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Skip After (seconds)">
+                    <TextInput type="number" value={config.vast.skipAfterSeconds}
+                      onChange={v => setVA(s => ({ ...s, skipAfterSeconds: Number(v) }))} />
+                  </Field>
+                  <Field label="Timeout (seconds)">
+                    <TextInput type="number" value={config.vast.timeoutSeconds}
+                      onChange={v => setVA(s => ({ ...s, timeoutSeconds: Number(v) }))} />
+                  </Field>
+                </div>
+              </div>
+            </Section>
+
+            {/* Banner */}
+            <Section title="HTML Banner" icon={ImageIcon} accent="bg-pink-500/15">
+              <ToggleRow
+                label="Enable HTML Banner"
+                hint="Renders an Adsterra / Monetag script in a WebView banner"
+                value={config.banner.enabled}
+                onChange={v => setBN(b => ({ ...b, enabled: v }))}
+              />
+              <div className="pt-3 border-t border-white/5 space-y-3">
+                <Field label="Banner HTML / JS Code">
+                  <textarea
+                    value={config.banner.htmlCode}
+                    onChange={e => setBN(b => ({ ...b, htmlCode: e.target.value }))}
+                    rows={5}
+                    placeholder="<script>/* paste your Adsterra or Monetag banner script */</script>"
+                    className="w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-primary/50 font-mono resize-none"
+                  />
+                </Field>
+                <Field label="Banner Height (px)">
+                  <TextInput type="number" value={config.banner.height}
+                    onChange={v => setBN(b => ({ ...b, height: Number(v) }))} />
+                </Field>
+              </div>
+            </Section>
+          </>
+        )}
+
+        {/* ════ Frequency Rules ══════════════════════════════════════════════ */}
+        {activeTab === 'frequency' && (
+          <>
+            <div className="bg-[#13131C] border border-white/8 rounded-xl p-5 space-y-5">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Channel Switch Cycle</h3>
+                <p className="text-xs text-white/40 leading-relaxed">
+                  Every time a user switches to a different channel, the counter increments.
+                  Smartlink and VAST never fire on the same switch — they alternate in a repeating cycle.
+                  The counter is persistent and survives app restarts.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Smartlink fires every X switches"
+                  hint="Switch number in cycle where Smartlink appears"
+                >
+                  <TextInput
+                    type="number"
+                    value={config.smartlink.frequency}
+                    onChange={v => setSL(s => ({ ...s, frequency: Math.max(1, Number(v)) }))}
+                  />
+                </Field>
+                <Field
+                  label="VAST fires every X switches (after SL)"
+                  hint="After Smartlink, VAST fires this many switches later"
+                >
+                  <TextInput
+                    type="number"
+                    value={config.vast.frequency}
+                    onChange={v => setVA(s => ({ ...s, frequency: Math.max(1, Number(v)) }))}
+                  />
+                </Field>
+              </div>
+
+              {/* Cycle preview */}
+              <div>
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-wide mb-3">
+                  Cycle Preview — length: {cycleLen} switches (showing 2 cycles)
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: Math.min(cycleLen * 2, 30) }, (_, i) => {
+                    const pos = (i % cycleLen) + 1;
+                    const isSL = pos === slFreq;
+                    const isVA = pos === cycleLen;
+                    return (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex flex-col items-center gap-1 px-2.5 py-2 rounded-lg border min-w-[50px]",
+                          isSL ? "border-blue-500/40 bg-blue-500/10" :
+                          isVA ? "border-green-500/40 bg-green-500/10" :
+                                  "border-white/5 bg-white/2",
+                        )}
+                      >
+                        <span className="text-[9px] font-bold text-white/25">#{i + 1}</span>
+                        <span className={cn(
+                          "text-[9px] font-bold leading-tight text-center",
+                          isSL ? "text-blue-400" :
+                          isVA ? "text-green-400" :
+                                  "text-white/15",
+                        )}>
+                          {isSL ? "SL" : isVA ? "VAST" : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-blue-500/30 border border-blue-500/50" />
+                    <span className="text-xs text-white/40">Smartlink</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-green-500/30 border border-green-500/50" />
+                    <span className="text-xs text-white/40">VAST Pre-roll</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-white/5 border border-white/10" />
+                    <span className="text-xs text-white/40">No ad</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* How to configure */}
-            <div className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpen size={14} className="text-[#8B92A5]" />
-                <h3 className="text-sm font-semibold text-white">Quick Setup Guide</h3>
-              </div>
-              <ol className="space-y-3 text-[12px] text-[#8B92A5] leading-relaxed list-decimal list-inside">
-                <li>Go to <strong className="text-white/70">Channels</strong> in the sidebar and open any channel.</li>
-                <li>Click the <strong className="text-white/70">Ad Monetization</strong> tab inside the channel editor.</li>
-                <li>Enable <strong className="text-white/70">Smartlink</strong> and paste your affiliate Smartlink URL — users will land here before the stream starts.</li>
-                <li>Paste a <strong className="text-white/70">VAST Tag URL</strong> (from any SSP / ad network) to play a pre-roll video ad.</li>
-                <li>Paste raw <strong className="text-white/70">Banner HTML</strong> (any ad tag, iframe, or custom HTML) to show a banner below the player.</li>
-                <li>Save the channel — changes take effect immediately on next stream load.</li>
-              </ol>
+            <div className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4">
+              <p className="text-xs text-amber-300 font-medium mb-1">Important</p>
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                The persistent counter is stored in AsyncStorage on the device.
+                It is NOT reset on app restart or reinstall (it survives until the user clears app data).
+                This ensures the frequency cap is respected across sessions.
+              </p>
             </div>
           </>
         )}
 
-        {/* ── CHANNEL ADS ───────────────────────────────────────────────────── */}
-        {tab === "channel-ads" && (
+        {/* ════ Banner Positions ════════════════════════════════════════════ */}
+        {activeTab === 'banners' && (
           <>
-            {/* Filters */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 flex-1 min-w-[180px] max-w-xs">
-                <Search size={13} className="text-[#8B92A5] shrink-0" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search channels…"
-                  className="bg-transparent text-sm text-white placeholder:text-[#8B92A5] outline-none w-full"
-                />
+            <div className="bg-[#13131C] border border-white/8 rounded-xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Screen Positions</h3>
+                <p className="text-xs text-white/40">
+                  Toggle which screens show the HTML banner. Requires "Enable HTML Banner" to be on in Global Settings.
+                </p>
               </div>
-              <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-                {(["all", "smartlink", "vast", "banner", "none"] as const).map(f => (
-                  <button key={f} onClick={() => setFilter(f)}
-                    className={cn("px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors capitalize",
-                      filter === f ? "bg-primary text-white" : "text-[#8B92A5] hover:text-white"
-                    )}>
-                    {f === "none" ? "No Ads" : f === "all" ? "All" : f === "smartlink" ? "Smartlink" : f === "vast" ? "VAST" : "Banner"}
+              <div className="divide-y divide-white/5">
+                {([
+                  { key: 'home',        icon: Home,    label: 'Home Screen'                  },
+                  { key: 'player',      icon: Tv,      label: 'Player Screen'                },
+                  { key: 'categories',  icon: Layers,  label: 'Categories / Channel Grid'    },
+                  { key: 'movies',      icon: Film,    label: 'Movies & Series'              },
+                  { key: 'sports',      icon: Trophy,  label: 'Sports'                       },
+                  { key: 'search',      icon: Search,  label: 'Search'                       },
+                  { key: 'channelGrid', icon: Layers,  label: 'Channel Grid (between cards)' },
+                ] as const).map(({ key, icon: Icon, label }) => (
+                  <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2.5">
+                      <Icon size={14} className="text-white/35" />
+                      <span className="text-sm text-white">{label}</span>
+                    </div>
+                    <Toggle
+                      on={!!config.banner.positions[key as keyof BannerPositions]}
+                      onChange={v => setBNP(p => ({ ...p, [key]: v }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Player position */}
+            <div className="bg-[#13131C] border border-white/8 rounded-xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-white">Player Banner Position</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'below',           label: 'Below Player'    },
+                  { value: 'above',           label: 'Above Player'    },
+                  { value: 'floating-bottom', label: 'Floating Bottom' },
+                  { value: 'floating-top',    label: 'Floating Top'    },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setBNP(p => ({ ...p, playerPosition: opt.value }))}
+                    className={cn(
+                      "px-3 py-2 rounded-lg border text-sm font-medium text-left transition-colors",
+                      config.banner.positions.playerPosition === opt.value
+                        ? "border-primary/60 bg-primary/12 text-white"
+                        : "border-white/8 text-white/40 hover:border-white/20 hover:text-white/60",
+                    )}
+                  >
+                    {opt.label}
                   </button>
                 ))}
               </div>
-              <span className="text-[11px] text-[#8B92A5]">{filtered.length} channels</span>
             </div>
 
-            {chLoading ? (
-              <div className="flex items-center justify-center py-16"><RefreshCw size={20} className="text-primary animate-spin" /></div>
-            ) : (
-              <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-[#0d1525]">
-                      {["Channel", "Category", "Smartlink", "VAST Pre-Roll", "HTML Banner", ""].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-[#8B92A5] uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-12 text-sm text-[#8B92A5]">
-                          No channels match your filter
-                        </td>
-                      </tr>
-                    ) : filtered.map(ch => {
-                      const hasAny = ch.isSmartlinkEnabled || !!ch.vastUrl || !!ch.bannerHtmlCode;
-                      return (
-                        <tr key={ch.id} className={cn("border-b border-border/50 last:border-0 hover:bg-white/2", !hasAny && "opacity-60")}>
-                          {/* Channel */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2.5">
-                              {ch.logoUrl || ch.logo ? (
-                                <img
-                                  src={ch.logoUrl ?? ch.logo}
-                                  alt=""
-                                  className="w-7 h-7 rounded-lg object-contain bg-white border border-white/10"
-                                />
-                              ) : (
-                                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-700 flex items-center justify-center">
-                                  <Tv size={12} className="text-white" />
-                                </div>
-                              )}
-                              <span className="text-sm font-medium text-white truncate max-w-[140px]">{ch.name}</span>
-                            </div>
-                          </td>
-
-                          {/* Category */}
-                          <td className="px-4 py-3 text-xs text-[#8B92A5]">{getCatName(ch.category)}</td>
-
-                          {/* Smartlink */}
-                          <td className="px-4 py-3">
-                            {ch.isSmartlinkEnabled && ch.smartlinkUrl ? (
-                              <div className="flex flex-col gap-0.5">
-                                <AdTypeBadge active icon={Link2} label="Enabled"
-                                  color="border-emerald-500/30 text-emerald-400 bg-emerald-500/10" />
-                                <span className="text-[9px] text-[#8B92A5] font-mono truncate max-w-[120px]">
-                                  {ch.smartlinkUrl.replace(/^https?:\/\//, "").slice(0, 24)}…
-                                </span>
-                              </div>
-                            ) : (
-                              <AdTypeBadge active={false} icon={Link2} label="Off"
-                                color="border-emerald-500/30 text-emerald-400 bg-emerald-500/10" />
-                            )}
-                          </td>
-
-                          {/* VAST */}
-                          <td className="px-4 py-3">
-                            {ch.vastUrl ? (
-                              <div className="flex flex-col gap-0.5">
-                                <AdTypeBadge active icon={Play} label="Configured"
-                                  color="border-blue-500/30 text-blue-400 bg-blue-500/10" />
-                                <span className="text-[9px] text-[#8B92A5] font-mono truncate max-w-[120px]">
-                                  {ch.vastUrl.replace(/^https?:\/\//, "").slice(0, 24)}…
-                                </span>
-                              </div>
-                            ) : (
-                              <AdTypeBadge active={false} icon={Play} label="None"
-                                color="border-blue-500/30 text-blue-400 bg-blue-500/10" />
-                            )}
-                          </td>
-
-                          {/* Banner */}
-                          <td className="px-4 py-3">
-                            {ch.bannerHtmlCode ? (
-                              <AdTypeBadge active icon={Code2} label={`${ch.bannerHtmlCode.length} chars`}
-                                color="border-amber-500/30 text-amber-400 bg-amber-500/10" />
-                            ) : (
-                              <AdTypeBadge active={false} icon={Code2} label="None"
-                                color="border-amber-500/30 text-amber-400 bg-amber-500/10" />
-                            )}
-                          </td>
-
-                          {/* Edit link */}
-                          <td className="px-4 py-3">
-                            <a
-                              href={`/channels?edit=${ch.id}&tab=ads`}
-                              className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-                            >
-                              Edit <ChevronRight size={11} />
-                            </a>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            {/* Channel grid frequency */}
+            {config.banner.positions.channelGrid && (
+              <div className="bg-[#13131C] border border-white/8 rounded-xl p-5">
+                <Field
+                  label="Channel Grid: Insert banner every N cards"
+                  hint="e.g. 6 = a banner row appears after every 6 channel cards"
+                >
+                  <TextInput
+                    type="number"
+                    value={config.banner.positions.channelGridFrequency}
+                    onChange={v => setBNP(p => ({ ...p, channelGridFrequency: Math.max(3, Number(v)) }))}
+                  />
+                </Field>
               </div>
             )}
           </>
         )}
 
-        {/* ── HOUSE ADS ─────────────────────────────────────────────────────── */}
-        {tab === "house-ads" && (
-          <>
-            {/* Quick create */}
-            <div className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-1">
-                <Zap size={14} className="text-primary" />
-                <h3 className="text-sm font-semibold text-white">Quick Create House Ad</h3>
-              </div>
-              <p className="text-[11px] text-[#8B92A5] mb-4">
-                House ads show in the app to all users on the placement you choose. No external ad network needed.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Title *</label>
-                  <input
-                    type="text"
-                    value={quickForm.title}
-                    onChange={e => setQuickForm(f => ({ ...f, title: e.target.value }))}
-                    placeholder="e.g. Upgrade to Premium"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5]/60 focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Type</label>
-                  <select
-                    value={quickForm.type}
-                    onChange={e => setQuickForm(f => ({ ...f, type: e.target.value }))}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
-                  >
-                    <option value="interstitial">Interstitial — full-screen</option>
-                    <option value="banner">Banner — strip at bottom</option>
-                    <option value="rewarded">Rewarded — user watches to unlock</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Image URL (optional)</label>
-                  <input
-                    type="url"
-                    value={quickForm.imageUrl}
-                    onChange={e => setQuickForm(f => ({ ...f, imageUrl: e.target.value }))}
-                    placeholder="https://… (jpg, png, webp)"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5]/60 focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#8B92A5] mb-1 uppercase tracking-wide">Destination URL (optional)</label>
-                  <input
-                    type="url"
-                    value={quickForm.targetUrl}
-                    onChange={e => setQuickForm(f => ({ ...f, targetUrl: e.target.value }))}
-                    placeholder="https://… (where tapping the ad goes)"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#8B92A5]/60 focus:outline-none focus:border-primary"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleQuickSave}
-                  disabled={quickSaving || !quickForm.title.trim()}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50"
-                >
-                  {quickSaving ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-                  Create & Activate
-                </button>
-                {quickResult && (
-                  <span className={cn("text-xs font-medium", quickResult.ok ? "text-emerald-400" : "text-red-400")}>
-                    {quickResult.msg}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* House ads list */}
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-border">
-                <h3 className="text-xs font-semibold text-white">All House Ads</h3>
-              </div>
-              {houseLoading ? (
-                <div className="flex items-center justify-center py-10"><RefreshCw size={16} className="text-primary animate-spin" /></div>
-              ) : houseAds.length === 0 ? (
-                <div className="text-center py-10 text-sm text-[#8B92A5]">No house ads yet — create one above</div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-[#0d1525]">
-                      {["Title","Type","Status","Actions"].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-[#8B92A5] uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {houseAds.map(ad => (
-                      <tr key={ad.id} className="border-b border-border/50 last:border-0 hover:bg-white/2">
-                        <td className="px-4 py-3">
-                          <div className="text-sm font-medium text-white">{ad.title}</div>
-                          {ad.targetUrl && (
-                            <a href={ad.targetUrl} target="_blank" rel="noreferrer"
-                              className="flex items-center gap-1 text-[10px] text-[#8B92A5] hover:text-primary mt-0.5">
-                              <ExternalLink size={9} />
-                              {ad.targetUrl.length > 40 ? ad.targetUrl.slice(0, 40) + "…" : ad.targetUrl}
-                            </a>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 capitalize">{ad.type ?? "—"}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Toggle
-                            on={ad.isActive ?? false}
-                            onChange={() => handleToggleHouseAd(ad.id, ad.isActive ?? false)}
-                            disabled={mutating}
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleDeleteHouseAd(ad.id)}
-                            disabled={mutating}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/10 disabled:opacity-50"
-                          >
-                            <Trash2 size={13} className="text-red-400" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ── ANALYTICS ─────────────────────────────────────────────────────── */}
-        {tab === "analytics" && (
-          <>
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={handleSeedDemo}
-                disabled={seedLoading || resetLoading || mutating}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50"
-              >
-                {seedLoading ? <><RefreshCw size={13} className="animate-spin" /> Seeding…</> : <><Zap size={13} /> Seed 30-Day Demo Data</>}
-              </button>
-              <button
-                onClick={handleResetAnalytics}
-                disabled={seedLoading || resetLoading || mutating}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-500/40 text-red-400 text-xs font-semibold hover:bg-red-500/10 disabled:opacity-50"
-              >
-                {resetLoading ? <><RefreshCw size={13} className="animate-spin" /> Resetting…</> : <><Trash2 size={13} /> Reset All Data</>}
-              </button>
-              {seedResult && (
-                <span className={cn("text-xs px-3 py-2 rounded-lg border",
-                  seedResult.startsWith("✓")
-                    ? "bg-green-500/10 border-green-500/30 text-green-400"
-                    : "bg-orange-500/10 border-orange-500/30 text-orange-400"
-                )}>
-                  {seedResult}
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                { label: "Total Impressions",  value: fmtNum(summary?.totalImpressions), icon: Eye,        gradient: "from-blue-600 to-blue-800"     },
-                { label: "Total Clicks",       value: fmtNum(summary?.totalClicks),       icon: TrendingUp, gradient: "from-emerald-600 to-emerald-800" },
-                { label: "Click-Through Rate", value: summary?.ctr ?? "0.00%",            icon: BarChart2,  gradient: "from-violet-600 to-violet-800"  },
-                { label: "House Ad Revenue",   value: fmtMoney(summary?.totalRevenue),    icon: DollarSign, gradient: "from-orange-600 to-orange-800"  },
-              ].map(s => <StatCard key={s.label} {...s} loading={analyticsLoading} sub="Last 30 days" />)}
-            </div>
-
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-white">Performance by Placement</h3>
-                <button onClick={() => refetchAnalytics()} className="flex items-center gap-1 text-[10px] text-[#8B92A5] hover:text-white">
-                  <RefreshCw size={11} /> Refresh
-                </button>
+        {/* ════ Analytics ═══════════════════════════════════════════════════ */}
+        {activeTab === 'analytics' && (
+          analytics ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Impressions" value={(analytics?.summary?.totalImpressions ?? 0).toLocaleString()} icon={Eye}          color="text-blue-400"   />
+                <StatCard label="Clicks"      value={(analytics?.summary?.totalClicks ?? 0).toLocaleString()}      icon={MousePointer}  color="text-green-400"  />
+                <StatCard label="CTR"         value={analytics?.summary?.ctr ?? '0%'}                               icon={BarChart2}     color="text-yellow-400" />
+                <StatCard label="Revenue"     value={`$${(analytics?.summary?.totalRevenue ?? 0).toFixed(2)}`}      icon={DollarSign}    color="text-pink-400"   />
               </div>
 
-              {/* Bar chart */}
-              {byPlacement.length > 0 && (
-                <div className="p-4">
-                  <div className="flex items-end gap-3 h-28">
-                    {byPlacement.slice(0, 8).map(d => {
-                      const rev = d._sum?.revenue ?? 0;
-                      const pct = barMax > 0 ? (rev / barMax) * 100 : 0;
-                      return (
-                        <div key={d.placement} className="flex-1 flex flex-col items-center gap-1">
-                          <span className="text-[9px] text-[#8B92A5]">{fmtMoney(rev)}</span>
-                          <div className="w-full rounded-t bg-primary/70" style={{ height: `${Math.max(pct, 4)}%` }} />
-                          <span className="text-[9px] text-[#8B92A5] truncate w-full text-center">{d.placement}</span>
+              {(analytics?.byPlacement?.length ?? 0) > 0 && (
+                <div className="bg-[#13131C] border border-white/8 rounded-xl p-5">
+                  <h3 className="text-sm font-semibold text-white mb-4">By Placement</h3>
+                  <div className="space-y-0">
+                    {analytics.byPlacement.map((p: any, i: number) => (
+                      <div
+                        key={p.placement ?? i}
+                        className="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0"
+                      >
+                        <span className="text-sm text-white/60 font-mono text-xs">{p.placement ?? 'unknown'}</span>
+                        <div className="flex gap-5 text-xs text-white/35">
+                          <span>{(p._sum?.impressions ?? 0).toLocaleString()} imp</span>
+                          <span>{(p._sum?.clicks ?? 0).toLocaleString()} clicks</span>
+                          <span className="text-green-400">${(p._sum?.revenue ?? 0).toFixed(2)}</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-[#0d1525]">
-                    {["Placement","Impressions","Clicks","CTR","Revenue"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-[#8B92A5] uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {analyticsLoading ? (
-                    <tr><td colSpan={5} className="text-center py-8"><RefreshCw size={16} className="text-primary animate-spin mx-auto" /></td></tr>
-                  ) : byPlacement.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-10 text-sm text-[#8B92A5]">No data yet — appears as the mobile app logs events</td></tr>
-                  ) : byPlacement.map(r => {
-                    const impr  = r._sum?.impressions ?? 0;
-                    const clicks = r._sum?.clicks ?? 0;
-                    const ctr   = impr > 0 ? `${((clicks / impr) * 100).toFixed(2)}%` : "0.00%";
-                    return (
-                      <tr key={r.placement} className="border-b border-border/50 last:border-0 hover:bg-white/2">
-                        <td className="px-4 py-3 text-sm font-medium text-white capitalize">{r.placement}</td>
-                        <td className="px-4 py-3 text-sm text-[#8B92A5]">{fmtNum(impr)}</td>
-                        <td className="px-4 py-3 text-sm text-[#8B92A5]">{fmtNum(clicks)}</td>
-                        <td className="px-4 py-3 text-sm font-semibold text-primary">{ctr}</td>
-                        <td className="px-4 py-3 text-sm font-bold text-white">{fmtMoney(r._sum?.revenue)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            </>
+          ) : (
+            <div className="bg-[#13131C] border border-white/8 rounded-xl p-14 text-center">
+              <BarChart2 size={40} className="mx-auto text-white/8 mb-3" />
+              <p className="text-white/35 font-medium">No analytics data yet</p>
+              <p className="text-xs text-white/20 mt-1">
+                Events will appear once ads are enabled and serving
+              </p>
             </div>
+          )
+        )}
+
+        {/* ════ House Ads ════════════════════════════════════════════════════ */}
+        {activeTab === 'house-ads' && (
+          <>
+            {/* Create form */}
+            <div className="bg-[#13131C] border border-white/8 rounded-xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Create House Ad</h3>
+                <p className="text-xs text-white/40">
+                  Promote your own content, subscription plans, or announcements directly in the app.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Field label="Ad Title">
+                    <TextInput value={newTitle} onChange={setNewTitle} placeholder="Premium Subscription — 50% Off" />
+                  </Field>
+                </div>
+                <Field label="Type">
+                  <select
+                    value={newType}
+                    onChange={e => setNewType(e.target.value)}
+                    className="w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary/50 appearance-none cursor-pointer"
+                  >
+                    {['banner', 'video', 'popup', 'interstitial', 'native'].map(t => (
+                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Click URL">
+                  <TextInput value={newTargetUrl} onChange={setNewTargetUrl} placeholder="https://..." mono />
+                </Field>
+                <div className="col-span-2">
+                  <Field label="HTML Code (optional — for script-based ads)">
+                    <textarea
+                      value={newHtml}
+                      onChange={e => setNewHtml(e.target.value)}
+                      rows={3}
+                      placeholder="<script>/* optional ad script */</script>"
+                      className="w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-primary/50 font-mono resize-none"
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreateAd}
+                disabled={creatingAd || !newTitle.trim()}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+              >
+                <Plus size={14} />
+                {creatingAd ? 'Creating…' : 'Create House Ad'}
+              </button>
+            </div>
+
+            {/* List */}
+            {houseAds.length > 0 ? (
+              <div className="bg-[#13131C] border border-white/8 rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-white/5">
+                  <p className="text-xs font-semibold text-white/40 uppercase tracking-wide">
+                    {houseAds.length} House Ad{houseAds.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {houseAds.map(ad => (
+                    <div key={ad.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className={cn(
+                        "w-2 h-2 rounded-full flex-shrink-0 mt-0.5",
+                        ad.isActive ? "bg-green-400" : "bg-white/15",
+                      )} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium truncate">{ad.title}</p>
+                        <p className="text-xs text-white/35 mt-0.5">
+                          {ad.type ?? 'banner'}
+                          {ad.targetUrl ? ` • ${ad.targetUrl.replace(/^https?:\/\//, '').slice(0, 40)}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Toggle on={!!ad.isActive} onChange={v => handleToggleAd(ad.id, v)} />
+                        <button
+                          onClick={() => handleDeleteAd(ad.id)}
+                          className="p-1.5 text-white/25 hover:text-red-400 transition-colors rounded"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#13131C] border border-white/8 rounded-xl p-12 text-center">
+                <Megaphone size={36} className="mx-auto text-white/8 mb-3" />
+                <p className="text-white/35 text-sm">No house ads yet</p>
+                <p className="text-xs text-white/20 mt-1">Create one above to promote your own content</p>
+              </div>
+            )}
           </>
         )}
 
       </div>
-    </>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AdvertisementsService } from './advertisements.service';
@@ -18,6 +18,12 @@ export class AdsConfigController {
   @Get('config')
   @ApiOperation({ summary: 'Get remote ad + app configuration' })
   getConfig() { return this.svc.getRemoteConfig(); }
+
+  @Put('global-config')
+  @ApiOperation({ summary: 'Update global ad rule engine config (admin only)' })
+  updateGlobalConfig(@Body() body: Record<string, unknown>) {
+    return this.svc.updateGlobalAdConfig(body);
+  }
 
   @Public()
   @Post('impression')

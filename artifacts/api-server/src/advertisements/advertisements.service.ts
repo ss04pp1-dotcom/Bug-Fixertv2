@@ -231,6 +231,20 @@ export class AdvertisementsService {
     return this.upsertSettings(dto);
   }
 
+  async getGlobalAdConfig() {
+    const settings = await this.prisma.adSetting.findUnique({ where: { key: AD_SETTING_KEY } });
+    return (settings?.globalConfig as Record<string, unknown> | null) ?? null;
+  }
+
+  async updateGlobalAdConfig(config: Record<string, unknown>) {
+    const settings = await this.prisma.adSetting.upsert({
+      where:  { key: AD_SETTING_KEY },
+      update: { globalConfig: config as Prisma.InputJsonValue },
+      create: { key: AD_SETTING_KEY, globalConfig: config as Prisma.InputJsonValue },
+    });
+    return { success: true, globalConfig: settings.globalConfig };
+  }
+
   async getRemoteConfig() {
     const [settings, activeProvider, placements, features] = await Promise.all([
       this.prisma.adSetting.findUnique({ where: { key: AD_SETTING_KEY } }),
@@ -280,6 +294,7 @@ export class AdvertisementsService {
       forceUpdate: settings?.forceUpdate ?? false,
       maintenanceMode: settings?.maintenanceMode ?? false,
       maintenanceMessage: settings?.maintenanceMessage ?? null,
+      globalConfig: (settings?.globalConfig as Record<string, unknown> | null) ?? null,
       featureFlags: featureMap,
       timestamp: new Date().toISOString(),
     };
