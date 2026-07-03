@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMatch, useMatchCommentary, useToggleMatchAlert } from '@/lib/api-hooks';
+import { normalizeName, normalizeCapitalized } from '@/lib/normalize';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -200,19 +201,7 @@ export default function MatchDetailScreen() {
 
           {/* Stats row */}
           <View style={styles.heroStatsRow}>
-            <StatBox
-              label="Sport"
-              value={(() => {
-                // FIX: API returns sport as an object {id, name, slug} in some
-                // responses, a plain string in others. Calling .charAt directly
-                // on the object throws "match.sport.charAt is not a function"
-                // and crashes the app — this is what happened after adding a
-                // Sports match. Normalize to a string first, same fix already
-                // applied on the sports list screen.
-                const sportName = typeof match?.sport === 'object' ? (match?.sport as any)?.name : match?.sport;
-                return sportName ? sportName.charAt(0).toUpperCase() + sportName.slice(1) : 'N/A';
-              })()}
-            />
+            <StatBox label="Sport" value={normalizeCapitalized(match?.sport, 'N/A')} />
             <View style={styles.heroStatsDivider} />
             {/* M-011: avoid rendering the literal string 'undefined' when status is missing. */}
             <StatBox
@@ -224,7 +213,7 @@ export default function MatchDetailScreen() {
               }
             />
             <View style={styles.heroStatsDivider} />
-            <StatBox label={typeof match?.tournament === 'string' ? 'Tournament' : 'Match'} value={typeof match?.tournament === 'string' ? match.tournament : match?.tournament?.name || 'N/A'} />
+            <StatBox label={typeof match?.tournament === 'string' ? 'Tournament' : 'Match'} value={normalizeName(match?.tournament, 'N/A')} />
           </View>
         </LinearGradient>
 

@@ -18,6 +18,7 @@ import { useLiveMatches, useUpcomingMatches, useMyTeams, useSportTypes } from '@
 import { AdBanner } from '@/components/AdBanner';
 import { AdInterstitial } from '@/components/AdInterstitial';
 import { SocketService } from '@/services/socket.service';
+import { normalizeName } from '@/lib/normalize';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -279,18 +280,18 @@ export default function SportsScreen() {
   const liveMatches: LiveMatch[] = useMemo(() => {
     const items = Array.isArray(liveData) ? liveData : liveData?.data ?? [];
     return items.map((m: any) => {
-      // FIX: API returns sport as an object {id, name, slug} — extract .name
-      // before calling capitalizeSport (which calls .charAt on a string).
-      // Without this fix, passing the raw object causes:
-      //   TypeError: sport.charAt is not a function → app crash.
-      const sportName = typeof m.sport === 'object' ? m.sport?.name : m.sport;
+      // FIX: API returns sport/tournament as relation objects {id, name, slug}
+      // in some responses, plain strings in others. normalizeName() unwraps
+      // both shapes — without it, passing the raw object into capitalizeSport
+      // causes: TypeError: sport.charAt is not a function → app crash.
+      const sportName = normalizeName(m.sport);
       return {
         id: m.id,
         sport: capitalizeSport(sportName || 'Sport'),
         teamA: { name: m.teamA?.name || '', score: m.teamAScore || '', abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
         teamB: { name: m.teamB?.name || '', score: m.teamBScore || '', abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
         status: m.status || '',
-        tournament: typeof m.tournament === 'object' ? m.tournament?.name || '' : m.tournament || '',
+        tournament: normalizeName(m.tournament),
       };
     });
   }, [liveData]);
@@ -299,7 +300,7 @@ export default function SportsScreen() {
     const items = Array.isArray(upcomingData) ? upcomingData : upcomingData?.data ?? [];
     return items.map((m: any) => {
       // FIX: same object-extraction fix as liveMatches above.
-      const sportName = typeof m.sport === 'object' ? m.sport?.name : m.sport;
+      const sportName = normalizeName(m.sport);
       const sportLabel = capitalizeSport(sportName || 'Sport');
       return {
         id: m.id,
@@ -307,7 +308,7 @@ export default function SportsScreen() {
         teamB: m.teamB?.name || '',
         sport: sportLabel,
         time: m.scheduledAt ? formatScheduledTime(m.scheduledAt) : '',
-        tournament: typeof m.tournament === 'object' ? m.tournament?.name || '' : m.tournament || '',
+        tournament: normalizeName(m.tournament),
         icon: (sportIconMap[sportLabel] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap,
       };
     });

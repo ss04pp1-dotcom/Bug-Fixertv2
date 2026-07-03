@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMatchAlerts, useToggleMatchAlert } from '@/lib/api-hooks';
+import { normalizeName } from '@/lib/normalize';
 
 interface Alert {
   id: string;
@@ -68,15 +69,14 @@ export default function MatchAlertsScreen() {
         } catch { timeStr = ''; }
       }
       const isEnabled = a.id in localEnabled ? localEnabled[a.id] : (a.isEnabled ?? a.enabled ?? true);
-      // FIX: API may return sport as an object {id, name, slug} instead of a
-      // plain string (same shape mismatch fixed on the sports/match-detail
-      // screens). Normalize here so item.sport.charAt() below never throws.
-      const rawSport = a.sport || a.match?.sport || 'cricket';
-      const sportName = (typeof rawSport === 'object' ? rawSport?.name : rawSport) || 'cricket';
+      // FIX: API may return sport as a relation object {id, name, slug}
+      // instead of a plain string. normalizeName() unwraps both shapes so
+      // item.sport.charAt() below never throws.
+      const sportName = normalizeName(a.sport, '') || normalizeName(a.match?.sport, 'cricket');
       return {
         id: a.matchId || a.id,
         match: displayLabel,
-        sport: String(sportName).toLowerCase(),
+        sport: sportName.toLowerCase(),
         isLive,
         time: timeStr,
         enabled: isEnabled,
