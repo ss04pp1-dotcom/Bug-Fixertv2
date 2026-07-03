@@ -160,10 +160,10 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
       if (typeof adsEnabled === 'boolean') {
         base.isEnabled = adsEnabled;
         // If ads are enabled server-side but banner.enabled was never explicitly saved
-        // in globalConfig (undefined, not false), default banner.enabled to true so
-        // house ads and HTML banners can be displayed.
+        // in globalConfig (undefined or null, not false), default banner.enabled to true
+        // so house ads and HTML banners can be displayed.
         // We must NOT override an explicit false — admin may want ads on but banner off.
-        if (adsEnabled && raw?.banner?.enabled === undefined) {
+        if (adsEnabled && raw?.banner?.enabled == null) {
           base.banner = {
             ...DEFAULT_GLOBAL_AD_CONFIG.banner,
             ...(raw?.banner ?? {}),

@@ -18,9 +18,15 @@ export function useGlobalAdConfig(): GlobalAdConfig {
 
   useEffect(() => {
     let cancelled = false;
-    fetchGlobalAdConfig().then(cfg => {
-      if (!cancelled) setConfig(cfg);
-    });
+    fetchGlobalAdConfig()
+      .then(cfg => {
+        if (!cancelled) setConfig(cfg);
+      })
+      .catch((e: unknown) => {
+        // fetchGlobalAdConfig has internal try-catch and should never reject,
+        // but guard here to prevent an unhandled rejection from crashing the app.
+        console.warn('[AdConfig] fetchGlobalAdConfig rejected unexpectedly:', e);
+      });
     return () => { cancelled = true; };
   }, []);
 

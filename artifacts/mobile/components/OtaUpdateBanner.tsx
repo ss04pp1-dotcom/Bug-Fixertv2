@@ -101,6 +101,8 @@ export default function OtaUpdateBanner() {
           await Updates.reloadAsync();
         } catch (e: any) {
           console.warn('[OTA] reloadAsync failed:', e?.message ?? e);
+          // reloadAsync failed — let the user retry instead of being stuck forever.
+          setState('available');
         }
       }, 1500);
     } catch (e: any) {
