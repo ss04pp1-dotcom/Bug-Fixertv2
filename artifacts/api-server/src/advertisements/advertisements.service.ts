@@ -163,10 +163,17 @@ export class AdvertisementsService {
         }];
       }
 
-      // Last resort: infer ad type from slug keyword and return any matching ads
+      // Last resort: infer ad type from slug keyword and return any matching ads.
+      // NOTE: `banner` is checked before the generic `channel` keyword — the
+      // mobile app's `channel_banner` placement (live player screen) used to
+      // match `slug.includes('channel')` and get misclassified as
+      // 'interstitial', so it only matched interstitial/popup/app_open/splash
+      // ads and never rendered a plain banner. `channel` should only imply
+      // interstitial when paired with `switch` (channel-switch triggers).
       const inferredType = slug.includes('reward') ? 'rewarded'
         : slug.includes('app_open') || slug.includes('appopen') ? 'app_open'
-        : slug.includes('channel') || slug.includes('switch') || slug.includes('hourly') || slug.includes('interstitial') ? 'interstitial'
+        : slug.includes('banner') ? 'banner'
+        : (slug.includes('channel') && slug.includes('switch')) || slug.includes('hourly') || slug.includes('interstitial') ? 'interstitial'
         : 'banner';
       const allowedTypes = inferredType === 'rewarded' ? ['rewarded', 'video']
         : inferredType === 'app_open' ? ['app_open', 'interstitial']
