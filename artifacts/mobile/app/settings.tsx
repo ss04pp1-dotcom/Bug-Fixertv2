@@ -38,7 +38,9 @@ interface SettingItem {
   route?: string;
 }
 
-const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
+const UNLOCK_TAPS_REQUIRED = 5;
+
+const BASE_SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
   {
     title: 'Account',
     items: [
@@ -64,14 +66,15 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: `v${Config.APP_VERSION}` },
     ],
   },
-  ...(__DEV__ ? [{
-    title: 'Diagnostics',
-    items: [
-      { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline' as const, iconColor: '#8B5CF6', type: 'nav' as const, route: '/iptv-report' },
-      { id: 'ad-debug', label: 'Ad Engine Debug', icon: 'megaphone-outline' as const, iconColor: '#EC4899', type: 'nav' as const, route: '/ad-debug' },
-    ] as SettingItem[],
-  }] : []),
 ];
+
+const DIAGNOSTICS_GROUP: { title: string; items: SettingItem[] } = {
+  title: 'Diagnostics',
+  items: [
+    { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline', iconColor: '#8B5CF6', type: 'nav', route: '/iptv-report' },
+    { id: 'ad-debug', label: 'Ad Engine Debug', icon: 'megaphone-outline', iconColor: '#EC4899', type: 'nav', route: '/ad-debug' },
+  ],
+};
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -83,6 +86,25 @@ export default function SettingsScreen() {
     autoDownload: false,
     dataSaver: false,
   });
+  const [diagnosticsUnlocked, setDiagnosticsUnlocked] = useState(__DEV__);
+  const aboutTapCount = React.useRef(0);
+
+  const handleAboutTap = () => {
+    if (diagnosticsUnlocked) return;
+    aboutTapCount.current += 1;
+    const remaining = UNLOCK_TAPS_REQUIRED - aboutTapCount.current;
+    if (remaining <= 0) {
+      setDiagnosticsUnlocked(true);
+      aboutTapCount.current = 0;
+      Alert.alert('Diagnostics unlocked', 'The Diagnostics section is now visible below.');
+    } else if (remaining <= 2) {
+      Alert.alert('Almost there', `Tap ${remaining} more time${remaining === 1 ? '' : 's'} to unlock Diagnostics.`);
+    }
+  };
+
+  const settingGroups = diagnosticsUnlocked
+    ? [...BASE_SETTING_GROUPS, DIAGNOSTICS_GROUP]
+    : BASE_SETTING_GROUPS;
 
   const handleToggle = (key: string, value: boolean) => {
     setToggles((prev) => ({ ...prev, [key]: value }));
@@ -132,7 +154,7 @@ export default function SettingsScreen() {
         <View style={s.loader}><ActivityIndicator color={C.primary} size="large" /></View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-          {SETTING_GROUPS.map((group) => (
+          {settingGroups.map((group) => (
             <View key={group.title} style={s.group}>
               <Text style={s.groupTitle}>{group.title}</Text>
               <View style={s.groupCard}>
@@ -141,6 +163,10 @@ export default function SettingsScreen() {
                     key={item.id}
                     style={[s.settingRow, idx < group.items.length - 1 && s.settingRowBorder]}
                     onPress={() => {
+                      if (item.id === 'about') {
+                        handleAboutTap();
+                        return;
+                      }
                       if (item.route) {
                         router.push(item.route as any);
                       }
