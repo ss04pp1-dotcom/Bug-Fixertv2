@@ -25,6 +25,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { Config } from '@/constants/config';
+
+// Derive a clean base URL (scheme + host only) from Config.API_BASE.
+// Ad network scripts (Adsterra, Monetag, etc.) need a real HTTP origin in the
+// WebView's baseUrl — without it the XHR/fetch calls inside the script hit
+// `null` origin and are blocked, leaving the banner black.
+const AD_BASE_URL = (() => {
+  try {
+    return new URL(Config.API_BASE).origin;
+  } catch (e) {
+    if (__DEV__) console.warn('[AdBanner] Could not parse Config.API_BASE for baseUrl:', e);
+    return undefined;
+  }
+})();
 import { useAuthStore } from '@/lib/auth-store';
 import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 
@@ -207,7 +220,7 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
           <Text style={styles.adLabelText}>AD</Text>
         </View>
         <WebView
-          source={{ html: wrapHtml(activeHtml) }}
+          source={{ html: wrapHtml(activeHtml), baseUrl: AD_BASE_URL }}
           style={{ flex: 1, backgroundColor: 'transparent' }}
           scrollEnabled={false}
           javaScriptEnabled
