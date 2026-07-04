@@ -1214,6 +1214,12 @@ export default function GlobalVideoPlayer() {
             volume={videoVolume}
             resizeMode={mode === 'mini' ? 'cover' : aspect}
             pip={mode === 'mini' ? false : pip}
+            // Home/app-switch auto-PiP — only while the player screen is the
+            // visible content (top/fullscreen). Scoped to the video surface
+            // by react-native-video itself, so it never captures Home/Sign Up
+            // or any other non-video screen (that was the old bug with the
+            // custom native onUserLeaveHint hack).
+            enterPictureInPictureOnLeave={mode === 'top' || mode === 'fullscreen'}
             isLive={isLive}
             videoRef={videoRef}
             selectedVideoTrack={selectedVideoTrack}

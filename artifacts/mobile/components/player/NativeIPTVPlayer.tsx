@@ -10,6 +10,16 @@ export interface NativePlayerProps {
   volume: number;
   resizeMode: 'contain' | 'cover' | 'stretch';
   pip: boolean;
+  /**
+   * When true, react-native-video automatically enters PiP itself when the
+   * user leaves the app (Home button / app switch) — scoped to just the
+   * video surface (uses the library's own PictureInPictureParams tied to
+   * the video view), NOT a screenshot of the whole Activity. This is the
+   * correct way to do "Home button → PiP": unlike our own onUserLeaveHint
+   * native-plugin hack (which had no source rect and captured the entire
+   * screen), this only ever shows the video.
+   */
+  enterPictureInPictureOnLeave: boolean;
   isLive: boolean;
   videoRef: React.MutableRefObject<any>;
   selectedVideoTrack: any;
@@ -43,7 +53,7 @@ const IOS_FWD_BUFFER_LIVE = 12;  // 12 s forward buffer for live
 const IOS_FWD_BUFFER_VOD  = 30;  // 30 s forward buffer for VOD
 
 export const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
-  source, paused, rate, volume, resizeMode, pip, isLive, videoRef,
+  source, paused, rate, volume, resizeMode, pip, enterPictureInPictureOnLeave, isLive, videoRef,
   selectedVideoTrack, selectedAudioTrack, selectedTextTrack,
   onLoad, onLoadStart, onReadyForDisplay, onProgress, onBuffer,
   onError, onEnd, onVideoTracks, onAudioTracks, onTextTracks,
@@ -123,6 +133,11 @@ export const NativeIPTVPlayer = React.memo(function NativeIPTVPlayer({
 
         // ── PiP ───────────────────────────────────────────────────────────
         pictureInPicture={pip}
+        // Auto-PiP on Home/app-switch — scoped to the video surface only
+        // (library-level, uses the video view's own PiP params). Only
+        // enabled while the player screen is actually the visible content
+        // (mode 'top'/'fullscreen'), so Home/Sign Up/etc. never enter PiP.
+        enterPictureInPictureOnLeave={enterPictureInPictureOnLeave}
 
         // ── Track selection ───────────────────────────────────────────────
         selectedVideoTrack={selectedVideoTrack}
