@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/axios-client";
 import { toast } from "sonner";
@@ -82,6 +82,64 @@ function TextInput({ value, onChange, placeholder, type = "text", mono }: {
   value: string | number; onChange: (v: string) => void;
   placeholder?: string; type?: string; mono?: boolean;
 }) {
+  // For number inputs keep a local string so the user can clear the field
+  // before typing a new value. Without this, Number("") === 0 fires immediately
+  // and the field snaps back to "0" before the user can enter anything.
+  //
+  // lastExternal stores the string form of the last value that came from the
+  // parent (via props). We compare String-to-String so "12" === "12" works
+  // even when the parent holds the numeric 12.
+  const [localVal, setLocalVal] = useState<string>(String(value ?? ""));
+  const lastExternal = useRef<string>(String(value ?? ""));
+  const isFocused = useRef<boolean>(false);
+
+  // Sync incoming value only when it changes externally (e.g. after save/load).
+  // While the field is focused we skip the sync so in-progress edits aren't
+  // clobbered by parent rerenders (e.g. the 15s health poll on this page).
+  useEffect(() => {
+    const strValue = String(value ?? "");
+    if (strValue !== lastExternal.current && !isFocused.current) {
+      lastExternal.current = strValue;
+      setLocalVal(strValue);
+    }
+  }, [value]);
+
+  if (type === "number") {
+    return (
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={localVal}
+        onFocus={() => { isFocused.current = true; }}
+        onChange={e => {
+          const raw = e.target.value.replace(/[^0-9]/g, "");
+          setLocalVal(raw);
+          if (raw !== "") {
+            lastExternal.current = raw;
+            onChange(raw);
+          }
+        }}
+        onBlur={() => {
+          isFocused.current = false;
+          // Commit empty → "0" only when the user leaves the field
+          const committed = localVal === "" ? "0" : localVal;
+          if (committed !== lastExternal.current) {
+            lastExternal.current = committed;
+            onChange(committed);
+          }
+          setLocalVal(committed);
+        }}
+        placeholder={placeholder}
+        className={cn(
+          "w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2.5 text-sm text-white",
+          "outline-none focus:border-primary/50 transition-colors",
+          mono && "font-mono text-xs",
+        )}
+      />
+    );
+  }
+
   return (
     <input
       type={type}
