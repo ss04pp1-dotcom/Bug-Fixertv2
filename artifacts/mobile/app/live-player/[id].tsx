@@ -10,8 +10,10 @@
  *   4. Shows related channels + info below
  *   5. Shows banner HTML ad driven by the global ad config (not per-channel)
  *
- * Back button → player enters native PiP (no reload, no rebuffer).
- * Mini mode has been fully removed — native OS PiP is used everywhere.
+ * Back button → player shrinks to the JS-based mini player (bottom-right
+ * floating bubble), not native OS PiP. Native PiP is entered ONLY when the
+ * user explicitly taps the PiP button inside the player controls — see
+ * GlobalVideoPlayer.tsx for the full mode state machine (mini/top/fullscreen/PiP).
  */
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
