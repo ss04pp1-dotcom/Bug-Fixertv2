@@ -43,8 +43,10 @@ async function secureDelete(key: string): Promise<void> {
 export const tokenStorage = {
   getAccessToken: () => secureGet(ACCESS_KEY),
   getRefreshToken: () => secureGet(REFRESH_KEY),
-  setTokens: async (access: string, refresh: string) => {
-    await Promise.all([secureSet(ACCESS_KEY, access), secureSet(REFRESH_KEY, refresh)]);
+  setTokens: async (access: string, refresh?: string | null) => {
+    const ops: Promise<void>[] = [secureSet(ACCESS_KEY, access)];
+    if (refresh) ops.push(secureSet(REFRESH_KEY, refresh));
+    await Promise.all(ops);
   },
   clearTokens: async () => {
     await Promise.all([secureDelete(ACCESS_KEY), secureDelete(REFRESH_KEY)]);
