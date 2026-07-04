@@ -48,7 +48,14 @@ export interface GlobalAdConfig {
     vastHeight: number;
     /** Seconds before the inline VAST unit can be skipped. Default 5. */
     vastSkipSec: number;
+    /** Default height for all banner slots (px). Per-slot overrides live in `heights`. */
     height: number;
+    /**
+     * Per-placement height overrides (px). Keys match the position keys in `positions`
+     * (e.g. "home", "player", "movies"). When present, this value takes priority over
+     * `height` for that specific slot. Omitted keys fall back to the global `height`.
+     */
+    heights: Partial<Record<string, number>>;
     positions: {
       home: boolean;
       player: boolean;
@@ -88,6 +95,7 @@ export const DEFAULT_GLOBAL_AD_CONFIG: GlobalAdConfig = {
     vastHeight: 250,
     vastSkipSec: 5,
     height: 90,
+    heights: {},
     positions: {
       home: true,
       player: true,
@@ -125,6 +133,10 @@ function mergeWithDefaults(raw: Partial<GlobalAdConfig>): GlobalAdConfig {
     banner: {
       ...DEFAULT_GLOBAL_AD_CONFIG.banner,
       ...(raw.banner ?? {}),
+      heights: {
+        ...DEFAULT_GLOBAL_AD_CONFIG.banner.heights,
+        ...(raw.banner?.heights ?? {}),
+      },
       positions: {
         ...DEFAULT_GLOBAL_AD_CONFIG.banner.positions,
         ...(raw.banner?.positions ?? {}),

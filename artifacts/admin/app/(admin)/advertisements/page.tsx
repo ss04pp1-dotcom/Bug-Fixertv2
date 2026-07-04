@@ -28,6 +28,7 @@ interface BannerPositions {
 }
 interface BannerConfig {
   enabled: boolean; htmlCode: string; height: number;
+  heights: Partial<Record<string, number>>;
   positions: BannerPositions;
 }
 interface GlobalAdConfig {
@@ -47,7 +48,7 @@ const DEFAULT: GlobalAdConfig = {
   smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30 },
   vast:      { enabled: false, url: '', skipAfterSeconds: 5, frequency: 3, timeoutSeconds: 10 },
   banner: {
-    enabled: false, htmlCode: '', height: 90,
+    enabled: false, htmlCode: '', height: 90, heights: {},
     positions: {
       home: true, player: true, playerPosition: 'below',
       categories: false, movies: true, sports: false,
@@ -256,6 +257,7 @@ export default function AdvertisementsPage() {
           vast:      { ...prev.vast,      ...(gc.vast      ?? {}) },
           banner: {
             ...prev.banner, ...(gc.banner ?? {}),
+            heights:   { ...prev.banner.heights,   ...(gc.banner?.heights   ?? {}) },
             positions: { ...prev.banner.positions, ...(gc.banner?.positions ?? {}) },
           },
         }));
@@ -613,15 +615,54 @@ export default function AdvertisementsPage() {
                   { key: 'search',      icon: Search,  label: 'Search'                       },
                   { key: 'channelGrid', icon: Layers,  label: 'Channel Grid (between cards)' },
                 ] as const).map(({ key, icon: Icon, label }) => (
-                  <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2.5">
-                      <Icon size={14} className="text-white/35" />
-                      <span className="text-sm text-white">{label}</span>
+                  <div key={key} className="py-3 first:pt-0 last:pb-0 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Icon size={14} className="text-white/35" />
+                        <span className="text-sm text-white">{label}</span>
+                      </div>
+                      <Toggle
+                        on={!!config.banner.positions[key as keyof BannerPositions]}
+                        onChange={v => setBNP(p => ({ ...p, [key]: v }))}
+                      />
                     </div>
-                    <Toggle
-                      on={!!config.banner.positions[key as keyof BannerPositions]}
-                      onChange={v => setBNP(p => ({ ...p, [key]: v }))}
-                    />
+                    {/* Per-placement height override */}
+                    {!!config.banner.positions[key as keyof BannerPositions] && (
+                      <div className="flex items-center gap-2 pl-5">
+                        <span className="text-xs text-white/30 shrink-0">Height (px)</span>
+                        <div className="w-24">
+                          <TextInput
+                            type="number"
+                            placeholder={String(config.banner.height || 90)}
+                            value={config.banner.heights?.[key] ?? ''}
+                            onChange={v => setBN(b => {
+                              const h = { ...(b.heights ?? {}) };
+                              const n = Number(v);
+                              if (n > 0) { h[key] = n; } else { delete h[key]; }
+                              return { ...b, heights: h };
+                            })}
+                          />
+                        </div>
+                        {(config.banner.heights?.[key] ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setBN(b => {
+                              const h = { ...(b.heights ?? {}) };
+                              delete h[key];
+                              return { ...b, heights: h };
+                            })}
+                            className="text-xs text-white/25 hover:text-white/60 transition-colors"
+                          >
+                            reset
+                          </button>
+                        )}
+                        {!(config.banner.heights?.[key] ?? 0) && (
+                          <span className="text-xs text-white/20">
+                            using default ({config.banner.height || 90} px)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

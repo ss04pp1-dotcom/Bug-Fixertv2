@@ -426,8 +426,12 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
     ? !!(globalConfig.banner.positions as any)[posKey]
     : true; // Unknown placement → allow by default
 
-  // Effective height for primary unit
-  const effectiveHeight = bannerHeight ?? globalConfig.banner.height ?? 90;
+  // Effective height: prop → per-placement override → global default → 90
+  // Use `|| undefined` so a stored 0 (or missing key) safely falls through.
+  const perPlacementHeight: number | undefined = posKey
+    ? (globalConfig.banner.heights?.[posKey] || undefined)
+    : undefined;
+  const effectiveHeight = bannerHeight ?? perPlacementHeight ?? globalConfig.banner.height ?? 90;
 
   // Resolved HTML source (prop → global config → house ad)
   const globalHtml  = globalConfig.banner.htmlCode?.trim() || '';
