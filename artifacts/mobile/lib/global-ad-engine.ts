@@ -137,9 +137,21 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
   const url = `${Config.API_BASE}/ads/config`;
   if (__DEV__) console.log('[AdEngine] Fetching config from:', url);
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000), // 10s — Render.com free tier can take time to wake up
-    });
+    // Render.com's free tier can take 20-50s to wake a cold instance. A plain
+    // 10s AbortSignal.timeout() was killing the very first request on a cold
+    // start every time, so we manually build an AbortController with a much
+    // longer 30s budget. We also guard against AbortSignal.timeout not being
+    // available at all on some Hermes/RN engine builds (it silently throws a
+    // TypeError there, which — unlike a timeout — is NOT caught by fetch and
+    // was skipping the request entirely on every single retry).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (__DEV__) console.log('[AdEngine] HTTP status:', res.status);
     if (res.ok) {
       const json = await res.json();
