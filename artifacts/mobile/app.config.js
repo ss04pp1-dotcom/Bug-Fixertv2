@@ -97,9 +97,9 @@ module.exports = {
       typedRoutes: true,
     },
     extra: {
-      apiUrl: 'https://bug-fixertv2-ww94.onrender.com',
-      wsUrl: 'wss://bug-fixertv2-ww94.onrender.com',
-      imageUrl: 'https://bug-fixertv2-ww94.onrender.com',
+      apiUrl: 'https://livetv-aokw.onrender.com',
+      wsUrl: 'wss://livetv-aokw.onrender.com',
+      imageUrl: 'https://livetv-aokw.onrender.com',
       cdnUrl: '',
       eas: {
         projectId: '41ae0d59-922c-4851-8b9a-8b5d8c657d13',
