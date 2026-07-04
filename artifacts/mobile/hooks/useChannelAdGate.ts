@@ -51,7 +51,14 @@ export function useChannelAdGate(config: GlobalAdConfig) {
             enableBarCollapsing: true,
           });
           trackAdEvent('impression', 'smartlink');
-        } catch {}
+        } catch (e: any) {
+          // FIX: previously swallowed silently — failures never showed up in
+          // Admin's Ad Health/Analytics, making it impossible to tell whether
+          // smartlinks were broken (bad URL, no browser available, etc.) or
+          // simply not configured.
+          trackAdEvent('error', 'smartlink', { message: e?.message ?? String(e) });
+          if (__DEV__) console.warn('[Smartlink] openBrowserAsync failed:', e);
+        }
       }
 
       // ── Navigate to player ─────────────────────────────────────────────────

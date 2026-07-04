@@ -316,12 +316,19 @@ export default function SportsScreen() {
 
   const myTeams: (Team | null)[] = useMemo(() => {
     const items: any[] = Array.isArray(myTeamsData) ? myTeamsData : [];
-    const mapped = items.map((t: any) => ({
-      id: t.id,
-      abbr: t.abbr || t.name?.slice(0, 3).toUpperCase() || 'TM',
-      name: t.name || '',
-      gradient: teamGradients[t.abbr] || ['#7C3AED', '#2563EB'],
-    }));
+    // FIX: GET /v1/sports/my-teams returns follow-wrapper rows shaped like
+    // { id, userId, teamId, team: { name, abbr, ... } } — reading t.name /
+    // t.abbr directly (the wrapper's own id fields) always missed and fell
+    // back to "TM" for every team. Unwrap t.team when present.
+    const mapped = items.map((t: any) => {
+      const team = t.team ?? t;
+      return {
+        id: team.id,
+        abbr: team.abbr || team.name?.slice(0, 3).toUpperCase() || 'TM',
+        name: team.name || '',
+        gradient: teamGradients[team.abbr] || ['#7C3AED', '#2563EB'],
+      };
+    });
     return [...mapped, null];
   }, [myTeamsData]);
 

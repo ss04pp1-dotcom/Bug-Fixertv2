@@ -30,6 +30,7 @@ import { AdBanner } from '@/components/AdBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
 import { SkeletonHeroCard, SkeletonChannelRow, SkeletonCard } from '@/components/ui/Skeleton';
+import { normalizeName } from '@/lib/normalize';
 
 const { width: W } = Dimensions.get('window');
 
@@ -144,7 +145,11 @@ export default function HomeScreen() {
     if (!liveMatchData || !Array.isArray(liveMatchData)) return [];
     return liveMatchData.slice(0, 4).map((m: any, i: number) => ({
       id: m.id || String(i),
-      title: m.tournament || m.title || 'Live Match',
+      // FIX: `tournament` (and `sport`) can come back as a relation object
+      // ({ id, name, slug, logo }) instead of a plain string, which crashed
+      // this screen when rendered directly inside <Text>. normalizeName
+      // safely unwraps it to a string in either case.
+      title: normalizeName(m.tournament, '') || normalizeName(m.title, '') || 'Live Match',
       team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
       team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',
       score1: safeStr(m.score ?? m.score1),
@@ -216,7 +221,8 @@ export default function HomeScreen() {
     if (!upcomingData || !Array.isArray(upcomingData)) return [];
     return upcomingData.slice(0, 3).map((m: any, i: number) => ({
       id: m.id || String(i),
-      title: m.title || m.tournament || 'Upcoming Match',
+      // FIX: same object-vs-string issue as liveMatches above.
+      title: normalizeName(m.title, '') || normalizeName(m.tournament, '') || 'Upcoming Match',
       date: m.startTime || m.date || '',
       team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
       team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',

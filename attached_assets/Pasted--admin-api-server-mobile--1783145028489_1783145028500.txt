@@ -1,0 +1,160 @@
+এখন পর্যন্ত পুরো কোডবেস (admin + api-server + mobile) খুঁজে যা যা সমস্যা পেয়েছি, সব একসাথে দিলাম — গুরুত্ব অনুযায়ী সাজানো।
+
+---
+
+## 🔴 ১. Admin-এর "Master Enable" টগল আসলে কাজই করে না
+
+**সমস্যা:** Admin → Advertisements পেজে "Master Enable" টগল সেভ হয় `PUT /v1/ads/global-config` দিয়ে, যা `globalConfig` (JSON) কলামে `isEnabled` লিখে।
+
+কিন্তু mobile app-এর `global-ad-engine.ts`-এ:
+```js
+const adsEnabled = json?.data?.adsEnabled ?? ...;  // এটা আসে settings.isEnabled থেকে — ভিন্ন DB কলাম!
+if (typeof adsEnabled === 'boolean') {
+  base.isEnabled = adsEnabled;  // ← globalConfig.isEnabled কে ওভাররাইট করে দেয়!
+}
+```
+`AdSetting.isEnabled` হলো `AdSetting` টেবিলের একটা **আলাদা কলাম**, যা `PUT /v1/advertisements/settings` endpoint দিয়ে আপডেট হয় (ডিফল্ট `true`)। Admin UI-তে এই endpoint কল করার কোনো বাটন/ফর্মই নেই। ফলে —
+- Admin "Master Enable" অফ করলেও mobile-এ ads বন্ধ হয় না (কারণ `adsEnabled` DB কলাম সবসময় `true` থেকে যায়)।
+
+**সমাধান (backend):** `updateGlobalAdConfig()`-এ config সেভের সময় `AdSetting.isEnabled`-কেও sync করে দিন —
+```ts
+async updateGlobalAdConfig(config: Record<string, unknown>) {
+  const isEnabled = typeof config.isEnabled === 'boolean' ? config.isEnabled : undefined;
+  const settings = await this.prisma.adSetting.upsert({
+    where:  { key: AD_SETTING_KEY },
+    update: { globalConfig: config as Prisma.InputJsonValue, ...(isEnabled !== undefined && { isEnabled }) },
+    create: { key: AD_SETTING_KEY, globalConfig: config as Prisma.InputJsonValue, isEnabled: isEnabled ?? true },
+  });
+  return { success: true, globalConfig: settings.globalConfig };
+}
+```
+
+---
+
+## 🔴 ২. Smartlink/VAST-এর persistent counter কখনো রিসেট হয় না
+
+**ফাইল:** `mobile/lib/global-ad-engine.ts`
+
+`ad_engine_switch_count` AsyncStorage-এ জমা থাকে, app uninstall না করলে কখনো রিসেট হয় না। আগে (Frequency অফ থাকা অবস্থায়) যতবার চ্যানেল পাল্টানো হয়েছে সেটাও কাউন্ট হয়ে গেছে — তাই এখন Frequency=3 সেট করলেও `pos === slFreq` কখন মিলবে সেটা predictable না, টেস্ট করলে "কখনো আসে না" মনে হয়।
+
+**সমাধান:** টেস্টিং-এর সময় counter রিসেট করার একটা ডেভ-মোড অপশন রাখুন —
+```ts
+export async function resetSwitchCounter() {
+  await AsyncStorage.multiRemove([KEY_SWITCH_COUNT, KEY_LAST_SMARTLINK]);
+}
+```
+এবং Admin-এর config সেভ করার সময় (frequency/cooldown পাল্টালে) `invalidateGlobalAdConfig()` + কাউন্টার রিসেট — দুটোই করা ভালো, নাহলে অ্যাডমিন সেটিং পাল্টালেও পুরনো cycle position থেকেই হিসাব হবে।
+
+---
+
+## 🟠 ৩. Cooldown ডিফল্ট ৩০ মিনিট — টেস্টিং-এ বিভ্রান্তিকর
+
+একবার শর্ত মিললে `KEY_LAST_SMARTLINK` সেট হয়ে যায়, পরের ৩০ মিনিট আর দেখাবে না, কোনো লগ/এরর ছাড়াই। **সমাধান:** টেস্টিং-এর জন্য cooldown সাময়িক 0 করুন, প্রোডাকশনে যা খুশি রাখুন — এটা bug না, কিন্তু ডকুমেন্টেড না থাকায় বিভ্রান্তি তৈরি করছে।
+
+---
+
+## 🟠 ৪. `ChannelAdGateProvider`-এ config fetch একবারই হয়, retry নেই
+
+**ফাইল:** `mobile/lib/channel-ad-gate-context.tsx`
+```js
+useEffect(() => { fetchGlobalAdConfig().then(setConfig).catch(...); }, []); // এক-শট
+```
+আপনার সার্ভার এখন বন্ধ হয় না ঠিকই, কিন্তু ইউজারের নেটওয়ার্ক স্লো/ফেইল হলে এই একটা ফেচ ফেইল করলে সারা সেশনে আর কখনো রিট্রাই হবে না। `channel/[id].tsx` আর `search-screen.tsx` ঠিকভাবে `useGlobalAdConfig()` (retry সহ) ব্যবহার করে, কিন্তু Live TV-র মূল ফ্লো এটা করে না।
+
+**সমাধান:**
+```tsx
+// channel-ad-gate-context.tsx
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+
+export function ChannelAdGateProvider({ children }) {
+  const config = useGlobalAdConfig(); // retry যুক্ত হুকটাই ব্যবহার করুন
+  const gate = useChannelAdGate(config);
+  return <ChannelAdGateContext.Provider value={{ requestChannel: gate.requestChannel, globalConfig: config }}>{children}</ChannelAdGateContext.Provider>;
+}
+```
+
+---
+
+## 🟠 ৫. House ad / Interstitial ad — exact slug না মিললে silent fail
+
+**ফাইল:** `AdBanner.tsx`, `AdInterstitial.tsx`
+
+কোডে হার্ডকোড করা placement slug লাগে:
+| স্ক্রিন | Slug যা কোড খোঁজে |
+|---|---|
+| Sports ব্যানার | `live_banner` |
+| Sports ম্যাচ ওপেনের আগে | `sports_interstitial` |
+| Home | `home-banner` / `home_banner` |
+| Player | `player_banner` / `channel_banner` |
+
+Admin-এ Ad Placement তৈরি করার সময় slug এগুলোর সাথে **অক্ষরে অক্ষরে** না মিললে `fetchHouseAd`/`fetchInterstitialAd` সবসময় `null` রিটার্ন করে — কোনো error/warning ছাড়াই।
+
+**সমাধান:** Admin Placement তৈরির ফর্মে slug ফিল্ডের নিচে এই allowed slug list-টা hint হিসেবে দেখানো, বা backend-এ slug না মিললে একটা `warn`-লেভেল লগ রাখা যাতে ডিবাগ সহজ হয়।
+
+---
+
+## 🟠 ৬. Smartlink browser ওপেন ফেইল হলে সাইলেন্টলি চেপে যায়
+
+```js
+try {
+  await WebBrowser.openBrowserAsync(config.smartlink.url, {...});
+  trackAdEvent('impression', 'smartlink');
+} catch {}   // ← এরর গায়েব
+```
+**সমাধান:**
+```js
+} catch (e: any) {
+  trackAdEvent('error', 'smartlink', { message: e?.message ?? String(e) });
+  if (__DEV__) console.warn('[Smartlink] openBrowserAsync failed:', e);
+}
+```
+এটা করলে Admin-এর Ad Health/Analytics ট্যাবে error events দেখা যাবে, ঠিক কোথায় আটকাচ্ছে বোঝা যাবে।
+
+---
+
+## 🟡 ৭. "My Teams" ডেটা-শেপ মিসম্যাচ (ক্র্যাশ না, কিন্তু ভুল ডেটা)
+
+**ফাইল:** `mobile/app/sports.tsx` + `api-server/.../sports.service.ts`
+
+`GET /v1/sports/my-teams` রিটার্ন করে:
+```json
+[{ "id": "...", "userId": "...", "teamId": "...", "team": { "name": "...", "abbr": "..." } }]
+```
+কিন্তু mobile পড়ে `t.name`, `t.abbr` সরাসরি — যা `undefined`, তাই সবসময় ফলব্যাক "TM" দেখায়।
+
+**সমাধান (`sports.tsx`):**
+```ts
+const myTeams = useMemo(() => {
+  const items = Array.isArray(myTeamsData) ? myTeamsData : [];
+  const mapped = items.map((t: any) => {
+    const team = t.team ?? t; // wrapper হলে .team, না হলে সরাসরি
+    return {
+      id: team.id,
+      abbr: team.abbr || team.name?.slice(0, 3).toUpperCase() || 'TM',
+      name: team.name || '',
+      gradient: teamGradients[team.abbr] || ['#7C3AED', '#2563EB'],
+    };
+  });
+  return [...mapped, null];
+}, [myTeamsData]);
+```
+
+---
+
+## 🟢 ৮. Sports/Match "sport.charAt is not a function" ক্র্যাশ — **আগেই ফিক্স করা, ঠিক আছে**
+
+এই পরিচিত bug-টা (admin নতুন sport/match অ্যাড করলে API `sport` field কখনো string কখনো object রিটার্ন করত) `normalizeName()`/`normalizeCapitalized()` দিয়ে `sports.tsx`, `matches.tsx`, `match/[id].tsx`, `match-alerts.tsx`, `search.tsx` — সব জায়গায় ঠিক করা আছে। এটাতে নতুন কিছু করার নেই।
+
+---
+
+### সারসংক্ষেপ — কোনটা আগে ফিক্স করবেন
+
+| Priority | সমস্যা | ইমপ্যাক্ট |
+|---|---|---|
+| 🔴 | Master Enable টগল কাজ করে না (#১) | Admin-এর কনফিগ ভুল আচরণ |
+| 🔴 | Counter রিসেট না হওয়া (#২) | Smartlink/VAST unpredictable |
+| 🟠 | Cooldown/no-retry/silent-fail (#৩,৪,৬) | Debug কঠিন করে তোলে |
+| 🟠 | Placement slug mismatch (#৫) | House ad কখনো না দেখানো |
+| 🟡 | My Teams mismatch (#৭) | ছোট UI bug |
+
+চাইলে আমি এখন এই ফিক্সগুলো সরাসরি কোডে করে দিতে পারি — কোনটা থেকে শুরু করতে চান?

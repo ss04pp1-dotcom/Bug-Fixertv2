@@ -244,6 +244,20 @@ async function incrementSwitchCount(): Promise<number> {
   return next;
 }
 
+/**
+ * Resets the persistent channel-switch counter (e.g. "reset ad counter"
+ * option in a debug/settings screen, or after login/logout). Exposed because
+ * the counter previously had no way to be cleared short of reinstalling the
+ * app, which made testing new smartlink/VAST frequency values from the admin
+ * panel confusing — the cycle position carried over from whatever frequency
+ * was in effect before.
+ */
+export async function resetSwitchCounter(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([KEY_SWITCH_COUNT, KEY_LAST_SMARTLINK]);
+  } catch {}
+}
+
 // ─── Ad action engine ─────────────────────────────────────────────────────────
 
 export type AdAction = 'smartlink' | 'vast' | null;

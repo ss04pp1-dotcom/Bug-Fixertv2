@@ -227,12 +227,19 @@ export class AdvertisementsService {
   }
 
   async updateGlobalAdConfig(config: Record<string, unknown>) {
+    // The mobile app reads the master on/off switch from AdSetting.isEnabled
+    // (a separate DB column, exposed via getRemoteConfig().adsEnabled) — NOT
+    // from globalConfig.isEnabled. Without this sync, toggling "Master Enable"
+    // in the admin's Advertisements page only wrote globalConfig.isEnabled,
+    // which the mobile app's fetchGlobalAdConfig() immediately overwrites with
+    // the stale AdSetting.isEnabled value, making the toggle a no-op.
+    const isEnabled = typeof config.isEnabled === 'boolean' ? config.isEnabled : undefined;
     const settings = await this.prisma.adSetting.upsert({
       where:  { key: AD_SETTING_KEY },
-      update: { globalConfig: config as Prisma.InputJsonValue },
-      create: { key: AD_SETTING_KEY, globalConfig: config as Prisma.InputJsonValue },
+      update: { globalConfig: config as Prisma.InputJsonValue, ...(isEnabled !== undefined && { isEnabled }) },
+      create: { key: AD_SETTING_KEY, globalConfig: config as Prisma.InputJsonValue, isEnabled: isEnabled ?? true },
     });
-    return { success: true, globalConfig: settings.globalConfig };
+    return { success: true, globalConfig: settings.globalConfig, isEnabled: settings.isEnabled };
   }
 
   async getRemoteConfig() {

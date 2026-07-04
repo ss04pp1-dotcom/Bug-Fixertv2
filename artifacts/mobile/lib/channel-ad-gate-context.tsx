@@ -1,10 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
 import { useChannelAdGate } from '@/hooks/useChannelAdGate';
-import {
-  GlobalAdConfig,
-  DEFAULT_GLOBAL_AD_CONFIG,
-  fetchGlobalAdConfig,
-} from '@/lib/global-ad-engine';
+import { GlobalAdConfig } from '@/lib/global-ad-engine';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 
 interface ChannelAdGateContextValue {
   requestChannel: (id: string, params?: Record<string, any>) => Promise<void>;
@@ -15,11 +12,12 @@ interface ChannelAdGateContextValue {
 const ChannelAdGateContext = createContext<ChannelAdGateContextValue | null>(null);
 
 export function ChannelAdGateProvider({ children }: { children: React.ReactNode }) {
-  const [config, setConfig] = useState<GlobalAdConfig>(DEFAULT_GLOBAL_AD_CONFIG);
-
-  useEffect(() => {
-    fetchGlobalAdConfig().then(setConfig).catch((e) => console.warn('[AdGate] config fetch failed:', e));
-  }, []);
+  // FIX: previously fetched config once via a one-shot fetchGlobalAdConfig()
+  // call with no retry — a single slow/failed network request left the whole
+  // app's ad gate stuck on DEFAULT_GLOBAL_AD_CONFIG (all ads off) for the rest
+  // of the session. useGlobalAdConfig() retries every 10s until the server
+  // responds, matching the behavior other screens already rely on.
+  const config = useGlobalAdConfig();
 
   const gate = useChannelAdGate(config);
 
