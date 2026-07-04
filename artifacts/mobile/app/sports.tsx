@@ -278,7 +278,7 @@ export default function SportsScreen() {
   const { data: myTeamsData, isLoading: teamsLoading, isError: teamsError, refetch: refetchTeams } = useMyTeams();
 
   const liveMatches: LiveMatch[] = useMemo(() => {
-    const items = Array.isArray(liveData) ? liveData : liveData?.data ?? [];
+    const items: any[] = Array.isArray(liveData) ? liveData : [];
     return items.map((m: any) => {
       // FIX: API returns sport/tournament as relation objects {id, name, slug}
       // in some responses, plain strings in others. normalizeName() unwraps
@@ -297,7 +297,7 @@ export default function SportsScreen() {
   }, [liveData]);
 
   const upcomingMatches: UpcomingMatch[] = useMemo(() => {
-    const items = Array.isArray(upcomingData) ? upcomingData : upcomingData?.data ?? [];
+    const items: any[] = Array.isArray(upcomingData) ? upcomingData : [];
     return items.map((m: any) => {
       // FIX: same object-extraction fix as liveMatches above.
       const sportName = normalizeName(m.sport);
@@ -315,7 +315,7 @@ export default function SportsScreen() {
   }, [upcomingData]);
 
   const myTeams: (Team | null)[] = useMemo(() => {
-    const items = Array.isArray(myTeamsData) ? myTeamsData : myTeamsData?.data ?? [];
+    const items: any[] = Array.isArray(myTeamsData) ? myTeamsData : [];
     const mapped = items.map((t: any) => ({
       id: t.id,
       abbr: t.abbr || t.name?.slice(0, 3).toUpperCase() || 'TM',

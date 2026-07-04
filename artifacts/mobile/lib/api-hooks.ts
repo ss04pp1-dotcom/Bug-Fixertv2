@@ -14,9 +14,10 @@ import apiClient from './api';
 const unwrap = (r: any) => r.data.data;
 const unwrapList = (r: any) => {
   const d = r.data.data;
-  if (d && Array.isArray(d.data)) return d.data;   // paginated: { data:[...], meta:{} }
-  if (Array.isArray(d)) return d;                   // already an array
-  return d ?? [];
+  if (d && Array.isArray(d.data)) return d.data as any[];   // paginated: { data:[...], meta:{} }
+  if (Array.isArray(d)) return d as any[];                   // already an array
+  // Guarantee an array — never return a plain object so callers can safely spread
+  return [] as any[];
 };
 
 // Auth
@@ -180,11 +181,9 @@ export const useSaveWatchProgress = () => useMutation({
 // staleTime: 5 min — sport types rarely change, no need to refetch on every mount.
 export const useSportTypes = () => useQuery({
   queryKey: ['sports', 'types'],
-  queryFn: () => apiClient.get('/sports/sports', { params: { limit: 200 } })
-    .then((r: any) => {
-      const list = Array.isArray(r) ? r : r?.data ?? [];
-      return list as { id: string; name: string; slug: string; icon?: string }[];
-    }),
+  // Server returns { data: { data: [...] } } — use unwrapList which handles
+  // both paginated {data:{data:[...]}} and flat {data:[...]} shapes.
+  queryFn: () => apiClient.get('/sports/sports', { params: { limit: 200 } }).then(unwrapList),
   staleTime: 5 * 60 * 1000,
 });
 

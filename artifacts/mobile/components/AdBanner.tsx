@@ -181,8 +181,8 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
   }, [houseAd, placement]);
 
   // ── Gate checks ───────────────────────────────────────────────────────────
-  // DEBUG — always visible in Metro / Expo terminal while troubleshooting
-  console.log(
+  // DEBUG — only in dev builds (Metro / Expo Go)
+  if (__DEV__) console.log(
     `[AdBanner][${placement}]`,
     'isPremium:', isPremium,
     '| rawIsPremium:', rawIsPremium,
