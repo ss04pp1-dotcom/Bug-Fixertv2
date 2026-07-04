@@ -33,6 +33,11 @@ import { SkeletonHeroCard, SkeletonChannelRow, SkeletonCard } from '@/components
 
 const { width: W } = Dimensions.get('window');
 
+/** Coerce any API value to a primitive string — prevents `throwOnInvalidObjectType`
+ *  if the API returns score/time as an object instead of a scalar. */
+const safeStr = (v: any): string =>
+  v == null || typeof v === 'object' ? '' : String(v);
+
 const C = {
   bg: '#0A0A0F',
   card: '#13131C',
@@ -142,8 +147,8 @@ export default function HomeScreen() {
       title: m.tournament || m.title || 'Live Match',
       team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
       team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',
-      score1: m.score ?? m.score1 ?? '',
-      score2: m.score2 ?? '',
+      score1: safeStr(m.score ?? m.score1),
+      score2: safeStr(m.score2 ?? m.score?.away ?? ''),
       time: m.elapsed || m.time || (m.scheduledAt ? new Date(m.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'LIVE'),
       logo1: m.teamA?.logo || m.homeTeam?.logo || '',
       logo2: m.teamB?.logo || m.awayTeam?.logo || '',
