@@ -181,6 +181,21 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
   }, [houseAd, placement]);
 
   // ── Gate checks ───────────────────────────────────────────────────────────
+  // DEBUG — always visible in Metro / Expo terminal while troubleshooting
+  console.log(
+    `[AdBanner][${placement}]`,
+    'isPremium:', isPremium,
+    '| rawIsPremium:', rawIsPremium,
+    '| testMode:', globalConfig.testMode,
+    '| isGlobalEnabled:', isGlobalEnabled,
+    '(isEnabled:', globalConfig.isEnabled, 'banner.enabled:', globalConfig.banner.enabled, ')',
+    '| posKey:', posKey,
+    '| isPositionEnabled:', isPositionEnabled,
+    '| dismissed:', dismissed,
+    '| activeHtml len:', activeHtml.length,
+    '| houseAd:', houseAd?.id ?? 'null',
+  );
+
   if (isPremium || dismissed) return null;
   if (!isGlobalEnabled || !isPositionEnabled) return null;
 

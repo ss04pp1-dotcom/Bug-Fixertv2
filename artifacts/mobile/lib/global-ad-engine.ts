@@ -134,10 +134,13 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
   }
 
   // Try network
+  const url = `${Config.API_BASE}/ads/config`;
+  console.log('[AdEngine] Fetching config from:', url);
   try {
-    const res = await fetch(`${Config.API_BASE}/ads/config`, {
+    const res = await fetch(url, {
       signal: AbortSignal.timeout(10000), // 10s — Render.com free tier can take time to wake up
     });
+    console.log('[AdEngine] HTTP status:', res.status);
     if (res.ok) {
       const json = await res.json();
       const raw: Partial<GlobalAdConfig> | null =
@@ -153,6 +156,12 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
         json?.data?.adsEnabled ??
         json?.adsEnabled ??
         null;
+
+      console.log('[AdEngine] adsEnabled:', adsEnabled,
+        '| banner.enabled:', raw?.banner?.enabled,
+        '| smartlink.enabled:', raw?.smartlink?.enabled,
+        '| vast.enabled:', raw?.vast?.enabled,
+        '| testMode:', raw?.testMode);
 
       const base: Partial<GlobalAdConfig> = raw && typeof raw === 'object' ? { ...raw } : {};
 
@@ -174,13 +183,21 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
 
       _cachedConfig = mergeWithDefaults(base);
       _configFetchedAt = now;
+      console.log('[AdEngine] Config loaded ✓ isEnabled:', _cachedConfig.isEnabled,
+        '| banner:', _cachedConfig.banner.enabled,
+        '| smartlink:', _cachedConfig.smartlink.enabled,
+        '| vast:', _cachedConfig.vast.enabled);
       // Persist for offline use
       try {
         await AsyncStorage.setItem(KEY_CONFIG_CACHE, JSON.stringify({ config: _cachedConfig, ts: now }));
       } catch {}
       return _cachedConfig;
+    } else {
+      console.warn('[AdEngine] Bad HTTP status, falling back to cache');
     }
-  } catch {}
+  } catch (err: any) {
+    console.warn('[AdEngine] Fetch failed:', err?.message ?? err, '— falling back to cache');
+  }
 
   // Try AsyncStorage cache
   try {
@@ -188,6 +205,9 @@ export async function fetchGlobalAdConfig(): Promise<GlobalAdConfig> {
     if (cached) {
       const { config } = JSON.parse(cached);
       _cachedConfig = mergeWithDefaults(config);
+      console.log('[AdEngine] Loaded from AsyncStorage cache');
+    } else {
+      console.warn('[AdEngine] No cache — using DEFAULT (all ads OFF)');
     }
   } catch {}
 
