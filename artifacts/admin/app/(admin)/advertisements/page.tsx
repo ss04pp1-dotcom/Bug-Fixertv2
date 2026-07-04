@@ -29,6 +29,7 @@ interface BannerPositions {
 interface BannerConfig {
   enabled: boolean; htmlCode: string; height: number;
   heights: Partial<Record<string, number>>;
+  htmlCodes: Partial<Record<string, string>>;
   positions: BannerPositions;
 }
 interface GlobalAdConfig {
@@ -48,7 +49,7 @@ const DEFAULT: GlobalAdConfig = {
   smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30 },
   vast:      { enabled: false, url: '', skipAfterSeconds: 5, frequency: 3, timeoutSeconds: 10 },
   banner: {
-    enabled: false, htmlCode: '', height: 90, heights: {},
+    enabled: false, htmlCode: '', height: 90, heights: {}, htmlCodes: {},
     positions: {
       home: true, player: true, playerPosition: 'below',
       categories: false, movies: true, sports: false,

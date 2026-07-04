@@ -122,8 +122,9 @@ function wrapHtml(script: string): string {
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
+*{margin:0;padding:0;box-sizing:border-box;max-width:100% !important;}
 html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-user-select:none;user-select:none;}
+img,iframe,video,object,embed{max-width:100% !important;width:100% !important;height:auto !important;}
 </style>
 </head>
 <body>${script}</body>
@@ -433,15 +434,17 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
     : undefined;
   const effectiveHeight = bannerHeight ?? perPlacementHeight ?? globalConfig.banner.height ?? 90;
 
-  // Resolved HTML source (prop → global config → house ad)
+  // Resolved HTML source: prop → per-placement override → global → house ad
+  const perPlacementHtml = posKey
+    ? (globalConfig.banner.htmlCodes?.[posKey]?.trim() || '')
+    : '';
   const globalHtml  = globalConfig.banner.htmlCode?.trim() || '';
   const houseHtml   = houseAd?.htmlCode?.trim() || '';
-  const activeHtml  = propHtmlCode?.trim() || globalHtml || houseHtml || '';
+  const activeHtml  = propHtmlCode?.trim() || perPlacementHtml || globalHtml || houseHtml || '';
 
   // Secondary units (only shown when primary HTML is present)
   const secondHtml  = (globalConfig.banner as any).secondHtmlCode?.trim() || '';
   const vastUrl     = (globalConfig.banner as any).vastUrl?.trim() || '';
-  const vastHeight  = (globalConfig.banner as any).vastHeight ?? 250;
   const vastSkipSec = (globalConfig.banner as any).vastSkipSec ?? 5;
 
   // ── Fetch house ad only when needed ───────────────────────────────────────
@@ -506,11 +509,11 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
           />
         )}
 
-        {/* Inline VAST video unit */}
+        {/* Inline VAST video unit — uses same effectiveHeight as the banner slot */}
         {!!vastUrl && (
           <VastAdUnit
             vastUrl={vastUrl}
-            vastHeight={vastHeight}
+            vastHeight={effectiveHeight}
             skipSec={vastSkipSec}
             onDismiss={dismiss}
           />
@@ -537,7 +540,7 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
           <Image
             source={{ uri: Config.imageUrl(houseAd.imageUrl) }}
             style={[styles.bannerImage, { height: effectiveHeight }]}
-            resizeMode="cover"
+            resizeMode="contain"
             onError={() => setImgError(true)}
           />
         ) : (

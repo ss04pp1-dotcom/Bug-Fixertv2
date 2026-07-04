@@ -56,6 +56,12 @@ export interface GlobalAdConfig {
      * `height` for that specific slot. Omitted keys fall back to the global `height`.
      */
     heights: Partial<Record<string, number>>;
+    /**
+     * Per-placement ad HTML/JS script overrides. When present for a position key,
+     * this script is used instead of the global `htmlCode` for that slot.
+     * Useful when different screen sizes need different ad units (e.g. 300×90 vs 300×250).
+     */
+    htmlCodes: Partial<Record<string, string>>;
     positions: {
       home: boolean;
       player: boolean;
@@ -96,6 +102,7 @@ export const DEFAULT_GLOBAL_AD_CONFIG: GlobalAdConfig = {
     vastSkipSec: 5,
     height: 90,
     heights: {},
+    htmlCodes: {},
     positions: {
       home: true,
       player: true,
@@ -136,6 +143,10 @@ function mergeWithDefaults(raw: Partial<GlobalAdConfig>): GlobalAdConfig {
       heights: {
         ...DEFAULT_GLOBAL_AD_CONFIG.banner.heights,
         ...(raw.banner?.heights ?? {}),
+      },
+      htmlCodes: {
+        ...DEFAULT_GLOBAL_AD_CONFIG.banner.htmlCodes,
+        ...(raw.banner?.htmlCodes ?? {}),
       },
       positions: {
         ...DEFAULT_GLOBAL_AD_CONFIG.banner.positions,
