@@ -16,6 +16,7 @@ import {
 interface SmartlinkConfig {
   enabled: boolean; url: string; frequency: number;
   delaySeconds: number; cooldownMinutes: number;
+  minStaySeconds: number;
 }
 interface VastConfig {
   enabled: boolean; url: string; skipAfterSeconds: number;
@@ -47,7 +48,7 @@ interface HouseAd {
 const DEFAULT: GlobalAdConfig = {
   isEnabled: true,
   testMode: false,
-  smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30 },
+  smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30, minStaySeconds: 0 },
   vast:      { enabled: false, url: '', skipAfterSeconds: 5, frequency: 3, timeoutSeconds: 10 },
   banner: {
     enabled: false, htmlCode: '', height: 90, heights: {}, htmlCodes: {}, vastUrlsByPosition: {},
@@ -442,6 +443,10 @@ export default function AdvertisementsPage() {
                       onChange={v => setSL(s => ({ ...s, cooldownMinutes: Number(v) }))} />
                   </Field>
                 </div>
+                <Field label="Minimum Stay (seconds)" hint="If user closes the smart link page before this many seconds, it re-opens automatically (up to 3 times). 0 = disabled">
+                  <TextInput type="number" value={config.smartlink.minStaySeconds}
+                    onChange={v => setSL(s => ({ ...s, minStaySeconds: Number(v) }))} />
+                </Field>
               </div>
             </Section>
 

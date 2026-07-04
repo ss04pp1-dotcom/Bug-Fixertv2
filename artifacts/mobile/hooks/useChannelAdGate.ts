@@ -45,11 +45,26 @@ export function useChannelAdGate(config: GlobalAdConfig) {
           await new Promise<void>(r => setTimeout(r, config.smartlink.delaySeconds * 1000));
         }
         try {
-          await WebBrowser.openBrowserAsync(config.smartlink.url, {
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
-            showTitle: false,
-            enableBarCollapsing: true,
-          });
+          const minStaySeconds = Math.max(0, config.smartlink.minStaySeconds || 0);
+          const maxRetries = 3; // avoid annoying the user forever if they keep force-closing
+          let totalElapsedMs = 0;
+          let attempts = 0;
+
+          do {
+            const startedAt = Date.now();
+            await WebBrowser.openBrowserAsync(config.smartlink.url, {
+              presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+              showTitle: false,
+              enableBarCollapsing: true,
+            });
+            totalElapsedMs += Date.now() - startedAt;
+            attempts += 1;
+          } while (
+            minStaySeconds > 0 &&
+            totalElapsedMs < minStaySeconds * 1000 &&
+            attempts < maxRetries
+          );
+
           trackAdEvent('impression', 'smartlink');
         } catch (e: any) {
           // FIX: previously swallowed silently — failures never showed up in

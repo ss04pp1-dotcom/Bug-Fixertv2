@@ -29,6 +29,13 @@ export interface GlobalAdConfig {
     frequency: number;        // show smartlink after every N-th switch in cycle
     delaySeconds: number;     // wait this long before opening browser
     cooldownMinutes: number;  // minimum time between consecutive smartlinks
+    /**
+     * Minimum seconds the user must stay on the smart-link page before the
+     * in-app browser is allowed to close. If they dismiss it earlier, it is
+     * re-opened automatically (up to a few retries) until the total time
+     * spent reaches this threshold. 0 disables the enforcement.
+     */
+    minStaySeconds: number;
   };
   vast: {
     enabled: boolean;
@@ -93,6 +100,7 @@ export const DEFAULT_GLOBAL_AD_CONFIG: GlobalAdConfig = {
     frequency: 3,
     delaySeconds: 0,
     cooldownMinutes: 30,
+    minStaySeconds: 0,
   },
   vast: {
     enabled: false,
