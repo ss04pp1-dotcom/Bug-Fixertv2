@@ -36,6 +36,10 @@ description: Deep audit of artifacts/mobile — all confirmed bugs and their fix
 ### UI Bug
 - `app/movie/[id].tsx`: `isBookmarked ? 'My List' : 'My List'` → `'Added' : 'My List'` — label was identical in both states.
 
+### Ad Placement Slug Inference (Backend)
+- `advertisements.service.ts` `getPublicPlacements()` last-resort type-inference: when a requested slug doesn't exactly or fuzzily match a seeded `AdPlacement`, the code infers ad type from slug keywords. The old order checked `slug.includes('channel')` before `banner`, so the mobile app's `channel_banner` placement (live player screen) was misclassified as `interstitial` and got filtered to interstitial/popup/app_open/splash ads only — no banner ever rendered there, even with correct config. Fixed by checking `banner` first, and requiring both `channel` AND `switch` together to imply `interstitial`. **Lesson:** when adding keyword-based fallback classifiers, generic substrings (like `channel`) can collide with unrelated placement names using the same word for a different purpose — order matters and combos should require multiple confirming keywords, not one weak one.
+- Added `getAdEngineDebugState()` (lib/global-ad-engine.ts) + `app/ad-debug.tsx` debug screen (linked from Settings → Diagnostics, dev-only) showing switch counter, cycle position, next smartlink/VAST countdown, and live global config — plus buttons to force-refresh config and reset the switch counter, for QA testing ad cadence without reinstalling.
+
 ## Known Non-Critical / Low-Priority Remaining
 - `api.ts`: POST requests skip 401 auto-retry (intentional, documented — avoids duplicate resource creation).
 - `api-hooks.ts`: heavy use of `any` in unwrap helpers — no TypeScript safety on API responses.

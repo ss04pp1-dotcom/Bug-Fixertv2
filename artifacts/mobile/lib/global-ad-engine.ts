@@ -258,6 +258,59 @@ export async function resetSwitchCounter(): Promise<void> {
   } catch {}
 }
 
+// ─── Debug introspection ───────────────────────────────────────────────────────
+
+export interface AdEngineDebugState {
+  switchCount: number;
+  lastSmartlinkTs: number | null;
+  configLoaded: boolean;
+  configFetchedAt: number | null;
+  config: GlobalAdConfig;
+  slFreq: number;
+  vaFreq: number;
+  cycleLen: number;
+  posInCycle: number;
+  nextSmartlinkIn: number;
+  nextVastIn: number;
+}
+
+/**
+ * Returns a snapshot of the ad engine's internal state for a debug/QA screen —
+ * lets testers see exactly where the persistent switch counter is in the
+ * smartlink/VAST cycle without having to read AsyncStorage manually.
+ */
+export async function getAdEngineDebugState(): Promise<AdEngineDebugState> {
+  const [switchCount, lastTs] = await Promise.all([
+    getSwitchCount(),
+    AsyncStorage.getItem(KEY_LAST_SMARTLINK).catch(() => null),
+  ]);
+
+  const config = _cachedConfig;
+  const slFreq = Math.max(1, config.smartlink.frequency);
+  const vaFreq = Math.max(1, config.vast.frequency);
+  const cycleLen = slFreq + vaFreq;
+  const posInCycle = switchCount % cycleLen;
+
+  const nextSmartlinkIn = posInCycle < slFreq
+    ? slFreq - posInCycle
+    : cycleLen - posInCycle + slFreq;
+  const nextVastIn = cycleLen - posInCycle === cycleLen ? cycleLen : cycleLen - posInCycle;
+
+  return {
+    switchCount,
+    lastSmartlinkTs: lastTs ? parseInt(lastTs, 10) : null,
+    configLoaded: isConfigLoaded(),
+    configFetchedAt: _configFetchedAt > 0 ? _configFetchedAt : null,
+    config,
+    slFreq,
+    vaFreq,
+    cycleLen,
+    posInCycle,
+    nextSmartlinkIn,
+    nextVastIn,
+  };
+}
+
 // ─── Ad action engine ─────────────────────────────────────────────────────────
 
 export type AdAction = 'smartlink' | 'vast' | null;

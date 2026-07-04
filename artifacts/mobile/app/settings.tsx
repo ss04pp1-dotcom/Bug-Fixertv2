@@ -68,6 +68,7 @@ const SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
     title: 'Diagnostics',
     items: [
       { id: 'iptv-report', label: 'IPTV Compatibility Report', icon: 'pulse-outline' as const, iconColor: '#8B5CF6', type: 'nav' as const, route: '/iptv-report' },
+      { id: 'ad-debug', label: 'Ad Engine Debug', icon: 'megaphone-outline' as const, iconColor: '#EC4899', type: 'nav' as const, route: '/ad-debug' },
     ] as SettingItem[],
   }] : []),
 ];
