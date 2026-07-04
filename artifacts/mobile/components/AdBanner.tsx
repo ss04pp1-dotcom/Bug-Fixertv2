@@ -6,14 +6,24 @@
  *   2. Global ad config's `banner.htmlCode` (Adsterra / Monetag global script)
  *   3. House ad fetched from API (image or HTML)
  *
+ * After the primary unit, two optional secondary units may appear:
+ *   A. `banner.secondHtmlCode` — second WebView ad (HilTop, another network, etc.)
+ *   B. `banner.vastUrl` — inline VAST video player rendered in a WebView
+ *
  * Visibility rules (all must pass):
  *   a. User is NOT premium
  *   b. globalConfig.isEnabled === true
  *   c. globalConfig.banner.enabled === true
  *   d. If placement maps to a position key → that position is enabled in global config
+ *
+ * Fix — banner height auto-sizing:
+ *   WebViews inject JS to measure their content height and post it back via
+ *   postMessage. The container height adjusts to fit (capped at maxHeight).
+ *   This prevents ad content from being clipped when the creative is taller
+ *   than the configured `banner.height`.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,11 +35,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { Config } from '@/constants/config';
+import { useAuthStore } from '@/lib/auth-store';
+import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 
-// Derive a clean base URL (scheme + host only) from Config.API_BASE.
-// Ad network scripts (Adsterra, Monetag, etc.) need a real HTTP origin in the
-// WebView's baseUrl — without it the XHR/fetch calls inside the script hit
-// `null` origin and are blocked, leaving the banner black.
+// ─── Base URL for WebView ads ─────────────────────────────────────────────────
+// Ad network scripts (Adsterra, Monetag, HilTop, etc.) need a real HTTP origin
+// in the WebView's baseUrl — without it the XHR/fetch calls inside the script
+// hit `null` origin and are blocked, leaving the banner black.
 const AD_BASE_URL = (() => {
   try {
     return new URL(Config.API_BASE).origin;
@@ -38,8 +50,27 @@ const AD_BASE_URL = (() => {
     return undefined;
   }
 })();
-import { useAuthStore } from '@/lib/auth-store';
-import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+
+// ─── Max height cap to prevent a runaway ad from taking over the screen ───────
+const MAX_AD_HEIGHT = 400;
+
+// ─── JS injected into every ad WebView to auto-measure content height ─────────
+// Posts { type: 'adHeight', h: <pixels> } at 0 / 600 / 1800 / 3500 ms so the
+// container can grow to fit the creative instead of clipping it.
+const AUTO_HEIGHT_JS = `
+(function(){
+  function send(){
+    var h=Math.max(
+      document.body.scrollHeight,document.body.offsetHeight,
+      document.documentElement.scrollHeight,document.documentElement.offsetHeight
+    );
+    if(h>0 && window.ReactNativeWebView)
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'adHeight',h:h}));
+  }
+  send();
+  [600,1800,3500].forEach(function(t){setTimeout(send,t);});
+})(); true;
+`;
 
 // ─── Placement → banner position key mapping ──────────────────────────────────
 
@@ -99,6 +130,146 @@ html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-
 </html>`;
 }
 
+/**
+ * Generates a self-contained HTML page that fetches a VAST tag, parses it for
+ * the best MediaFile URL, and plays the video inline. Posts { type:'vastDone' }
+ * via postMessage when the video ends, is skipped, or errors.
+ */
+function makeVastHtml(vastUrl: string, skipSec: number): string {
+  // Escape the URL for safe embedding in a JS string literal
+  const escapedUrl = vastUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;}
+video{width:100%;height:100%;object-fit:contain;display:block;}
+#adlabel{position:fixed;top:8px;left:8px;background:rgba(0,0,0,0.6);
+  color:#9CA3AF;font-size:9px;font-weight:700;letter-spacing:.8px;
+  padding:2px 6px;border-radius:4px;font-family:sans-serif;}
+#skipwrap{position:fixed;bottom:10px;right:10px;font-family:sans-serif;}
+#countdown{background:rgba(0,0,0,0.65);color:#aaa;font-size:12px;
+  padding:5px 12px;border-radius:5px;}
+#skipbtn{background:rgba(0,0,0,0.75);color:#fff;font-size:13px;font-weight:600;
+  padding:7px 16px;border-radius:5px;border:1px solid rgba(255,255,255,.3);
+  cursor:pointer;display:none;}
+</style>
+</head>
+<body>
+<span id="adlabel">AD</span>
+<video id="v" autoplay playsinline></video>
+<div id="skipwrap">
+  <span id="countdown">Skip in ${skipSec}s</span>
+  <button id="skipbtn" onclick="done()">Skip Ad ›</button>
+</div>
+<script>
+var skipSec=${skipSec},elapsed=0,timer=null,finished=false;
+
+// Idempotent: once called, never fires again
+function done(){
+  if(finished)return;
+  finished=true;
+  if(timer){clearInterval(timer);timer=null;}
+  if(window.ReactNativeWebView)
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'vastDone'}));
+}
+
+function startTimer(){
+  timer=setInterval(function(){
+    elapsed++;
+    var rem=skipSec-elapsed;
+    if(rem>0){
+      document.getElementById('countdown').textContent='Skip in '+rem+'s';
+    } else {
+      // Stop interval — no more work to do in the countdown path
+      if(timer){clearInterval(timer);timer=null;}
+      document.getElementById('countdown').style.display='none';
+      document.getElementById('skipbtn').style.display='block';
+    }
+  },1000);
+}
+
+// Decode XML entities in a string (covers the 5 predefined + numeric refs)
+function decodeXml(s){
+  return s
+    .replace(/&amp;/g,'&')
+    .replace(/&lt;/g,'<')
+    .replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"')
+    .replace(/&#39;/g,"'")
+    .replace(/&#x([0-9a-fA-F]+);/g,function(_,h){return String.fromCharCode(parseInt(h,16));})
+    .replace(/&#([0-9]+);/g,function(_,d){return String.fromCharCode(parseInt(d,10));});
+}
+// Unwrap CDATA or plain text from a tag's text content, tolerating whitespace,
+// then decode XML entities so query-string params (&amp; etc.) survive correctly.
+function unwrap(s){return decodeXml(s.replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g,'$1').trim());}
+
+// Extract the best (preferably MP4/progressive) MediaFile URL from VAST XML
+function extractMedia(xml){
+  var re=/<MediaFile(\\s[^>]*)?>([\\s\\S]*?)<\\/MediaFile>/gi;
+  var best=null, bestScore=-1, m;
+  while((m=re.exec(xml))!==null){
+    var attrs=m[1]||'';
+    var url=unwrap(m[2]);
+    if(!url)continue;
+    // Score: MP4/progressive delivery wins over everything else
+    var isMp4=/video\\/mp4/i.test(attrs)||/\\.mp4(\\?|$)/i.test(url);
+    var isProg=/delivery="progressive"/i.test(attrs);
+    var score=(isMp4?2:0)+(isProg?1:0);
+    if(score>bestScore){bestScore=score;best=url;}
+  }
+  return best;
+}
+
+// fetch with a hard timeout via Promise.race — works even without AbortController.
+// Uses AbortController when available for proper resource cleanup; falls back to
+// a pure-promise race so the request never hangs indefinitely.
+function fetchTimeout(url,ms){
+  var timeoutP=new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'));},ms);});
+  var fetchP;
+  try{
+    var ctrl=new AbortController();
+    var t=setTimeout(function(){ctrl.abort();},ms);
+    fetchP=fetch(url,{signal:ctrl.signal}).finally(function(){clearTimeout(t);});
+  }catch(e){
+    fetchP=fetch(url);
+  }
+  return Promise.race([fetchP,timeoutP]);
+}
+
+async function loadVast(url,depth){
+  if(depth>3||finished){done();return;}
+  try{
+    var r=await fetchTimeout(url,12000);
+    if(!r.ok){done();return;}
+    var xml=await r.text();
+    // Handle VAST wrapper redirect — whitespace-tolerant
+    var wrapRe=/<VASTAdTagURI[\\s\\S]*?>([\\s\\S]*?)<\\/VASTAdTagURI>/i;
+    var wrapM=xml.match(wrapRe);
+    if(wrapM){var wrapUrl=unwrap(wrapM[1]);if(wrapUrl){loadVast(wrapUrl,depth+1);return;}}
+    var mediaUrl=extractMedia(xml);
+    if(!mediaUrl){done();return;}
+    var v=document.getElementById('v');
+    v.src=mediaUrl;
+    v.onended=done;
+    v.onerror=function(){done();};
+    v.play().catch(function(){done();});
+    startTimer();
+    v.onloadedmetadata=function(){
+      var h=v.videoHeight||250;
+      if(window.ReactNativeWebView)
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:'adHeight',h:Math.min(h,400)}));
+    };
+  }catch(e){done();}
+}
+loadVast('${escapedUrl}',0);
+</script>
+</body>
+</html>`;
+}
+
 async function fetchHouseAd(placement: string): Promise<AdItem | null> {
   try {
     const res = await fetch(
@@ -137,19 +308,115 @@ async function trackEvent(adId: string, event: 'impression' | 'click', placement
   } catch {}
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Single WebView ad unit (reusable) ────────────────────────────────────────
+
+interface WebAdUnitProps {
+  html: string;
+  fallbackHeight: number;
+  onDismiss?: () => void;
+  showDismiss?: boolean;
+  containerStyle?: object;
+}
+
+function WebAdUnit({ html, fallbackHeight, onDismiss, showDismiss = true, containerStyle }: WebAdUnitProps) {
+  const [height, setHeight] = useState(fallbackHeight);
+
+  const handleMessage = useCallback((e: { nativeEvent: { data: string } }) => {
+    try {
+      const d = JSON.parse(e.nativeEvent.data);
+      if (d.type === 'adHeight' && typeof d.h === 'number' && d.h > 10) {
+        setHeight(Math.min(d.h, MAX_AD_HEIGHT));
+      }
+    } catch {}
+  }, []);
+
+  return (
+    <View style={[styles.container, { height }, containerStyle]}>
+      <View style={styles.adLabel}>
+        <Text style={styles.adLabelText}>AD</Text>
+      </View>
+      <WebView
+        source={{ html: wrapHtml(html), baseUrl: AD_BASE_URL }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        scrollEnabled={false}
+        javaScriptEnabled
+        domStorageEnabled
+        thirdPartyCookiesEnabled
+        cacheEnabled={false}
+        originWhitelist={['*']}
+        injectedJavaScript={AUTO_HEIGHT_JS}
+        onMessage={handleMessage}
+      />
+      {showDismiss && onDismiss && (
+        <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss} hitSlop={8}>
+          <Ionicons name="close" size={14} color="#9CA3AF" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ─── Inline VAST video unit ───────────────────────────────────────────────────
+
+interface VastAdUnitProps {
+  vastUrl: string;
+  vastHeight: number;
+  skipSec: number;
+  onDismiss?: () => void;
+}
+
+function VastAdUnit({ vastUrl, vastHeight, skipSec, onDismiss }: VastAdUnitProps) {
+  const [height, setHeight] = useState(vastHeight);
+  const [done, setDone] = useState(false);
+
+  const handleMessage = useCallback((e: { nativeEvent: { data: string } }) => {
+    try {
+      const d = JSON.parse(e.nativeEvent.data);
+      if (d.type === 'adHeight' && typeof d.h === 'number' && d.h > 10) {
+        setHeight(Math.min(d.h, MAX_AD_HEIGHT));
+      } else if (d.type === 'vastDone') {
+        setDone(true);
+      }
+    } catch {}
+  }, []);
+
+  if (done) return null;
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <WebView
+        source={{ html: makeVastHtml(vastUrl, skipSec) }}
+        style={{ flex: 1, backgroundColor: '#000' }}
+        scrollEnabled={false}
+        javaScriptEnabled
+        domStorageEnabled
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback
+        originWhitelist={['*']}
+        onMessage={handleMessage}
+      />
+      {onDismiss && (
+        <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss} hitSlop={8}>
+          <Ionicons name="close" size={14} color="#9CA3AF" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, style }: AdBannerProps) {
-  const [houseAd, setHouseAd]   = useState<AdItem | null>(null);
+  const [houseAd, setHouseAd]     = useState<AdItem | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [imgError, setImgError]   = useState(false);
   const impressionTracked         = useRef(false);
 
-  const { user }    = useAuthStore();
+  const { user }     = useAuthStore();
   const rawIsPremium = !!user?.plan && user.plan.toLowerCase() !== 'free';
   const globalConfig = useGlobalAdConfig();
 
-  // Test Mode: bypass premium check so admins can verify ads work in real devices.
+  // Test Mode: bypass premium check so admins can verify ads work on real devices.
   const isPremium = rawIsPremium && !globalConfig.testMode;
 
   // ── Visibility checks ──────────────────────────────────────────────────────
@@ -159,17 +426,22 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
     ? !!(globalConfig.banner.positions as any)[posKey]
     : true; // Unknown placement → allow by default
 
-  // Effective height
+  // Effective height for primary unit
   const effectiveHeight = bannerHeight ?? globalConfig.banner.height ?? 90;
 
   // Resolved HTML source (prop → global config → house ad)
-  const globalHtml = globalConfig.banner.htmlCode?.trim() || '';
-  const houseHtml  = houseAd?.htmlCode?.trim() || '';
-  const activeHtml = propHtmlCode?.trim() || globalHtml || houseHtml || '';
+  const globalHtml  = globalConfig.banner.htmlCode?.trim() || '';
+  const houseHtml   = houseAd?.htmlCode?.trim() || '';
+  const activeHtml  = propHtmlCode?.trim() || globalHtml || houseHtml || '';
+
+  // Secondary units (only shown when primary HTML is present)
+  const secondHtml  = (globalConfig.banner as any).secondHtmlCode?.trim() || '';
+  const vastUrl     = (globalConfig.banner as any).vastUrl?.trim() || '';
+  const vastHeight  = (globalConfig.banner as any).vastHeight ?? 250;
+  const vastSkipSec = (globalConfig.banner as any).vastSkipSec ?? 5;
 
   // ── Fetch house ad only when needed ───────────────────────────────────────
   useEffect(() => {
-    // Don't fetch if: premium, disabled, hidden position, or we already have HTML
     if (isPremium || !isGlobalEnabled || !isPositionEnabled || dismissed) return;
     if (propHtmlCode || globalHtml) return; // Global/prop HTML takes priority — skip fetch
 
@@ -181,11 +453,7 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
   }, [placement, isPremium, isGlobalEnabled, isPositionEnabled, dismissed, propHtmlCode, globalHtml]);
 
   // ── Impression tracking ───────────────────────────────────────────────────
-  // Reset tracked flag when the ad itself changes so a new ad always fires an impression.
-  useEffect(() => {
-    impressionTracked.current = false;
-  }, [houseAd?.id]);
-
+  useEffect(() => { impressionTracked.current = false; }, [houseAd?.id]);
   useEffect(() => {
     if (houseAd && !impressionTracked.current) {
       impressionTracked.current = true;
@@ -193,45 +461,56 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
     }
   }, [houseAd, placement]);
 
-  // ── Gate checks ───────────────────────────────────────────────────────────
-  // DEBUG — only in dev builds (Metro / Expo Go)
+  // ── Debug log ─────────────────────────────────────────────────────────────
   if (__DEV__) console.log(
     `[AdBanner][${placement}]`,
     'isPremium:', isPremium,
-    '| rawIsPremium:', rawIsPremium,
-    '| testMode:', globalConfig.testMode,
     '| isGlobalEnabled:', isGlobalEnabled,
-    '(isEnabled:', globalConfig.isEnabled, 'banner.enabled:', globalConfig.banner.enabled, ')',
-    '| posKey:', posKey,
     '| isPositionEnabled:', isPositionEnabled,
     '| dismissed:', dismissed,
     '| activeHtml len:', activeHtml.length,
+    '| secondHtml len:', secondHtml.length,
+    '| vastUrl:', vastUrl || 'none',
     '| houseAd:', houseAd?.id ?? 'null',
   );
 
+  // ── Gate checks ───────────────────────────────────────────────────────────
   if (isPremium || dismissed) return null;
   if (!isGlobalEnabled || !isPositionEnabled) return null;
 
-  // ── Render WebView banner ─────────────────────────────────────────────────
+  const dismiss = () => setDismissed(true);
+
+  // ── Render WebView banner(s) ──────────────────────────────────────────────
   if (activeHtml) {
+    // Wrap all units in a single View so callers always get a stable root node —
+    // React Native list/scroll layouts can break with Fragment returns.
     return (
-      <View style={[styles.container, { height: effectiveHeight }, style]}>
-        <View style={styles.adLabel}>
-          <Text style={styles.adLabelText}>AD</Text>
-        </View>
-        <WebView
-          source={{ html: wrapHtml(activeHtml), baseUrl: AD_BASE_URL }}
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          scrollEnabled={false}
-          javaScriptEnabled
-          domStorageEnabled
-          thirdPartyCookiesEnabled
-          cacheEnabled={false}
-          originWhitelist={['*']}
+      <View style={style}>
+        {/* Primary ad unit */}
+        <WebAdUnit
+          html={activeHtml}
+          fallbackHeight={effectiveHeight}
+          onDismiss={dismiss}
         />
-        <TouchableOpacity style={styles.dismissBtn} onPress={() => setDismissed(true)} hitSlop={8}>
-          <Ionicons name="close" size={14} color="#9CA3AF" />
-        </TouchableOpacity>
+
+        {/* Secondary HTML unit (e.g. HilTop, second network) */}
+        {!!secondHtml && (
+          <WebAdUnit
+            html={secondHtml}
+            fallbackHeight={effectiveHeight}
+            onDismiss={dismiss}
+          />
+        )}
+
+        {/* Inline VAST video unit */}
+        {!!vastUrl && (
+          <VastAdUnit
+            vastUrl={vastUrl}
+            vastHeight={vastHeight}
+            skipSec={vastSkipSec}
+            onDismiss={dismiss}
+          />
+        )}
       </View>
     );
   }
@@ -264,7 +543,7 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
           </View>
         )}
       </TouchableOpacity>
-      <TouchableOpacity style={styles.dismissBtn} onPress={() => setDismissed(true)} hitSlop={8}>
+      <TouchableOpacity style={styles.dismissBtn} onPress={dismiss} hitSlop={8}>
         <Ionicons name="close" size={14} color="#9CA3AF" />
       </TouchableOpacity>
     </View>

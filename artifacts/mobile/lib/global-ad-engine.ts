@@ -40,6 +40,14 @@ export interface GlobalAdConfig {
   banner: {
     enabled: boolean;
     htmlCode: string;
+    /** Optional second ad unit rendered below the first (e.g. HilTop, another network script). */
+    secondHtmlCode: string;
+    /** Optional inline VAST/video URL rendered as a WebView video player below HTML banners. */
+    vastUrl: string;
+    /** Height of the inline VAST video unit in pixels. Default 250. */
+    vastHeight: number;
+    /** Seconds before the inline VAST unit can be skipped. Default 5. */
+    vastSkipSec: number;
     height: number;
     positions: {
       home: boolean;
@@ -75,6 +83,10 @@ export const DEFAULT_GLOBAL_AD_CONFIG: GlobalAdConfig = {
   banner: {
     enabled: false,
     htmlCode: '',
+    secondHtmlCode: '',
+    vastUrl: '',
+    vastHeight: 250,
+    vastSkipSec: 5,
     height: 90,
     positions: {
       home: true,
