@@ -209,7 +209,7 @@ export default function CommentaryScreen() {
   const { data: commentaryData, isLoading, isError, refetch } = useMatchCommentary(id);
 
   const commentary: CommentaryEntry[] = useMemo(() => {
-    const items = Array.isArray(commentaryData) ? commentaryData : commentaryData?.data ?? [];
+    const items = commentaryData ?? [];
     return items.map((c: any) => ({
       id: c.id,
       overBall: c.overBall || c.overNumber || '',
@@ -225,7 +225,9 @@ export default function CommentaryScreen() {
     }));
   }, [commentaryData]);
 
-  const overSummary = Array.isArray(commentaryData) ? null : commentaryData?.overSummary;
+  // Backend does not currently return an `overSummary` field alongside commentary
+  // entries; kept as undefined so OverSummaryCard renders nothing (existing behavior).
+  const overSummary: { overNumber?: number; balls?: string; runs?: number } | undefined = undefined;
 
   if (isLoading) {
     return (

@@ -179,7 +179,7 @@ export default function MatchesScreen() {
   const { data: liveOnlyData } = useLiveMatches();
 
   const allMatches: MatchItem[] = useMemo(() => {
-    const items = Array.isArray(matchesData) ? matchesData : matchesData?.data ?? [];
+    const items = matchesData ?? [];
     return items.map((m: any) => ({
       id: m.id,
       type: (m.status === 'live' ? 'live' : m.status === 'completed' || m.status === 'finished' ? 'completed' : 'upcoming') as TabType,
@@ -195,7 +195,7 @@ export default function MatchesScreen() {
   const filtered = allMatches.filter((m) => m.type === activeTab);
 
   const liveCount = useMemo(() => {
-    const liveItems = Array.isArray(liveOnlyData) ? liveOnlyData : liveOnlyData?.data ?? [];
+    const liveItems = liveOnlyData ?? [];
     if (liveItems.length > 0) return liveItems.length;
     return allMatches.filter(m => m.type === 'live' || m.status === 'live').length;
   }, [allMatches, liveOnlyData]);

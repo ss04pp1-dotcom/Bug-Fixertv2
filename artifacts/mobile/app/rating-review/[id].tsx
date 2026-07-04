@@ -59,7 +59,7 @@ export default function RatingReviewScreen() {
   const [localLikes, setLocalLikes] = useState<Record<string, { count: number; isLiked: boolean }>>({});
 
   const reviews: Review[] = useMemo(() => {
-    const items = Array.isArray(reviewsData) ? reviewsData : reviewsData?.data ?? [];
+    const items = reviewsData ?? [];
     return items.map((r: any) => {
       const baseLikes = r.likes || 0;
       const baseIsLiked = r.isLiked || false;

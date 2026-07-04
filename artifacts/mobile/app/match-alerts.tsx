@@ -52,7 +52,7 @@ export default function MatchAlertsScreen() {
   const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({});
 
   const alerts: Alert[] = useMemo(() => {
-    const items = Array.isArray(alertsData) ? alertsData : alertsData?.data ?? [];
+    const items = alertsData ?? [];
     return items.map((a: any) => {
       const teamAName = a.match?.teamA?.name || a.teamA?.name || '';
       const teamBName = a.match?.teamB?.name || a.teamB?.name || '';
