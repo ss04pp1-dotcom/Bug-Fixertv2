@@ -123,8 +123,11 @@ function wrapHtml(script: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;max-width:100% !important;}
-html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-user-select:none;user-select:none;}
-img,iframe,video,object,embed{max-width:100% !important;width:100% !important;height:auto !important;}
+html,body{width:100%;height:100%;min-height:100%;overflow:hidden;background:transparent;-webkit-user-select:none;user-select:none;}
+body{display:flex;align-items:center;justify-content:center;}
+img{max-width:100% !important;max-height:100% !important;width:auto !important;height:auto !important;object-fit:contain;}
+iframe,video,object,embed{max-width:100% !important;width:100% !important;height:100% !important;border:0;}
+a{display:block;width:100%;height:100%;}
 </style>
 </head>
 <body>${script}</body>
@@ -258,11 +261,6 @@ async function loadVast(url,depth){
     v.onerror=function(){done();};
     v.play().catch(function(){done();});
     startTimer();
-    v.onloadedmetadata=function(){
-      var h=v.videoHeight||250;
-      if(window.ReactNativeWebView)
-        window.ReactNativeWebView.postMessage(JSON.stringify({type:'adHeight',h:Math.min(h,400)}));
-    };
   }catch(e){done();}
 }
 loadVast('${escapedUrl}',0);
@@ -332,13 +330,13 @@ function WebAdUnit({ html, fallbackHeight, onDismiss, showDismiss = true, contai
   }, []);
 
   return (
-    <View style={[styles.container, { height }, containerStyle]}>
+    <View style={[styles.container, { height, width: '100%', alignSelf: 'stretch' }, containerStyle]}>
       <View style={styles.adLabel}>
         <Text style={styles.adLabelText}>AD</Text>
       </View>
       <WebView
         source={{ html: wrapHtml(html), baseUrl: AD_BASE_URL }}
-        style={{ flex: 1, backgroundColor: 'transparent' }}
+        style={{ flex: 1, width: '100%', backgroundColor: 'transparent' }}
         scrollEnabled={false}
         javaScriptEnabled
         domStorageEnabled
@@ -367,15 +365,15 @@ interface VastAdUnitProps {
 }
 
 function VastAdUnit({ vastUrl, vastHeight, skipSec, onDismiss }: VastAdUnitProps) {
-  const [height, setHeight] = useState(vastHeight);
+  // VAST always plays at the banner's configured size (no auto-grow to the
+  // video's native resolution) — the video letterboxes via object-fit:contain
+  // inside the fixed-height container so it never overflows or resizes the slot.
   const [done, setDone] = useState(false);
 
   const handleMessage = useCallback((e: { nativeEvent: { data: string } }) => {
     try {
       const d = JSON.parse(e.nativeEvent.data);
-      if (d.type === 'adHeight' && typeof d.h === 'number' && d.h > 10) {
-        setHeight(Math.min(d.h, MAX_AD_HEIGHT));
-      } else if (d.type === 'vastDone') {
+      if (d.type === 'vastDone') {
         setDone(true);
       }
     } catch {}
@@ -384,10 +382,10 @@ function VastAdUnit({ vastUrl, vastHeight, skipSec, onDismiss }: VastAdUnitProps
   if (done) return null;
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[styles.container, { height: vastHeight, width: '100%', alignSelf: 'stretch' }]}>
       <WebView
         source={{ html: makeVastHtml(vastUrl, skipSec) }}
-        style={{ flex: 1, backgroundColor: '#000' }}
+        style={{ flex: 1, width: '100%', backgroundColor: '#000' }}
         scrollEnabled={false}
         javaScriptEnabled
         domStorageEnabled

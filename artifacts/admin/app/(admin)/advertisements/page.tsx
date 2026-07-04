@@ -664,6 +664,42 @@ export default function AdvertisementsPage() {
                         )}
                       </div>
                     )}
+                    {/* Per-placement ad script override */}
+                    {!!config.banner.positions[key as keyof BannerPositions] && (
+                      <div className="pl-5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-white/30 shrink-0">Ad Script Override</span>
+                          {!!(config.banner.htmlCodes?.[key]?.trim()) && (
+                            <button
+                              type="button"
+                              onClick={() => setBN(b => {
+                                const h = { ...(b.htmlCodes ?? {}) };
+                                delete h[key];
+                                return { ...b, htmlCodes: h };
+                              })}
+                              className="text-xs text-white/25 hover:text-white/60 transition-colors"
+                            >
+                              reset
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          value={config.banner.htmlCodes?.[key] ?? ''}
+                          onChange={e => setBN(b => {
+                            const h = { ...(b.htmlCodes ?? {}) };
+                            const v = e.target.value;
+                            if (v.trim()) { h[key] = v; } else { delete h[key]; }
+                            return { ...b, htmlCodes: h };
+                          })}
+                          rows={3}
+                          placeholder="Leave empty to use the global Banner HTML / JS Code"
+                          className="w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono resize-none"
+                        />
+                        {!(config.banner.htmlCodes?.[key]?.trim()) && (
+                          <span className="text-xs text-white/20">using global ad script</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
