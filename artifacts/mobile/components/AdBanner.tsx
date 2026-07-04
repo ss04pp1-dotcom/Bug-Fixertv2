@@ -37,6 +37,7 @@ import { WebView } from 'react-native-webview';
 import { Config } from '@/constants/config';
 import { useAuthStore } from '@/lib/auth-store';
 import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+import { getNextVastUrlForPosition } from '@/lib/global-ad-engine';
 
 // ─── Base URL for WebView ads ─────────────────────────────────────────────────
 // Ad network scripts (Adsterra, Monetag, HilTop, etc.) need a real HTTP origin
@@ -442,8 +443,26 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
 
   // Secondary units (only shown when primary HTML is present)
   const secondHtml  = (globalConfig.banner as any).secondHtmlCode?.trim() || '';
-  const vastUrl     = (globalConfig.banner as any).vastUrl?.trim() || '';
+  const globalVastUrl = (globalConfig.banner as any).vastUrl?.trim() || '';
   const vastSkipSec = (globalConfig.banner as any).vastSkipSec ?? 5;
+
+  // Per-placement VAST rotation: if this position has 2+ tags configured, cycle
+  // through them one after another (persisted across restarts). Falls back to
+  // the single global vastUrl when no per-position list is set.
+  const vastUrlsForPosition: string[] = posKey
+    ? (globalConfig.banner.vastUrlsByPosition?.[posKey] ?? [])
+    : [];
+  const [rotatedVastUrl, setRotatedVastUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!posKey || vastUrlsForPosition.length === 0) { setRotatedVastUrl(null); return; }
+    let cancelled = false;
+    getNextVastUrlForPosition(posKey, vastUrlsForPosition).then((url) => {
+      if (!cancelled) setRotatedVastUrl(url);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posKey, vastUrlsForPosition.join('|')]);
+  const vastUrl = rotatedVastUrl ?? (vastUrlsForPosition.length === 0 ? globalVastUrl : '');
 
   // ── Fetch house ad only when needed ───────────────────────────────────────
   useEffect(() => {

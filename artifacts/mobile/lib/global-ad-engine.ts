@@ -44,6 +44,14 @@ export interface GlobalAdConfig {
     secondHtmlCode: string;
     /** Optional inline VAST/video URL rendered as a WebView video player below HTML banners. */
     vastUrl: string;
+    /**
+     * Per-placement VAST tag rotation. When a position key has 2+ URLs here, the
+     * banner acts like a "VAST banner slot": each time that slot is shown, it
+     * rotates to the next tag in the list (persisted per-position in AsyncStorage
+     * so the sequence survives app restarts), instead of always playing the same
+     * single global `vastUrl`. Falls back to `vastUrl` when empty/absent.
+     */
+    vastUrlsByPosition: Partial<Record<string, string[]>>;
     /** Height of the inline VAST video unit in pixels. Default 250. */
     vastHeight: number;
     /** Seconds before the inline VAST unit can be skipped. Default 5. */
@@ -98,6 +106,7 @@ export const DEFAULT_GLOBAL_AD_CONFIG: GlobalAdConfig = {
     htmlCode: '',
     secondHtmlCode: '',
     vastUrl: '',
+    vastUrlsByPosition: {},
     vastHeight: 250,
     vastSkipSec: 5,
     height: 90,
@@ -147,6 +156,10 @@ function mergeWithDefaults(raw: Partial<GlobalAdConfig>): GlobalAdConfig {
       htmlCodes: {
         ...DEFAULT_GLOBAL_AD_CONFIG.banner.htmlCodes,
         ...(raw.banner?.htmlCodes ?? {}),
+      },
+      vastUrlsByPosition: {
+        ...DEFAULT_GLOBAL_AD_CONFIG.banner.vastUrlsByPosition,
+        ...(raw.banner?.vastUrlsByPosition ?? {}),
       },
       positions: {
         ...DEFAULT_GLOBAL_AD_CONFIG.banner.positions,
@@ -272,6 +285,38 @@ export function invalidateGlobalAdConfig() {
  */
 export function isConfigLoaded(): boolean {
   return _configFetchedAt > 0;
+}
+
+// ─── Per-placement VAST rotation ──────────────────────────────────────────────
+
+const KEY_VAST_ROTATION_PREFIX = 'ad_engine_vast_rotation_';
+
+/**
+ * Picks the next VAST tag URL for a placement's rotation list, advancing and
+ * persisting the round-robin index in AsyncStorage (so the sequence continues
+ * across app restarts instead of always starting from the first tag).
+ *
+ * Returns `null` when the list is empty so callers can fall back to a single
+ * global `vastUrl`.
+ */
+export async function getNextVastUrlForPosition(
+  positionKey: string,
+  urls: string[],
+): Promise<string | null> {
+  const list = urls.filter((u) => !!u && u.trim());
+  if (list.length === 0) return null;
+  if (list.length === 1) return list[0];
+
+  const key = `${KEY_VAST_ROTATION_PREFIX}${positionKey}`;
+  let index = 0;
+  try {
+    const stored = await AsyncStorage.getItem(key);
+    index = stored ? (parseInt(stored, 10) + 1) % list.length : 0;
+    await AsyncStorage.setItem(key, String(index));
+  } catch {
+    index = Math.floor(Math.random() * list.length);
+  }
+  return list[index];
 }
 
 // ─── Persistent switch counter ────────────────────────────────────────────────

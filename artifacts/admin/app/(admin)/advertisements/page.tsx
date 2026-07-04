@@ -30,6 +30,7 @@ interface BannerConfig {
   enabled: boolean; htmlCode: string; height: number;
   heights: Partial<Record<string, number>>;
   htmlCodes: Partial<Record<string, string>>;
+  vastUrlsByPosition: Partial<Record<string, string[]>>;
   positions: BannerPositions;
 }
 interface GlobalAdConfig {
@@ -49,7 +50,7 @@ const DEFAULT: GlobalAdConfig = {
   smartlink: { enabled: false, url: '', frequency: 3, delaySeconds: 0, cooldownMinutes: 30 },
   vast:      { enabled: false, url: '', skipAfterSeconds: 5, frequency: 3, timeoutSeconds: 10 },
   banner: {
-    enabled: false, htmlCode: '', height: 90, heights: {}, htmlCodes: {},
+    enabled: false, htmlCode: '', height: 90, heights: {}, htmlCodes: {}, vastUrlsByPosition: {},
     positions: {
       home: true, player: true, playerPosition: 'below',
       categories: false, movies: true, sports: false,
@@ -259,6 +260,8 @@ export default function AdvertisementsPage() {
           banner: {
             ...prev.banner, ...(gc.banner ?? {}),
             heights:   { ...prev.banner.heights,   ...(gc.banner?.heights   ?? {}) },
+            htmlCodes: { ...prev.banner.htmlCodes, ...(gc.banner?.htmlCodes ?? {}) },
+            vastUrlsByPosition: { ...prev.banner.vastUrlsByPosition, ...(gc.banner?.vastUrlsByPosition ?? {}) },
             positions: { ...prev.banner.positions, ...(gc.banner?.positions ?? {}) },
           },
         }));
@@ -698,6 +701,46 @@ export default function AdvertisementsPage() {
                         {!(config.banner.htmlCodes?.[key]?.trim()) && (
                           <span className="text-xs text-white/20">using global ad script</span>
                         )}
+                      </div>
+                    )}
+                    {/* Per-placement VAST rotation */}
+                    {!!config.banner.positions[key as keyof BannerPositions] && (
+                      <div className="pl-5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-white/30 shrink-0">
+                            VAST Ad Tags (one per line, rotates automatically)
+                          </span>
+                          {!!(config.banner.vastUrlsByPosition?.[key]?.length) && (
+                            <button
+                              type="button"
+                              onClick={() => setBN(b => {
+                                const v = { ...(b.vastUrlsByPosition ?? {}) };
+                                delete v[key];
+                                return { ...b, vastUrlsByPosition: v };
+                              })}
+                              className="text-xs text-white/25 hover:text-white/60 transition-colors"
+                            >
+                              reset
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          value={(config.banner.vastUrlsByPosition?.[key] ?? []).join('\n')}
+                          onChange={e => setBN(b => {
+                            const v = { ...(b.vastUrlsByPosition ?? {}) };
+                            const urls = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+                            if (urls.length > 0) { v[key] = urls; } else { delete v[key]; }
+                            return { ...b, vastUrlsByPosition: v };
+                          })}
+                          rows={3}
+                          placeholder={"https://example.com/vast1.xml\nhttps://example.com/vast2.xml"}
+                          className="w-full bg-[#0A0B0F] border border-white/8 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono resize-none"
+                        />
+                        <p className="text-xs text-white/20">
+                          {(config.banner.vastUrlsByPosition?.[key]?.length ?? 0) >= 2
+                            ? `Rotates through ${config.banner.vastUrlsByPosition?.[key]?.length} tags — one plays each time this slot loads`
+                            : 'Add 2+ URLs to rotate between tags in this slot. Leave empty to use the global VAST Pre-roll tag.'}
+                        </p>
                       </div>
                     )}
                   </div>
