@@ -1,22 +1,23 @@
 /**
  * Real Google & Facebook sign-in for the mobile app.
  *
- * Both providers use the OAuth authorization-code + PKCE flow (no client
- * secret ever lives on-device):
- *   - Google:   PKCE code exchanged directly against Google's token endpoint
- *               (public client — no secret exists for Google in Settings,
- *               confirming this is the intended flow).
- *   - Facebook: the authorization `code` is sent to our backend
+ *   - Google:   Native Google Sign-In SDK (@react-native-google-signin) —
+ *               shows Android/iOS's own account-picker bottom sheet, not a
+ *               browser popup. Requires the app's SHA-1 fingerprint to be
+ *               registered against the Android OAuth client in Google Cloud
+ *               Console (see EAS credentials for the SHA-1 to add).
+ *   - Facebook: OAuth authorization-code + PKCE flow in an in-app browser.
+ *               The authorization `code` is sent to our backend
  *               (`POST /auth/social`), which exchanges it server-side using
  *               the private `facebook_client_token` setting. The mobile app
  *               never sees that token.
  *
- * NOTE: this requires a native dev build (EAS build / expo prebuild) — the
- * OAuth redirect via the app's custom scheme (`sol-tv://`) does not work
- * inside Expo Go.
+ * NOTE: both require a native dev build (EAS build / expo prebuild) — this
+ * does not work inside Expo Go.
  */
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,12 +31,6 @@ export interface SocialAuthResult {
   name?: string;
 }
 
-const GOOGLE_DISCOVERY = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
-
 const FACEBOOK_DISCOVERY = {
   authorizationEndpoint: 'https://www.facebook.com/v19.0/dialog/oauth',
   tokenEndpoint: 'https://graph.facebook.com/v19.0/oauth/access_token',
@@ -47,69 +42,50 @@ export interface GoogleClientIds {
   ios?: string;
 }
 
-function pickGoogleClientId(ids: GoogleClientIds): string | undefined {
-  // Expo dev-client / EAS builds all use the same package/bundle id per
-  // platform — pick the platform-specific client id when present, else fall
-  // back to the Web client id (works fine for the Expo AuthSession proxy-less
-  // native flow since Google matches on redirect URI, not just client type).
-  const Platform = require('react-native').Platform;
-  if (Platform.OS === 'android' && ids.android) return ids.android;
-  if (Platform.OS === 'ios' && ids.ios) return ids.ios;
-  return ids.web || ids.android || ids.ios;
-}
+let googleConfigured = false;
 
 /**
- * Runs the Google sign-in flow and returns a verified OAuth access token
- * ready to send to `POST /auth/social`.
+ * Runs the native Google sign-in flow (account-picker bottom sheet) and
+ * returns a verified OAuth access token ready to send to `POST /auth/social`.
+ *
+ * `ids.web` is REQUIRED — the native SDK uses the Web client ID to mint the
+ * access/ID tokens on both Android and iOS (matches the "Web Client ID"
+ * field in Admin → Settings → Authentication).
  */
 export async function signInWithGoogle(ids: GoogleClientIds): Promise<SocialAuthResult | null> {
-  const clientId = pickGoogleClientId(ids);
-  if (!clientId) throw new Error('Google Client ID is not configured');
+  if (!ids.web) throw new Error('Google Web Client ID is not configured');
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'sol-tv', path: 'redirect' });
-
-  const request = new AuthSession.AuthRequest({
-    clientId,
-    redirectUri,
-    scopes: ['openid', 'profile', 'email'],
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: true,
-  });
-
-  const result = await request.promptAsync(GOOGLE_DISCOVERY);
-  if (result.type !== 'success' || !result.params.code) {
-    if (result.type === 'error') throw new Error(result.params?.error_description || 'Google sign-in failed');
-    return null;
-  }
-
-  const tokenResult = await AuthSession.exchangeCodeAsync(
-    {
-      clientId,
-      code: result.params.code,
-      redirectUri,
-      extraParams: request.codeVerifier ? { code_verifier: request.codeVerifier } : undefined,
-    },
-    GOOGLE_DISCOVERY,
-  );
-
-  if (!tokenResult.accessToken) throw new Error('Google did not return an access token');
-
-  let email: string | undefined;
-  let name: string | undefined;
-  try {
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
+  if (!googleConfigured) {
+    GoogleSignin.configure({
+      webClientId: ids.web,
+      ...(ids.ios ? { iosClientId: ids.ios } : {}),
+      offlineAccess: false,
+      scopes: ['profile', 'email'],
     });
-    if (res.ok) {
-      const info = (await res.json()) as { email?: string; name?: string };
-      email = info.email;
-      name = info.name;
-    }
-  } catch {
-    // Non-fatal — the backend independently re-verifies via tokeninfo.
+    googleConfigured = true;
   }
 
-  return { provider: 'google', accessToken: tokenResult.accessToken, email, name };
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const response = await GoogleSignin.signIn();
+    if (response.type !== 'success') return null; // user cancelled
+
+    const { accessToken } = await GoogleSignin.getTokens();
+    if (!accessToken) throw new Error('Google did not return an access token');
+
+    return {
+      provider: 'google',
+      accessToken,
+      email: response.data.user.email,
+      name: response.data.user.name ?? undefined,
+    };
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === statusCodes.SIGN_IN_CANCELLED) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 /**

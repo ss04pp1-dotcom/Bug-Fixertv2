@@ -78,6 +78,7 @@ module.exports = {
         },
       ],
       'expo-screen-orientation',
+      '@react-native-google-signin/google-signin',
       './plugins/withPipSupport',
       './plugins/withPipNative',
       './plugins/withMedia3Gradle',
