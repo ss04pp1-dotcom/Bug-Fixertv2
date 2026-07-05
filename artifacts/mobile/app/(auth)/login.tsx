@@ -20,6 +20,7 @@ import apiClient, { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePublicSettings } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
+import { signInWithGoogle, signInWithFacebook, SocialAuthResult } from '@/lib/social-auth';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -38,6 +39,11 @@ export default function LoginScreen() {
   const googleEnabled: boolean = Boolean(settings?.['google_auth_enabled']);
   const facebookEnabled: boolean = Boolean(settings?.['facebook_auth_enabled']);
   const appleEnabled: boolean = Boolean(settings?.['apple_auth_enabled']);
+  const googleClientIdWeb: string = settings?.['google_client_id_web'] ?? '';
+  const googleClientIdAndroid: string = settings?.['google_client_id_android'] ?? '';
+  const googleClientIdIos: string = settings?.['google_client_id_ios'] ?? '';
+  const facebookAppId: string = settings?.['facebook_app_id'] ?? '';
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
 
   const socialProviders = [
     { icon: 'logo-google' as const,   label: 'Google',   enabled: googleEnabled },
@@ -78,11 +84,56 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSocialLogin = (label: string) => {
-    Alert.alert(
-      `${label} Sign-In`,
-      `${label} sign-in is coming soon. Please use your email and password to log in.`,
-    );
+  const finishSocialLogin = async (result: SocialAuthResult) => {
+    const { data } = await apiClient.post('/auth/social', {
+      provider: result.provider,
+      accessToken: result.accessToken,
+      code: result.code,
+      redirectUri: result.redirectUri,
+      codeVerifier: result.codeVerifier,
+      email: result.email,
+      name: result.name,
+    });
+    const { accessToken, refreshToken, user } = data.data;
+    await tokenStorage.setTokens(accessToken, refreshToken);
+    setUser({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      plan: user.subscription?.status === 'active' || user.subscription?.status === 'trial'
+        ? (user.subscription?.plan?.name || 'premium')
+        : 'free',
+    });
+    router.replace('/(main)/' as any);
+  };
+
+  const handleSocialLogin = async (label: string) => {
+    if (label === 'Apple') {
+      Alert.alert('Apple Sign-In', 'Apple sign-in is coming soon. Please use your email and password to log in.');
+      return;
+    }
+    setError('');
+    setSocialLoading(label);
+    try {
+      let result: SocialAuthResult | null = null;
+      if (label === 'Google') {
+        result = await signInWithGoogle({
+          web: googleClientIdWeb,
+          android: googleClientIdAndroid,
+          ios: googleClientIdIos,
+        });
+      } else if (label === 'Facebook') {
+        result = await signInWithFacebook(facebookAppId);
+      }
+      if (!result) return; // user cancelled
+      await finishSocialLogin(result);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message;
+      Alert.alert(`${label} Sign-In Failed`, Array.isArray(msg) ? msg.join(', ') : msg || 'Something went wrong. Please try again.');
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   const logoUrl = appLogo ? Config.imageUrl(appLogo) : null;
@@ -165,9 +216,14 @@ export default function LoginScreen() {
                     <TouchableOpacity
                       key={label}
                       style={s.socialBtn}
+                      disabled={socialLoading !== null}
                       onPress={() => handleSocialLogin(label)}
                     >
-                      <Ionicons name={icon} size={24} color="#fff" />
+                      {socialLoading === label ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Ionicons name={icon} size={24} color="#fff" />
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>

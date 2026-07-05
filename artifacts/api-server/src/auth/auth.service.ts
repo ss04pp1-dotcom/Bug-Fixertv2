@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +28,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private mailer: MailerService,
+    private settingsService: SettingsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -334,17 +336,41 @@ export class AuthService {
    * server-side against the provider's tokeninfo endpoint before trusting
    * the claimed email.  This prevents email-spoofing account takeover.
    */
-  async socialLogin(dto: { provider: string; accessToken: string; email?: string; name?: string; providerId?: string }) {
+  async socialLogin(dto: {
+    provider: string;
+    accessToken?: string;
+    code?: string;
+    redirectUri?: string;
+    codeVerifier?: string;
+    email?: string;
+    name?: string;
+    providerId?: string;
+  }) {
+    let accessToken = dto.accessToken;
+    let name = dto.name;
+
+    // Facebook is exchanged server-side using the private client token — the
+    // client never sees it (mirrors admin's isPublic:false for facebook_client_token).
+    if (dto.provider === 'facebook' && !accessToken && dto.code) {
+      const exchanged = await this.exchangeFacebookCode(dto.code, dto.redirectUri, dto.codeVerifier);
+      accessToken = exchanged.accessToken;
+      name = name ?? exchanged.name;
+    }
+
+    if (!accessToken) {
+      throw new BadRequestException('An access token (or authorization code) is required for social login');
+    }
     if (!dto.email && !dto.providerId) {
       throw new BadRequestException('Email or provider ID is required for social login');
     }
 
     // Server-side OAuth token verification
-    const verifiedEmail = await this.verifyOAuthToken(dto.provider, dto.accessToken, dto.email);
+    const verifiedEmail = await this.verifyOAuthToken(dto.provider, accessToken, dto.email);
     if (!verifiedEmail) {
       throw new UnauthorizedException('OAuth token verification failed — invalid or expired token');
     }
     const resolvedEmail = verifiedEmail;
+    dto = { ...dto, name };
 
     // 1. Try to find an existing user by verified email
     let user = resolvedEmail
@@ -436,6 +462,64 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Exchange a Facebook OAuth authorization code (obtained on-device via PKCE)
+   * for a user access token. Uses the app's private `facebook_client_token`
+   * setting as the client secret equivalent — this must stay server-side only
+   * (it is stored with isPublic:false), which is why this exchange cannot
+   * happen on the mobile client itself.
+   */
+  private async exchangeFacebookCode(
+    code: string,
+    redirectUri?: string,
+    codeVerifier?: string,
+  ): Promise<{ accessToken: string; name?: string }> {
+    const [appIdSetting, clientTokenSetting] = await Promise.all([
+      this.settingsService.get('facebook_app_id').catch(() => null),
+      this.settingsService.get('facebook_client_token').catch(() => null),
+    ]);
+    const appId = appIdSetting?.value ? String(appIdSetting.value) : '';
+    const clientToken = clientTokenSetting?.value ? String(clientTokenSetting.value) : '';
+    if (!appId || !clientToken) {
+      throw new BadRequestException('Facebook Sign-In is not configured on the server');
+    }
+    if (!redirectUri) {
+      throw new BadRequestException('redirectUri is required to exchange a Facebook authorization code');
+    }
+
+    const params = new URLSearchParams({
+      client_id: appId,
+      client_secret: clientToken,
+      redirect_uri: redirectUri,
+      code,
+    });
+    if (codeVerifier) params.set('code_verifier', codeVerifier);
+
+    const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${params.toString()}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const tokenData = (await tokenRes.json()) as { access_token?: string; error?: { message?: string } };
+    if (!tokenRes.ok || !tokenData.access_token) {
+      throw new UnauthorizedException(tokenData.error?.message || 'Failed to exchange Facebook authorization code');
+    }
+
+    let name: string | undefined;
+    try {
+      const meRes = await fetch(
+        `https://graph.facebook.com/v19.0/me?fields=name&access_token=${encodeURIComponent(tokenData.access_token)}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (meRes.ok) {
+        const me = (await meRes.json()) as { name?: string };
+        name = me.name;
+      }
+    } catch {
+      // Non-fatal — name is optional, socialLogin() falls back to the email prefix.
+    }
+
+    return { accessToken: tokenData.access_token, name };
   }
 
   private async generateTokens(userId: string, email: string, role: string, extra: object) {

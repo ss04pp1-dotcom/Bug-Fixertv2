@@ -7,6 +7,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { jwtConfig } from '../config/jwt.config';
 import { MailerService } from '../common/services/mailer.service';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MailerService } from '../common/services/mailer.service';
       secret: jwtConfig.secret,
       signOptions: { expiresIn: jwtConfig.expiresIn },
     }),
+    SettingsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy, MailerService],
