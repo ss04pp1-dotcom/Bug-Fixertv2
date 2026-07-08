@@ -121,9 +121,6 @@ export function TopOverlay(props: TopOverlayProps) {
               <Ionicons name="refresh" size={14} color="#fff" />
               <Text style={[g.retryTxt, { fontSize: 12 }]}>Retry</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onShowDebug} style={[g.altBtn, { paddingHorizontal: 14, paddingVertical: 7 }]}>
-              <Text style={[g.retryTxt, { fontSize: 12 }]}>Debug</Text>
-            </TouchableOpacity>
           </View>
         </View>
       )}

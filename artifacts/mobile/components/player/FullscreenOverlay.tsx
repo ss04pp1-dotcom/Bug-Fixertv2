@@ -125,9 +125,6 @@ export function FullscreenOverlay(props: FullscreenOverlayProps) {
               <Ionicons name="refresh" size={16} color="#fff" />
               <Text style={g.retryTxt}>Retry</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onShowDebug} style={g.altBtn}>
-              <Text style={g.altBtnTxt}>Debug</Text>
-            </TouchableOpacity>
           </View>
         </View>
       )}
