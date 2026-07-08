@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { Config } from '@/constants/config';
 import { usePresenceTracking } from '@/hooks/usePresenceTracking';
+import { useDeepLink } from '@/hooks/useDeepLink';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
@@ -34,6 +35,8 @@ function AppGuards({ children }: { children: React.ReactNode }) {
 
   // Track user presence for live-user count in admin dashboard
   usePresenceTracking();
+  // Handle incoming deep links (cold-start, foreground, post-login flush)
+  useDeepLink();
 
   useEffect(() => {
     // Register safe navigation handler now that router is mounted.

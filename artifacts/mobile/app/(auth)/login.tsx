@@ -22,6 +22,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { usePublicSettings } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 import { signInWithGoogle, signInWithFacebook, SocialAuthResult } from '@/lib/social-auth';
+import { PendingLink } from '@/lib/deeplink';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -76,7 +77,14 @@ export default function LoginScreen() {
           ? (user.subscription?.plan?.name || 'premium')
           : 'free',
       });
-      router.replace('/(main)/' as any);
+      const pending = PendingLink.get();
+      if (pending) {
+        PendingLink.clear();
+        router.replace('/(main)/' as any);
+        router.push(pending as any);
+      } else {
+        router.replace('/(main)/' as any);
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(', ') : msg || 'Invalid credentials. Please try again.');
@@ -106,7 +114,14 @@ export default function LoginScreen() {
         ? (user.subscription?.plan?.name || 'premium')
         : 'free',
     });
-    router.replace('/(main)/' as any);
+    const pending = PendingLink.get();
+    if (pending) {
+      PendingLink.clear();
+      router.replace('/(main)/' as any);
+      router.push(pending as any);
+    } else {
+      router.replace('/(main)/' as any);
+    }
   };
 
   const handleSocialLogin = async (label: string) => {

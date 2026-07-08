@@ -20,6 +20,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.sol-tv.app',
+      associatedDomains: ['applinks:soltv.app'],
       infoPlist: {
         UIBackgroundModes: ['audio', 'fetch'],
         UIRequiresFullScreen: false,
@@ -50,6 +51,21 @@ module.exports = {
         backgroundColor: '#05070F',
       },
       package: 'com.soltv.app',
+      intentFilters: [
+        // Custom scheme: sol-tv://
+        {
+          action: 'VIEW',
+          data: { scheme: 'sol-tv' },
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+        // Universal links: https://soltv.app/...
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: { scheme: 'https', host: 'soltv.app' },
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
       // usesCleartextTraffic is intentionally NOT set here.
       // The ./plugins/withNetworkSecurityConfig plugin writes
       // res/xml/network_security_config.xml which is the authoritative source
