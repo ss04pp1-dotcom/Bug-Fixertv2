@@ -7,6 +7,7 @@ import {
   Animated as RNAnimated,
   Image,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { tokenStorage } from '@/lib/api';
