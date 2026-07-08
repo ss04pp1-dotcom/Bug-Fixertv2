@@ -314,7 +314,7 @@ function MatchesTab() {
   const { data: sportsData } = useApi<{ data: Sport[] }>("/v1/sports/sports?limit=200");
   const { data: tournamentsData } = useApi<{ data: Tournament[] }>(`/v1/sports/tournaments?limit=200${filterSport ? `&sportId=${filterSport}` : ""}`);
   const { data: teamsData } = useApi<{ data: Team[] }>(`/v1/sports/teams?limit=200${filterSport ? `&sportId=${filterSport}` : ""}`);
-  const { data: channelsData } = useApi<{ data: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[] }>("/v1/channels?limit=500&isActive=true");
+  const { data: channelsData } = useApi<{ data: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[] }>("/v1/channels?limit=500");
   const { call, loading: actionLoading } = useApiCallState();
 
   const channels = channelsData?.data ?? [];
