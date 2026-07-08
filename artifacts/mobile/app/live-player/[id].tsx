@@ -123,7 +123,13 @@ export default function LivePlayerScreen() {
   const [currentLang, setCurrentLang]       = useState<string | null>(null);
 
   // ── Related channels ────────────────────────────────────────────────────────
-  const { data: relatedRaw } = useLiveChannels({ limit: 200, isActive: true });
+  // NOTE: the API caps `limit` at 500 (see PaginationDto @Max(500)) and rejects
+  // anything higher with a 400 (whitelist + forbidNonWhitelisted validation).
+  // This previously requested limit:200 while the cap was still 100, so every
+  // related-channels fetch failed silently and the tab always showed
+  // "No other channels". The cap has since been raised, but this is kept at
+  // 100 to keep the request light.
+  const { data: relatedRaw } = useLiveChannels({ limit: 100, isActive: true });
 
   const related = useMemo(() => {
     if (!relatedRaw || !Array.isArray(relatedRaw)) return [];

@@ -15,7 +15,15 @@ export class PaginationDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  // NOTE: several existing admin/mobile screens request up to limit=500
+  // (e.g. categories, sports/tournaments/teams dropdowns, the sports-match
+  // channel picker, and the live-player "related channels" list). The
+  // global ValidationPipe uses forbidNonWhitelisted + rejects out-of-range
+  // values with a 400, so a cap below what real call sites request makes
+  // those lists silently fail (empty dropdowns, "No channels match",
+  // "No other channels"). Keep this at/above the highest legitimate
+  // client-side request instead of guessing a lower "safe" number.
+  @Max(500)
   limit?: number = 20;
 
   @ApiPropertyOptional()
