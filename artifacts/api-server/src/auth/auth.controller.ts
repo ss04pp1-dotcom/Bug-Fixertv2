@@ -159,7 +159,7 @@ export class AuthController {
   private setRefreshCookieAndStrip(res: Response, result: { accessToken: string; refreshToken?: string }, req?: Request): void {
     const isProd = process.env.NODE_ENV === 'production';
     if (result.refreshToken) {
-      res.cookie('streampro_refresh_token', result.refreshToken, {
+      res.cookie('soltv_refresh_token', result.refreshToken, {
         httpOnly: true,
         secure: isProd,
         sameSite: isProd ? 'none' : 'lax',

@@ -76,7 +76,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
         Alert.alert(
           'Update Required',
           forceUpdate.message || 'A new version is available. Please update to continue.',
-          [{ text: 'Update Now', onPress: () => Linking.openURL(forceUpdate.storeUrl || 'https://streampro.app') }],
+          [{ text: 'Update Now', onPress: () => Linking.openURL(forceUpdate.storeUrl || 'https://soltv.app') }],
           { cancelable: false }
         );
       });
@@ -98,7 +98,7 @@ function AppGuards({ children }: { children: React.ReactNode }) {
         <Text style={styles.blockedIcon}>🌐</Text>
         <Text style={styles.blockedTitle}>Not Available in Your Region</Text>
         <Text style={styles.blockedSub}>
-          StreamPro is not currently available in your country.{'\n'}
+          SOL TV is not currently available in your country.{'\n'}
           Contact support for more information.
         </Text>
       </View>

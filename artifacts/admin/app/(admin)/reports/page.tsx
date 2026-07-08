@@ -73,7 +73,7 @@ export default function ReportsPage() {
   const subBreakdown = subs ?? [];
 
   function handleExportCSV() {
-    const rows: string[][] = [["StreamPro Report", `Period: ${period} days`, new Date().toLocaleString()]];
+    const rows: string[][] = [["SOL TV Report", `Period: ${period} days`, new Date().toLocaleString()]];
     rows.push([]);
     rows.push(["=== OVERVIEW ==="]);
     rows.push(["Metric", "Value"]);
@@ -100,7 +100,7 @@ export default function ReportsPage() {
       rows.push(["Plan", "Count", "Percentage", "Monthly Revenue ($)"]);
       subs.forEach(s => rows.push([s.planName, String(s.count), `${s.percentage}%`, String(s.monthlyRevenue)]));
     }
-    exportToCSV(rows, `streampro-report-${period}d-${new Date().toISOString().slice(0,10)}.csv`);
+    exportToCSV(rows, `soltv-report-${period}d-${new Date().toISOString().slice(0,10)}.csv`);
   }
 
   return (

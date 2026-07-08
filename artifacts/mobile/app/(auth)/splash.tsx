@@ -20,7 +20,7 @@ export default function SplashScreenComponent() {
   const barWidth = useRef(new RNAnimated.Value(0)).current;
   const checkAuth = useAuthStore((s) => s.checkAuth);
   const { data: settings } = usePublicSettings();
-  const appName: string = settings?.['app_name'] ?? 'StreamPro';
+  const appName: string = settings?.['app_name'] ?? 'SOL TV';
 
   useEffect(() => {
     let isMounted = true;

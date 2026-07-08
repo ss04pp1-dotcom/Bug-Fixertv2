@@ -185,7 +185,7 @@ export class AuthService {
     if (user.email) {
       this.mailer.sendMail({
         to: user.email,
-        subject: 'StreamPro — Password Reset Code',
+        subject: 'SOL TV — Password Reset Code',
         template: 'reset-password',
         context: { otp },
       }).catch((err: unknown) => {

@@ -18,7 +18,7 @@
 -- =============================================================================
 
 -- =============================================================================
--- StreamPro — safe incremental migration
+-- SOL TV — safe incremental migration
 -- Run this in Render → PostgreSQL → PSQL Console (or any SQL client)
 -- Every statement uses IF NOT EXISTS / DO $$ … $$ so it is safe to re-run.
 -- =============================================================================

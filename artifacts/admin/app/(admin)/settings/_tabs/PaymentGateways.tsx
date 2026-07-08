@@ -37,7 +37,7 @@ const GW_META: { slug: string; name: string; color: string; icon: string; fields
   { slug: "coinbase",     name: "Coinbase Commerce",  color: "from-[#0052FF] to-[#1A1AFF]", icon: "₿",
     fields: [{ key:"apiKey",label:"API Key",placeholder:"xxxxx",secret:true },{ key:"webhookSecret",label:"Webhook Shared Secret",placeholder:"xxxxx",secret:true }] },
   { slug: "manual",       name: "Manual Payment",    color: "from-[#6B7280] to-[#374151]", icon: "M",
-    fields: [{ key:"accountName",label:"Account Name",placeholder:"StreamPro Ltd." },{ key:"accountNumber",label:"Account Number / IBAN",placeholder:"xxx" },{ key:"instructions",label:"Payment Instructions",placeholder:"Transfer to..." }] },
+    fields: [{ key:"accountName",label:"Account Name",placeholder:"SOL TV Ltd." },{ key:"accountNumber",label:"Account Number / IBAN",placeholder:"xxx" },{ key:"instructions",label:"Payment Instructions",placeholder:"Transfer to..." }] },
   { slug: "custom",       name: "Custom Gateway",    color: "from-[#7C3AED] to-[#5B21B6]", icon: "C",
     fields: [{ key:"publicKey",label:"Public / API Key",placeholder:"xxx" },{ key:"secretKey",label:"Secret Key",secret:true,placeholder:"xxx" },{ key:"callbackUrl",label:"Callback / Webhook URL",placeholder:"https://..." }] },
 ];

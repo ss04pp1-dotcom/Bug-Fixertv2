@@ -164,7 +164,7 @@ export default function SignupScreen() {
               <Text style={s.logoTxt}>S</Text>
             </LinearGradient>
             <Text style={s.title}>Create Account</Text>
-            <Text style={s.subtitle}>Join StreamPro Today</Text>
+            <Text style={s.subtitle}>Join SOL TV Today</Text>
           </View>
 
           <View style={s.form}>

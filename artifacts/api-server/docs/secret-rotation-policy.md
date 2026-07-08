@@ -1,4 +1,4 @@
-# Secret Rotation Policy — StreamPro API
+# Secret Rotation Policy — SOL TV API
 
 ## Problem: Rotating JWT Secrets Invalidates ALL Sessions
 

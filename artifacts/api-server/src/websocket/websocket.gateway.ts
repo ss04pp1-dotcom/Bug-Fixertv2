@@ -40,9 +40,9 @@ interface HeartbeatPayload {
   },
   namespace: '/ws',
 })
-export class StreamProGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SolTvGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
-  private logger = new Logger(StreamProGateway.name);
+  private logger = new Logger(SolTvGateway.name);
 
   constructor(
     private readonly jwtService: JwtService,

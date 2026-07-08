@@ -36,7 +36,7 @@ export class MailerService {
         secure: process.env['SMTP_SECURE'] === 'true',
         user: envUser,
         pass: envPass,
-        from: process.env['SMTP_FROM'] ?? `StreamPro <noreply@streampro.app>`,
+        from: process.env['SMTP_FROM'] ?? `SOL TV <noreply@soltv.app>`,
       };
     }
 
@@ -50,8 +50,8 @@ export class MailerService {
 
       if (!cfg['smtp_host'] || !cfg['smtp_username'] || !cfg['smtp_password']) return null;
 
-      const fromEmail = cfg['smtp_from_email'] || 'noreply@streampro.app';
-      const fromName  = cfg['smtp_from_name']  || 'StreamPro';
+      const fromEmail = cfg['smtp_from_email'] || 'noreply@soltv.app';
+      const fromName  = cfg['smtp_from_name']  || 'SOL TV';
 
       return {
         host: cfg['smtp_host'],
@@ -102,7 +102,7 @@ export class MailerService {
       case 'otp':
         return `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
-            <h2 style="color:#1a1a2e;margin-bottom:8px">StreamPro Verification Code</h2>
+            <h2 style="color:#1a1a2e;margin-bottom:8px">SOL TV Verification Code</h2>
             <p style="color:#444">Enter this code to verify your identity:</p>
             <div style="font-size:40px;font-weight:bold;letter-spacing:10px;color:#e94560;
               padding:20px;background:#f8f8f8;border-radius:8px;text-align:center;margin:24px 0">
@@ -113,7 +113,7 @@ export class MailerService {
       case 'welcome':
         return `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
-            <h2 style="color:#1a1a2e">Welcome to StreamPro, ${ctx['name'] ?? 'there'}!</h2>
+            <h2 style="color:#1a1a2e">Welcome to SOL TV, ${ctx['name'] ?? 'there'}!</h2>
             <p>Your account is ready. Start streaming live TV, movies and series.</p>
           </div>`;
       case 'reset-password':

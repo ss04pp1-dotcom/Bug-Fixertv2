@@ -99,7 +99,7 @@ export default function HomeScreen() {
   const heroRef = useRef<FlatList>(null);
   const qc = useQueryClient();
   const { data: publicSettings } = usePublicSettings();
-  const appName: string = publicSettings?.['app_name'] ?? 'StreamPro';
+  const appName: string = publicSettings?.['app_name'] ?? 'SOL TV';
 
   const { data: bannersData, isLoading: bannersLoading } = useBanners();
   const { data: continueData } = useContinueWatching();

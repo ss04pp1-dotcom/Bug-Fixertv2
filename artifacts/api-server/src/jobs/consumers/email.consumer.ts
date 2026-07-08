@@ -48,7 +48,7 @@ export class EmailQueueConsumer extends WorkerHost {
     try {
       const html = data.html ?? this.renderTemplate(data.template, data.context ?? {});
       await this.transporter.sendMail({
-        from: process.env['SMTP_FROM'] ?? 'noreply@streampro.app',
+        from: process.env['SMTP_FROM'] ?? 'noreply@soltv.app',
         to: data.to,
         subject: data.subject,
         html,
@@ -65,7 +65,7 @@ export class EmailQueueConsumer extends WorkerHost {
       case 'otp':
         return `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-            <h2 style="color:#1a1a2e">StreamPro Verification Code</h2>
+            <h2 style="color:#1a1a2e">SOL TV Verification Code</h2>
             <p>Your one-time verification code is:</p>
             <div style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#e94560;padding:16px;background:#f4f4f4;border-radius:8px;text-align:center">
               ${ctx['otp'] ?? '------'}
@@ -75,7 +75,7 @@ export class EmailQueueConsumer extends WorkerHost {
       case 'welcome':
         return `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-            <h2 style="color:#1a1a2e">Welcome to StreamPro, ${ctx['name'] ?? 'there'}!</h2>
+            <h2 style="color:#1a1a2e">Welcome to SOL TV, ${ctx['name'] ?? 'there'}!</h2>
             <p>Your account has been created successfully. Enjoy unlimited streaming.</p>
           </div>`;
       case 'reset-password':

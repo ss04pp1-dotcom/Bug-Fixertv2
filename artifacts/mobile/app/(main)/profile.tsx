@@ -59,7 +59,7 @@ const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
     title: 'Support',
     items: [
       { id: 'help', label: 'Help & Support', icon: 'help-circle-outline', iconColor: C.textSec, route: '/support' },
-      { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec },
+      { id: 'about', label: 'About SOL TV', icon: 'information-circle-outline', iconColor: C.textSec },
       { id: 'logout', label: 'Logout', icon: 'log-out-outline', iconColor: C.danger, danger: true },
     ],
   },
@@ -203,7 +203,7 @@ export default function ProfileScreen() {
         ))}
 
         {/* Version */}
-        <Text style={s.version}>StreamPro v{require('@/constants/config').Config.APP_VERSION}</Text>
+        <Text style={s.version}>SOL TV v{require('@/constants/config').Config.APP_VERSION}</Text>
       </ScrollView>
     </View>
   );

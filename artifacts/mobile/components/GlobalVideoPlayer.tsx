@@ -161,7 +161,7 @@ function getVideoType(url: string, fmt: StreamFormat): string | undefined {
 }
 
 // ─── Watch history ────────────────────────────────────────────────────────────
-const WH_KEY = 'streampro_watch_history_v2';
+const WH_KEY = 'soltv_watch_history_v2';
 
 async function saveWatchHistory(entry: {
   contentId: string; contentType: string; title: string;
@@ -481,7 +481,7 @@ export default function GlobalVideoPlayer() {
   //    DataSource.Factory and only rebuilds it when requestHeaders is non-empty.
   //    An empty map triggers the cache path → old headers leak between streams.
   // 2. User-Agent MUST be present. Without it DataSourceUtil falls back to
-  //    Util.getUserAgent(ctx, packageName) = "StreamPro/2.4.1 (Linux;Android…)"
+  //    Util.getUserAgent(ctx, packageName) = "SOL TV/2.4.1 (Linux;Android…)"
   //    which many IPTV/CDN servers block or rate-limit to ~500 kbps.
   //    "Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0" is the
   //    default Media3/AndroidX UA — whitelisted by IPTV panels and CDNs.
@@ -1226,7 +1226,7 @@ export default function GlobalVideoPlayer() {
             selectedAudioTrack={selectedAudioTrack}
             selectedTextTrack={selectedTextTrack}
             // T3.4: MediaSession / lock-screen notification metadata
-            metadata={{ title: title || 'StreamPro', artist: isLive ? 'Live TV' : 'StreamPro', imageUri: logo || undefined }}
+            metadata={{ title: title || 'SOL TV', artist: isLive ? 'Live TV' : 'SOL TV', imageUri: logo || undefined }}
             onLoadStart={() => { setBuffering(true); setReady(false); }}
             onLoad={handleLoad}
             onReadyForDisplay={() => {

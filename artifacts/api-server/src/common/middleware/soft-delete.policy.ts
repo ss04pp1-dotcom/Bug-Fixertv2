@@ -2,7 +2,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
 /**
- * SoftDelete Policy — StreamPro Unified Soft Delete Pattern
+ * SoftDelete Policy — SOL TV Unified Soft Delete Pattern
  * ══════════════════════════════════════════════════════════
  *
  * PROBLEM: The schema uses three overlapping soft-delete signals:
@@ -39,7 +39,7 @@ import { Request, Response, NextFunction } from 'express';
  * that requires careful backfill. Until then, use this guidance consistently.
  *
  * This file is a documentation placeholder — no runtime behaviour.
- * See: https://www.notion.so/streampro/soft-delete-policy (internal)
+ * See: https://www.notion.so/soltv/soft-delete-policy (internal)
  */
 @Injectable()
 export class SoftDeleteDocumentation implements NestMiddleware {

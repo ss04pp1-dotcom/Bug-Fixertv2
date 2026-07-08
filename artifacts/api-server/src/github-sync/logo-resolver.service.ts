@@ -85,7 +85,7 @@ export class LogoResolverService {
     try {
       const res = await fetch(this.API_URL, {
         signal: AbortSignal.timeout(20_000),
-        headers: { 'User-Agent': 'StreamPro-LogoResolver/1.0' },
+        headers: { 'User-Agent': 'SolTV-LogoResolver/1.0' },
       });
       if (!res.ok) return this.cache;
       const data: IptvChannel[] = await res.json();

@@ -165,7 +165,7 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         </div>
         {!collapsed && (
           <>
-            <span className="text-sm font-bold text-white truncate flex-1">StreamPro</span>
+            <span className="text-sm font-bold text-white truncate flex-1">SOL TV</span>
             <button onClick={() => onCollapse(true)} className="text-[#8B92A5] hover:text-white transition-colors p-0.5 rounded">
               <ChevronLeft size={14} />
             </button>

@@ -82,7 +82,7 @@ export default function Billing() {
     if (billSetting?.value) {
       setBillForm(billSetting.value);
     } else {
-      setBillForm({ invoicePrefix: "INV", companyName: "StreamPro", companyEmail: "billing@streampro.com", autoInvoice: "true", emailInvoice: "true", emailReceipt: "true" });
+      setBillForm({ invoicePrefix: "INV", companyName: "SOL TV", companyEmail: "billing@soltv.com", autoInvoice: "true", emailInvoice: "true", emailReceipt: "true" });
     }
   }, [billSetting]);
 
@@ -479,8 +479,8 @@ export default function Billing() {
             <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               {[
                 { key: "invoicePrefix",  label: "Invoice Prefix",  ph: "INV" },
-                { key: "companyName",    label: "Company Name",    ph: "StreamPro" },
-                { key: "companyEmail",   label: "Company Email",   ph: "billing@streampro.com" },
+                { key: "companyName",    label: "Company Name",    ph: "SOL TV" },
+                { key: "companyEmail",   label: "Company Email",   ph: "billing@soltv.com" },
               ].map(f => (
                 <div key={f.key}>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">{f.label}</label>

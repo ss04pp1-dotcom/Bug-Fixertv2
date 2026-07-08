@@ -25,8 +25,8 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
   const [tab, setTab] = useState<"general" | "social" | "analytics" | "advanced">("general");
 
   const [form, setForm] = useState({
-    seo_website_title:   "StreamPro",
-    seo_meta_title:      "StreamPro — Watch TV Anytime",
+    seo_website_title:   "SOL TV",
+    seo_meta_title:      "SOL TV — Watch TV Anytime",
     seo_meta_description:"Stream live TV, movies, and series anytime, anywhere.",
     seo_meta_keywords:   "streaming,live tv,movies,series",
     seo_canonical_url:   "",
@@ -53,8 +53,8 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
   useEffect(() => {
     if (!settingsRaw) return;
     setForm({
-      seo_website_title:   field(settingsRaw, "seo_website_title",   "StreamPro"),
-      seo_meta_title:      field(settingsRaw, "seo_meta_title",      "StreamPro — Watch TV Anytime"),
+      seo_website_title:   field(settingsRaw, "seo_website_title",   "SOL TV"),
+      seo_meta_title:      field(settingsRaw, "seo_meta_title",      "SOL TV — Watch TV Anytime"),
       seo_meta_description:field(settingsRaw, "seo_meta_description","Stream live TV, movies, and series anytime, anywhere."),
       seo_meta_keywords:   field(settingsRaw, "seo_meta_keywords",   "streaming,live tv,movies,series"),
       seo_canonical_url:   field(settingsRaw, "seo_canonical_url"),
@@ -93,7 +93,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
     } catch (err) { toast.error(getApiErrorMessage(err)); }
   };
 
-  const metaTitle = form.seo_meta_title || form.seo_website_title || "StreamPro";
+  const metaTitle = form.seo_meta_title || form.seo_website_title || "SOL TV";
   const metaDesc  = form.seo_meta_description || "Stream live TV anytime.";
 
   const TABS = [
@@ -127,7 +127,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             </div>
             <div className="px-4 py-4">
               <p className="text-[#1a0dab] text-sm font-medium truncate">{metaTitle}</p>
-              <p className="text-[#006621] text-xs mt-0.5 truncate">{form.seo_canonical_url || "https://streampro.app"}</p>
+              <p className="text-[#006621] text-xs mt-0.5 truncate">{form.seo_canonical_url || "https://soltv.app"}</p>
               <p className="text-[#4d5156] text-xs mt-1 line-clamp-2 leading-relaxed">{metaDesc}</p>
             </div>
           </div>
@@ -136,11 +136,11 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             <h3 className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wider flex items-center gap-2"><Search size={11}/>Meta Tags</h3>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">Website Title</label>
-              <input className={INPUT} value={form.seo_website_title} onChange={set("seo_website_title")} placeholder="StreamPro" />
+              <input className={INPUT} value={form.seo_website_title} onChange={set("seo_website_title")} placeholder="SOL TV" />
             </div>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">Meta Title <span className="text-[10px] text-[#8B92A5]/60">(recommended: 50–60 chars)</span></label>
-              <input className={INPUT} value={form.seo_meta_title} onChange={set("seo_meta_title")} placeholder="StreamPro — Watch TV Anytime" maxLength={70} />
+              <input className={INPUT} value={form.seo_meta_title} onChange={set("seo_meta_title")} placeholder="SOL TV — Watch TV Anytime" maxLength={70} />
               <p className="text-[10px] text-[#8B92A5] mt-1">{form.seo_meta_title.length}/70</p>
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             </div>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">Canonical URL</label>
-              <input className={INPUT} value={form.seo_canonical_url} onChange={set("seo_canonical_url")} placeholder="https://streampro.app" />
+              <input className={INPUT} value={form.seo_canonical_url} onChange={set("seo_canonical_url")} placeholder="https://soltv.app" />
             </div>
           </div>
 
@@ -174,7 +174,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             </div>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">Sitemap URL</label>
-              <input className={INPUT} value={form.seo_sitemap_url} onChange={set("seo_sitemap_url")} placeholder="https://streampro.app/sitemap.xml" />
+              <input className={INPUT} value={form.seo_sitemap_url} onChange={set("seo_sitemap_url")} placeholder="https://soltv.app/sitemap.xml" />
             </div>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">Google Search Console Verification</label>
@@ -198,7 +198,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             <h3 className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wider">Open Graph (Facebook / LinkedIn)</h3>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">OG Title</label>
-              <input className={INPUT} value={form.seo_og_title} onChange={set("seo_og_title")} placeholder={form.seo_meta_title || "StreamPro"} />
+              <input className={INPUT} value={form.seo_og_title} onChange={set("seo_og_title")} placeholder={form.seo_meta_title || "SOL TV"} />
             </div>
             <div>
               <label className="text-xs text-[#8B92A5] mb-1.5 block">OG Description</label>
@@ -260,7 +260,7 @@ export default function SeoSettings({ settingsRaw, refetch }: Props) {
             <textarea rows={14} className={INPUT + " font-mono text-xs resize-y"}
               value={form.seo_json_ld}
               onChange={set("seo_json_ld")}
-              placeholder={`{\n  "@context": "https://schema.org",\n  "@type": "WebSite",\n  "name": "StreamPro",\n  "url": "https://streampro.app"\n}`}
+              placeholder={`{\n  "@context": "https://schema.org",\n  "@type": "WebSite",\n  "name": "SOL TV",\n  "url": "https://soltv.app"\n}`}
             />
           </div>
         </div>

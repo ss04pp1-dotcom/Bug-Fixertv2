@@ -83,7 +83,7 @@ export class StorageService {
           accountId: cfg['storage_account_id'] ?? '',
           accessKey: cfg['storage_access_key'],
           secretKey: cfg['storage_secret_key'],
-          bucket: cfg['storage_bucket'] ?? 'streampro-media',
+          bucket: cfg['storage_bucket'] ?? 'soltv-media',
           endpoint: cfg['storage_endpoint'] || undefined,
           cdnUrl: cfg['storage_cdn_url'] || undefined,
           region: cfg['storage_region'] || undefined,
@@ -103,7 +103,7 @@ export class StorageService {
         accountId: r2AccountId,
         accessKey: r2AccessKeyId,
         secretKey: r2SecretAccessKey,
-        bucket: this.configService.get<string>('storage.r2BucketName') ?? 'streampro-media',
+        bucket: this.configService.get<string>('storage.r2BucketName') ?? 'soltv-media',
         cdnUrl: this.configService.get<string>('storage.r2PublicUrl') || undefined,
       };
     }

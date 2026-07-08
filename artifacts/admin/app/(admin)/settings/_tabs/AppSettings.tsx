@@ -35,7 +35,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
   const { call, loading } = useApiCallState();
 
   const [form, setForm] = useState({
-    app_name: "StreamPro",
+    app_name: "SOL TV",
     app_tagline: "Watch TV Anytime, Anywhere",
     app_logo: "",
     app_favicon: "",
@@ -56,7 +56,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
   useEffect(() => {
     if (!settingsRaw) return;
     setForm({
-      app_name:            field(settingsRaw, "app_name", "StreamPro"),
+      app_name:            field(settingsRaw, "app_name", "SOL TV"),
       app_tagline:         field(settingsRaw, "app_tagline", "Watch TV Anytime, Anywhere"),
       app_logo:            field(settingsRaw, "app_logo"),
       app_favicon:         field(settingsRaw, "app_favicon"),
@@ -104,7 +104,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
         <h3 className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wider">Identity</h3>
         <div className="grid grid-cols-1 gap-4">
           <Field label="App Name">
-            <input className={INPUT} value={form.app_name} onChange={onChange("app_name")} placeholder="StreamPro" />
+            <input className={INPUT} value={form.app_name} onChange={onChange("app_name")} placeholder="SOL TV" />
           </Field>
           <Field label="App Tagline">
             <input className={INPUT} value={form.app_tagline} onChange={onChange("app_tagline")} placeholder="Watch TV Anytime, Anywhere" />
@@ -121,13 +121,13 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
         <Field label="Website URL">
           <div className="relative">
             <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B92A5]" />
-            <input className={INPUT + " pl-8"} value={form.website_url} onChange={onChange("website_url")} placeholder="https://streampro.app" />
+            <input className={INPUT + " pl-8"} value={form.website_url} onChange={onChange("website_url")} placeholder="https://soltv.app" />
           </div>
         </Field>
         <Field label="API Base URL">
           <div className="relative">
             <Link2 size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B92A5]" />
-            <input className={INPUT + " pl-8"} value={form.api_base_url} onChange={onChange("api_base_url")} placeholder="https://api.streampro.app" />
+            <input className={INPUT + " pl-8"} value={form.api_base_url} onChange={onChange("api_base_url")} placeholder="https://api.soltv.app" />
           </div>
         </Field>
       </div>
@@ -137,7 +137,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
         <Field label="Support Email">
           <div className="relative">
             <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B92A5]" />
-            <input type="email" className={INPUT + " pl-8"} value={form.support_email} onChange={onChange("support_email")} placeholder="support@streampro.app" />
+            <input type="email" className={INPUT + " pl-8"} value={form.support_email} onChange={onChange("support_email")} placeholder="support@soltv.app" />
           </div>
         </Field>
         <Field label="Support Phone">
@@ -180,7 +180,7 @@ export default function AppSettings({ settingsRaw, refetch }: Props) {
           <Smartphone size={12} /> Version Information
         </h3>
         <Field label="Android Package Name">
-          <input className={INPUT} value={form.android_package_name} onChange={onChange("android_package_name")} placeholder="com.streampro.app" />
+          <input className={INPUT} value={form.android_package_name} onChange={onChange("android_package_name")} placeholder="com.soltv.app" />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Android App Version">

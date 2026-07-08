@@ -218,7 +218,7 @@ export class NotificationsService {
     if (!firebase) throw new BadRequestException('Firebase not configured. Save credentials in Settings → Firebase / FCM first.');
     const msgId = await firebase.messaging().send({
       token,
-      notification: { title: '🔔 StreamPro Test Push', body: 'Push notifications are working correctly!' },
+      notification: { title: '🔔 SOL TV Test Push', body: 'Push notifications are working correctly!' },
     });
     return { message: 'Test push sent', messageId: msgId };
   }

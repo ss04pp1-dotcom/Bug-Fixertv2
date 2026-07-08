@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-const EMAIL    = process.env.SEED_ADMIN_EMAIL    || 'admin@streampro.com';
+const EMAIL    = process.env.SEED_ADMIN_EMAIL    || 'admin@soltv.com';
 const PASSWORD = process.env.SEED_ADMIN_PASSWORD;
 
 if (!PASSWORD) {

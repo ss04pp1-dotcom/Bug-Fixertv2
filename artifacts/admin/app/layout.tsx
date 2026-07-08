@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "StreamPro Admin Panel",
+  title: "SOL TV Admin Panel",
   description: "OTT Streaming Platform Admin Dashboard",
   icons: {
     icon: "/favicon.svg",

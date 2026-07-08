@@ -63,7 +63,7 @@ const BASE_SETTING_GROUPS: { title: string; items: SettingItem[] }[] = [
       { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', iconColor: '#EC4899', type: 'nav', route: '/notifications' },
       { id: 'parentalcontrol', label: 'Parental Control', icon: 'shield-checkmark-outline', iconColor: '#22C55E', type: 'nav', route: '/parental-control' },
       { id: 'language', label: 'Language', icon: 'globe-outline', iconColor: '#06B6D4', type: 'nav', route: '/language' },
-      { id: 'about', label: 'About StreamPro', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: `v${Config.APP_VERSION}` },
+      { id: 'about', label: 'About SOL TV', icon: 'information-circle-outline', iconColor: C.textSec, type: 'value', value: `v${Config.APP_VERSION}` },
     ],
   },
 ];

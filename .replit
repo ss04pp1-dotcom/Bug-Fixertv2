@@ -22,7 +22,7 @@ args = "artifacts/mobile: expo"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "StreamPro Admin"
+args = "SOL TV Admin"
 
 [[workflows.workflow]]
 name = "artifacts/mobile: expo"
@@ -37,7 +37,7 @@ args = "PORT=18115 EXPO_ROUTER_APP_ROOT=app EXPO_PACKAGER_PROXY_URL=https://$REP
 waitForPort = 18115
 
 [[workflows.workflow]]
-name = "StreamPro Admin"
+name = "SOL TV Admin"
 author = "agent"
 
 [[workflows.workflow.tasks]]

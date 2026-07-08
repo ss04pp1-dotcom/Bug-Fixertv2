@@ -1,5 +1,5 @@
 /**
- * StreamPro — IPTV Compatibility Report (Development Only)
+ * SOL TV — IPTV Compatibility Report (Development Only)
  * This screen is only accessible in development builds (__DEV__ === true).
  */
 
@@ -489,7 +489,7 @@ function buildReport(results: Record<string, TestResult>): string {
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const lines: string[] = [];
   lines.push('═══════════════════════════════════════');
-  lines.push('  STREAMPRO — IPTV COMPATIBILITY REPORT');
+  lines.push('  SOL TV — IPTV COMPATIBILITY REPORT');
   lines.push(`  Generated: ${ts}`);
   lines.push(`  Platform: ${Platform.OS.toUpperCase()} ${Platform.Version}`);
   lines.push('═══════════════════════════════════════');
@@ -589,7 +589,7 @@ export default function IPTVReportScreen() {
   const shareReport = useCallback(() => {
     const text = buildReport(results);
     reportText.current = text;
-    Share.share({ message: text, title: 'StreamPro IPTV Compatibility Report' }).catch(() => {});
+    Share.share({ message: text, title: 'SOL TV IPTV Compatibility Report' }).catch(() => {});
   }, [results]);
 
   const finalReport = buildReport(results);

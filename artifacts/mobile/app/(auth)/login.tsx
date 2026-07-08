@@ -34,7 +34,7 @@ export default function LoginScreen() {
 
   const { data: settings } = usePublicSettings();
 
-  const appName: string = settings?.['app_name'] ?? 'StreamPro';
+  const appName: string = settings?.['app_name'] ?? 'SOL TV';
   const appLogo: string | null = settings?.['app_logo'] ?? null;
   const googleEnabled: boolean = Boolean(settings?.['google_auth_enabled']);
   const facebookEnabled: boolean = Boolean(settings?.['facebook_auth_enabled']);

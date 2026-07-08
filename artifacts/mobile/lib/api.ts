@@ -2,8 +2,8 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 import { Config } from '@/constants/config';
 import { Platform } from 'react-native';
 
-const ACCESS_KEY = 'streampro_access_token';
-const REFRESH_KEY = 'streampro_refresh_token';
+const ACCESS_KEY = 'soltv_access_token';
+const REFRESH_KEY = 'soltv_refresh_token';
 
 const isWeb = Platform.OS === 'web';
 

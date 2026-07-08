@@ -475,7 +475,7 @@ export class GitHubSyncService implements OnModuleInit {
     }
 
     const headers: Record<string, string> = {
-      'User-Agent': 'StreamPro-Sync/1.0',
+      'User-Agent': 'SolTV-Sync/1.0',
       'Accept': 'text/plain,application/json,*/*',
     };
     if (etag) headers['If-None-Match'] = etag;

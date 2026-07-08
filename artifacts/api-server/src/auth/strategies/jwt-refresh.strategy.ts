@@ -13,7 +13,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       // Read refresh token from the httpOnly cookie first; fall back to body field for
       // backward compatibility with older mobile clients that send it in the JSON body.
       jwtFromRequest: (req: Request) =>
-        req?.cookies?.['streampro_refresh_token'] ?? ExtractJwt.fromBodyField('refreshToken')(req),
+        req?.cookies?.['soltv_refresh_token'] ?? ExtractJwt.fromBodyField('refreshToken')(req),
       ignoreExpiration: false,
       secretOrKey: jwtConfig.refreshSecret,
       passReqToCallback: true,
@@ -22,7 +22,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
 
   async validate(req: Request, payload: { sub: string }) {
     const refreshToken =
-      (req.cookies?.['streampro_refresh_token'] as string | undefined) ??
+      (req.cookies?.['soltv_refresh_token'] as string | undefined) ??
       (req.body?.refreshToken as string | undefined);
     if (!refreshToken) throw new UnauthorizedException();
 

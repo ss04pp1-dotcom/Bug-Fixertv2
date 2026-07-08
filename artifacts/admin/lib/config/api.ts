@@ -1,5 +1,5 @@
 /**
- * Centralized API configuration for StreamPro Admin Panel.
+ * Centralized API configuration for SOL TV Admin Panel.
  * All URLs come from environment variables — never hardcode elsewhere.
  *
  * Required env vars (Cloudflare Pages → Settings → Environment Variables):

@@ -198,7 +198,7 @@ export default function SecuritySettings({ settingsRaw, refetch }: Props) {
         <h3 className="text-xs font-semibold text-[#8B92A5] uppercase tracking-wider flex items-center gap-2"><Globe size={11}/> Network & CORS</h3>
         <div>
           <label className="text-xs text-[#8B92A5] mb-1.5 block">Allowed CORS Origins (comma-separated)</label>
-          <input className={INPUT} value={form.cors_origins} onChange={input("cors_origins")} placeholder="https://app.streampro.com,https://admin.streampro.com" />
+          <input className={INPUT} value={form.cors_origins} onChange={input("cors_origins")} placeholder="https://app.soltv.com,https://admin.soltv.com" />
         </div>
         <div>
           <label className="text-xs text-[#8B92A5] mb-1.5 block">IP Whitelist (comma-separated, leave blank to allow all)</label>

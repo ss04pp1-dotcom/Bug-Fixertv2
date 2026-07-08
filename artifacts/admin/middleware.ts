@@ -14,7 +14,7 @@ import type { NextRequest } from 'next/server';
 // ───────────────────────────────────────────────────────────────────────────
 
 export function middleware(req: NextRequest) {
-  const token = req.cookies.get('streampro_access_token')?.value
+  const token = req.cookies.get('soltv_access_token')?.value
     || req.headers.get('authorization')?.replace('Bearer ', '');
   const isLoginPage = req.nextUrl.pathname.startsWith('/login');
   if (!token && !isLoginPage) {

@@ -200,7 +200,7 @@ async function bootstrap(): Promise<void> {
     || process.env.SWAGGER_ENABLED === 'true';
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('StreamPro API')
+      .setTitle('SOL TV API')
       .setDescription(
         'Enterprise TV Streaming Platform API — Live TV, VOD, Subscriptions, Ads',
       )
@@ -242,7 +242,7 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   const env = process.env['NODE_ENV'] ?? 'development';
-  logger.log(`StreamPro API [${env}] running on port ${port}`);
+  logger.log(`SOL TV API [${env}] running on port ${port}`);
   logger.log(`Swagger docs: http://localhost:${port}/docs`);
   logger.log(`Health: http://localhost:${port}/healthz`);
   logger.log(`Full health: http://localhost:${port}/health/full`);

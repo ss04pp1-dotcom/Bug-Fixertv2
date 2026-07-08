@@ -3,9 +3,9 @@ export default () => ({
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
 
   app: {
-    name: process.env['APP_NAME'] ?? 'StreamPro',
-    url: process.env['APP_URL'] ?? 'https://streampro.app',
-    adminUrl: process.env['ADMIN_URL'] ?? 'https://admin.streampro.app',
+    name: process.env['APP_NAME'] ?? 'SOL TV',
+    url: process.env['APP_URL'] ?? 'https://soltv.app',
+    adminUrl: process.env['ADMIN_URL'] ?? 'https://admin.soltv.app',
   },
 
   cors: {
@@ -27,7 +27,7 @@ export default () => ({
     r2AccountId: process.env['CLOUDFLARE_R2_ACCOUNT_ID'],
     r2AccessKeyId: process.env['CLOUDFLARE_R2_ACCESS_KEY_ID'],
     r2SecretAccessKey: process.env['CLOUDFLARE_R2_SECRET_ACCESS_KEY'],
-    r2BucketName: process.env['CLOUDFLARE_R2_BUCKET_NAME'] ?? 'streampro-media',
+    r2BucketName: process.env['CLOUDFLARE_R2_BUCKET_NAME'] ?? 'soltv-media',
     r2PublicUrl: process.env['CLOUDFLARE_R2_PUBLIC_URL'],
     r2Endpoint: process.env['R2_ENDPOINT'],
   },
@@ -45,7 +45,7 @@ export default () => ({
     secure: process.env['SMTP_SECURE'] === 'true',
     user: process.env['SMTP_USER'],
     password: process.env['SMTP_PASSWORD'],
-    from: process.env['SMTP_FROM'] ?? 'noreply@streampro.app',
+    from: process.env['SMTP_FROM'] ?? 'noreply@soltv.app',
   },
 
   firebase: {

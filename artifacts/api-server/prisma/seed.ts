@@ -1,5 +1,5 @@
 /**
- * StreamPro Database Seed Script
+ * SOL TV Database Seed Script
  * Run: cd artifacts/api-server && npx ts-node --transpile-only prisma/seed.ts
  */
 import { PrismaClient, AdType, CouponDiscountType, UserRole } from '@prisma/client';
@@ -8,7 +8,7 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding StreamPro database…');
+  console.log('🌱 Seeding SOL TV database…');
 
   // ─── Roles ──────────────────────────────────────────────────────────────────
   const roles = [
@@ -31,18 +31,18 @@ async function main() {
   } else {
     const passwordHash = await bcrypt.hash(adminPass, 12);
     await prisma.user.upsert({
-      where: { email: 'admin@streampro.com' },
+      where: { email: 'admin@soltv.com' },
       update: { passwordHash, role: UserRole.super_admin, isActive: true, emailVerified: true },
       create: {
-        email: 'admin@streampro.com',
+        email: 'admin@soltv.com',
         passwordHash,
-        name: 'StreamPro Admin',
+        name: 'SOL TV Admin',
         role: UserRole.super_admin,
         emailVerified: true,
         isActive: true,
       },
     });
-    console.log('  ✓ Admin user  admin@streampro.com');
+    console.log('  ✓ Admin user  admin@soltv.com');
   }
 
   // ─── Categories ─────────────────────────────────────────────────────────────
@@ -269,11 +269,11 @@ async function main() {
 
   // ─── Settings ────────────────────────────────────────────────────────────────
   const settings = [
-    { key: 'app_name',              value: 'StreamPro',                    isPublic: true,  description: 'Application name' },
+    { key: 'app_name',              value: 'SOL TV',                    isPublic: true,  description: 'Application name' },
     { key: 'app_version',           value: '1.0.0',                        isPublic: true,  description: 'Current app version' },
-    { key: 'support_email',         value: 'support@streampro.com',        isPublic: true,  description: 'Support email address' },
-    { key: 'privacy_url',           value: 'https://streampro.com/privacy', isPublic: true,  description: 'Privacy policy URL' },
-    { key: 'terms_url',             value: 'https://streampro.com/terms',   isPublic: true,  description: 'Terms of service URL' },
+    { key: 'support_email',         value: 'support@soltv.com',        isPublic: true,  description: 'Support email address' },
+    { key: 'privacy_url',           value: 'https://soltv.com/privacy', isPublic: true,  description: 'Privacy policy URL' },
+    { key: 'terms_url',             value: 'https://soltv.com/terms',   isPublic: true,  description: 'Terms of service URL' },
     { key: 'min_app_version',       value: '1.0.0',                        isPublic: true,  description: 'Minimum supported app version' },
     { key: 'maintenance_message',   value: 'We are performing scheduled maintenance. Back shortly!', isPublic: true, description: 'Maintenance banner message' },
     { key: 'free_trial_days',       value: 7,                              isPublic: true,  description: 'Free trial duration in days' },
@@ -283,7 +283,7 @@ async function main() {
     { key: 'currency',              value: 'USD',                          isPublic: true,  description: 'Default currency' },
     { key: 'ads_config',            value: { activeProvider: 'admob', adsEnabled: true, maintenanceMode: false }, isPublic: true, description: 'Ad service configuration' },
     { key: 'billing_tax',           value: { vat: 15, gst: 10, vatEnabled: true, gstEnabled: false, service: 2.5, serviceEnabled: true, processing: 1.5, processingEnabled: true }, isPublic: false, description: 'Tax and fee configuration' },
-    { key: 'billing_config',        value: { invoicePrefix: 'INV', companyName: 'StreamPro', companyEmail: 'billing@streampro.com', autoInvoice: true, emailInvoice: true, emailReceipt: true }, isPublic: false, description: 'Billing configuration' },
+    { key: 'billing_config',        value: { invoicePrefix: 'INV', companyName: 'SOL TV', companyEmail: 'billing@soltv.com', autoInvoice: true, emailInvoice: true, emailReceipt: true }, isPublic: false, description: 'Billing configuration' },
   ];
   for (const s of settings) {
     await prisma.setting.upsert({ where: { key: s.key }, update: {}, create: s });
@@ -292,9 +292,9 @@ async function main() {
 
   // ─── Announcements ───────────────────────────────────────────────────────────
   const announcements = [
-    { title: 'Welcome to StreamPro!',      message: 'Enjoy unlimited streaming with our launch offer — 30% off all annual plans this month!', type: 'info',    isActive: true,  priority: 1, targetAll: true },
+    { title: 'Welcome to SOL TV!',      message: 'Enjoy unlimited streaming with our launch offer — 30% off all annual plans this month!', type: 'info',    isActive: true,  priority: 1, targetAll: true },
     { title: '4K Content Now Available',   message: 'We\'ve added 4K Ultra HD content for Premium subscribers. Update your app to access it.', type: 'feature', isActive: true,  priority: 2, targetAll: false, isPremium: true },
-    { title: 'Scheduled Maintenance',      message: 'StreamPro will undergo maintenance on Sunday 2–4 AM UTC. Some services may be interrupted.', type: 'warning', isActive: false, priority: 0, targetAll: true },
+    { title: 'Scheduled Maintenance',      message: 'SOL TV will undergo maintenance on Sunday 2–4 AM UTC. Some services may be interrupted.', type: 'warning', isActive: false, priority: 0, targetAll: true },
     { title: 'New Sports Channels Added',  message: '15 new sports channels have been added including cricket, basketball, and Formula 1!',   type: 'info',    isActive: true,  priority: 3, targetAll: true },
   ];
   for (const a of announcements) {
@@ -345,7 +345,7 @@ async function main() {
   console.log('  ✓ Sample movies');
 
   console.log('\n✅ Database seeded successfully!');
-  console.log('   Admin login: admin@streampro.com / (see SEED_ADMIN_PASSWORD in .env)');
+  console.log('   Admin login: admin@soltv.com / (see SEED_ADMIN_PASSWORD in .env)');
 }
 
 main()

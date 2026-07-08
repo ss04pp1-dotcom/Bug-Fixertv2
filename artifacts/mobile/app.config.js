@@ -70,7 +70,7 @@ module.exports = {
       [
         'expo-router',
         {
-          origin: 'https://streampro.app/',
+          origin: 'https://soltv.app/',
         },
       ],
       'expo-font',

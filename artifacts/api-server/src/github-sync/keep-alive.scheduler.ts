@@ -90,7 +90,7 @@ export class KeepAliveScheduler implements OnApplicationBootstrap {
       const res = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
-        headers: { 'User-Agent': 'StreamPro-KeepAlive/1.0', 'Cache-Control': 'no-store' },
+        headers: { 'User-Agent': 'SolTV-KeepAlive/1.0', 'Cache-Control': 'no-store' },
       });
       clearTimeout(timer);
       this.logger.log(

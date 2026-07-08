@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-black text-xl">S</span>
           </div>
-          <h1 className="text-xl font-bold text-white">StreamPro Admin</h1>
+          <h1 className="text-xl font-bold text-white">SOL TV Admin</h1>
           <p className="text-sm text-[#8B92A5] mt-1">Sign in to your admin panel</p>
         </div>
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
               <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B92A5]" />
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="admin@streampro.com" required autoFocus
+                placeholder="admin@soltv.com" required autoFocus
                 className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-[#8B92A5] outline-none focus:border-primary"
               />
             </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-[#8B92A5] mt-4">
-          StreamPro Admin Panel · Restricted Access
+          SOL TV Admin Panel · Restricted Access
         </p>
       </div>
     </div>

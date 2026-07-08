@@ -61,7 +61,7 @@ export default function Profile() {
   const confPwRef  = useRef<HTMLInputElement>(null);
 
   const displayName  = profile?.identifier ?? "Admin";
-  const displayEmail = profile?.identifier?.includes("@") ? profile.identifier : "admin@streampro.com";
+  const displayEmail = profile?.identifier?.includes("@") ? profile.identifier : "admin@soltv.com";
   const roleLabel    = profile?.role?.name ?? "Super Admin";
   const initials     = displayName[0]?.toUpperCase() ?? "A";
 

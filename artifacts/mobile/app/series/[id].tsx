@@ -125,7 +125,7 @@ export default function SeriesDetailsScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Watch ${series?.title} on StreamPro!`,
+        message: `Watch ${series?.title} on SOL TV!`,
       });
     } catch (error) {
       if (__DEV__) console.log('Share error:', error);

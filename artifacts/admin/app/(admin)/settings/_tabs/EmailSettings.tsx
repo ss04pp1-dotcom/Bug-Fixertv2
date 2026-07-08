@@ -36,11 +36,11 @@ const TEMPLATES = [
 ];
 
 const DEFAULT_TEMPLATES: Record<string, string> = {
-  email_template_welcome: `Hi {{name}},\n\nWelcome to StreamPro! Your account has been created.\n\nEmail: {{email}}\n\nStart watching at: {{website_url}}\n\nThe StreamPro Team`,
-  email_template_otp: `Hi {{name}},\n\nYour verification code is: {{otp}}\n\nThis code expires in 10 minutes.\n\nStreamPro`,
-  email_template_reset: `Hi {{name}},\n\nYou requested a password reset. Use this code:\n\n{{otp}}\n\nIf you didn't request this, ignore this email.\n\nStreamPro`,
-  email_template_subscription: `Hi {{name}},\n\nThank you! Your subscription to {{plan}} is now active.\n\nExpires: {{expires_at}}\n\nStreamPro`,
-  email_template_invoice: `Hi {{name}},\n\nYour invoice #{{invoice_number}} for {{amount}} is ready.\n\nStreamPro`,
+  email_template_welcome: `Hi {{name}},\n\nWelcome to SOL TV! Your account has been created.\n\nEmail: {{email}}\n\nStart watching at: {{website_url}}\n\nThe SOL TV Team`,
+  email_template_otp: `Hi {{name}},\n\nYour verification code is: {{otp}}\n\nThis code expires in 10 minutes.\n\nSOL TV`,
+  email_template_reset: `Hi {{name}},\n\nYou requested a password reset. Use this code:\n\n{{otp}}\n\nIf you didn't request this, ignore this email.\n\nSOL TV`,
+  email_template_subscription: `Hi {{name}},\n\nThank you! Your subscription to {{plan}} is now active.\n\nExpires: {{expires_at}}\n\nSOL TV`,
+  email_template_invoice: `Hi {{name}},\n\nYour invoice #{{invoice_number}} for {{amount}} is ready.\n\nSOL TV`,
 };
 
 export default function EmailSettings({ settingsRaw, refetch }: Props) {
@@ -58,7 +58,7 @@ export default function EmailSettings({ settingsRaw, refetch }: Props) {
     smtp_password:   "",
     smtp_encryption: "tls",
     smtp_from_email: "",
-    smtp_from_name:  "StreamPro",
+    smtp_from_name:  "SOL TV",
     smtp_reply_to:   "",
   });
 
@@ -74,7 +74,7 @@ export default function EmailSettings({ settingsRaw, refetch }: Props) {
       smtp_password:   field(settingsRaw, "smtp_password"),
       smtp_encryption: field(settingsRaw, "smtp_encryption", "tls"),
       smtp_from_email: field(settingsRaw, "smtp_from_email"),
-      smtp_from_name:  field(settingsRaw, "smtp_from_name", "StreamPro"),
+      smtp_from_name:  field(settingsRaw, "smtp_from_name", "SOL TV"),
       smtp_reply_to:   field(settingsRaw, "smtp_reply_to"),
     });
     const tpls: Record<string, string> = {};
@@ -197,15 +197,15 @@ export default function EmailSettings({ settingsRaw, refetch }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">From Email</label>
-                <input type="email" className={INPUT} value={form.smtp_from_email} onChange={set("smtp_from_email")} placeholder="noreply@streampro.app" />
+                <input type="email" className={INPUT} value={form.smtp_from_email} onChange={set("smtp_from_email")} placeholder="noreply@soltv.app" />
               </div>
               <div>
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">From Name</label>
-                <input className={INPUT} value={form.smtp_from_name} onChange={set("smtp_from_name")} placeholder="StreamPro" />
+                <input className={INPUT} value={form.smtp_from_name} onChange={set("smtp_from_name")} placeholder="SOL TV" />
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-[#8B92A5] mb-1.5 block">Reply-To (optional)</label>
-                <input type="email" className={INPUT} value={form.smtp_reply_to} onChange={set("smtp_reply_to")} placeholder="support@streampro.app" />
+                <input type="email" className={INPUT} value={form.smtp_reply_to} onChange={set("smtp_reply_to")} placeholder="support@soltv.app" />
               </div>
             </div>
           </div>

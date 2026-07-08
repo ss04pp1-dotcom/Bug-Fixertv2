@@ -1,6 +1,6 @@
 "use client";
 
-export const TOKEN_KEY = "streampro_admin_token";
+export const TOKEN_KEY = "soltv_admin_token";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Known limitation (D-002 fix):

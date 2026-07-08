@@ -42,7 +42,7 @@ export default function SettingsPage() {
   (settingsRaw ?? []).forEach(s => { settings[s.key] = s.value; });
 
   // ── General (controlled state) ──────────────────────────────────────
-  const [appName,   setAppName]   = useState("StreamPro");
+  const [appName,   setAppName]   = useState("SOL TV");
   const [tagline,   setTagline]   = useState("Watch TV Anytime, Anywhere");
   const [language,  setLanguage]  = useState("English");
   const [currency,  setCurrency]  = useState("USD ($)");
@@ -371,7 +371,7 @@ export default function SettingsPage() {
                 <div>
                   <label className="text-xs text-[#8B92A5] mb-1.5 block">Update Message</label>
                   <textarea value={fuMessage} onChange={e => setFuMessage(e.target.value)} rows={2}
-                    placeholder="A new version of StreamPro is available. Please update to continue."
+                    placeholder="A new version of SOL TV is available. Please update to continue."
                     className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-primary transition-colors resize-none" />
                 </div>
               </div>

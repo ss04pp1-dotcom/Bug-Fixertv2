@@ -88,7 +88,7 @@ export class SettingsService {
     }
     const provider = cfg['storage_provider'] ?? 'r2';
     const accountId = cfg['storage_account_id'] ?? '';
-    const bucket = cfg['storage_bucket'] ?? 'streampro-media';
+    const bucket = cfg['storage_bucket'] ?? 'soltv-media';
     let endpoint: string;
     switch (provider) {
       case 'r2': endpoint = `https://${accountId}.r2.cloudflarestorage.com`; break;
@@ -136,10 +136,10 @@ export class SettingsService {
     });
     await transporter.verify();
     await transporter.sendMail({
-      from: `"${cfg['smtp_from_name'] ?? 'StreamPro'}" <${cfg['smtp_from_email']}>`,
+      from: `"${cfg['smtp_from_name'] ?? 'SOL TV'}" <${cfg['smtp_from_email']}>`,
       to,
-      subject: '✅ StreamPro — SMTP Test',
-      html: `<div style="font-family:sans-serif;padding:32px;background:#0A0F1E;color:#fff;border-radius:12px"><h2 style="color:#7C3AED">StreamPro SMTP Test ✅</h2><p>Your email configuration is working correctly.</p><p style="color:#8B92A5;font-size:12px">Sent from StreamPro Admin Panel</p></div>`,
+      subject: '✅ SOL TV — SMTP Test',
+      html: `<div style="font-family:sans-serif;padding:32px;background:#0A0F1E;color:#fff;border-radius:12px"><h2 style="color:#7C3AED">SOL TV SMTP Test ✅</h2><p>Your email configuration is working correctly.</p><p style="color:#8B92A5;font-size:12px">Sent from SOL TV Admin Panel</p></div>`,
     });
     return { message: 'Test email sent to ' + to };
   }
