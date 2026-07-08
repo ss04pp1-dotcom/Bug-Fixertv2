@@ -35,11 +35,6 @@ import { openExternalUrl } from '@/lib/safeLink';
 
 const { width: W } = Dimensions.get('window');
 
-/** Coerce any API value to a primitive string — prevents `throwOnInvalidObjectType`
- *  if the API returns score/time as an object instead of a scalar. */
-const safeStr = (v: any): string =>
-  v == null || typeof v === 'object' ? '' : String(v);
-
 const C = {
   bg: '#0A0A0F',
   card: '#13131C',
@@ -153,8 +148,7 @@ export default function HomeScreen() {
       title: normalizeName(m.tournament, '') || normalizeName(m.title, '') || 'Live Match',
       team1: m.teamA?.name || m.homeTeam?.name || m.team1 || 'Team A',
       team2: m.teamB?.name || m.awayTeam?.name || m.team2 || 'Team B',
-      score1: safeStr(m.score ?? m.score1),
-      score2: safeStr(m.score2 ?? m.score?.away ?? ''),
+      status: normalizeName(m.status, 'LIVE'),
       time: m.elapsed || m.time || (m.scheduledAt ? new Date(m.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'LIVE'),
       logo1: m.teamA?.logo || m.homeTeam?.logo || '',
       logo2: m.teamB?.logo || m.awayTeam?.logo || '',
@@ -426,15 +420,17 @@ export default function HomeScreen() {
                     <View style={s.teamAbbr}>
                       {m.logo1 ? <Image source={{ uri: Config.imageUrl(m.logo1) }} style={s.teamLogoImg} /> : <Text style={s.teamAbbrTxt}>{m.team1.slice(0, 3).toUpperCase()}</Text>}
                     </View>
+                    <Text style={s.teamNameTxt} numberOfLines={1}>{m.team1}</Text>
                   </View>
                   <View style={s.scoreCenter}>
-                    <Text style={s.teamScore}>{m.score1} - {m.score2}</Text>
-                    <Text style={s.vsLabel}>{m.time}</Text>
+                    <Text style={s.vsLabel}>{m.status}</Text>
+                    <Text style={s.matchTimeTxt}>{m.time}</Text>
                   </View>
                   <View style={s.matchTeam}>
                     <View style={s.teamAbbr}>
                       {m.logo2 ? <Image source={{ uri: Config.imageUrl(m.logo2) }} style={s.teamLogoImg} /> : <Text style={s.teamAbbrTxt}>{m.team2.slice(0, 3).toUpperCase()}</Text>}
                     </View>
+                    <Text style={s.teamNameTxt} numberOfLines={1}>{m.team2}</Text>
                   </View>
                 </View>
                 <Pressable style={s.watchLiveBtn} onPress={() => router.push(`/match/${m.id}`)}>
@@ -681,7 +677,8 @@ const s = StyleSheet.create({
   teamAbbrTxt: { color: '#fff', fontSize: 14, fontWeight: '700', fontFamily: 'Inter' },
   teamLogoImg: { width: '100%', height: '100%' },
   scoreCenter: { alignItems: 'center' },
-  teamScore: { color: C.text, fontSize: 24, fontWeight: '800', fontFamily: 'SpaceMono' },
+  teamNameTxt: { color: C.textSec, fontSize: 11, fontWeight: '600', marginTop: 6, maxWidth: 84, textAlign: 'center' },
+  matchTimeTxt: { color: C.textSec, fontSize: 11, marginTop: 2 },
   vsLabel: { color: C.live, fontSize: 12, fontFamily: 'Inter', fontWeight: '600', marginTop: 4 },
   watchLiveBtn: { borderRadius: 12, overflow: 'hidden' },
   watchLiveBtnGrad: { paddingVertical: 12, alignItems: 'center' },

@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -13,7 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMatch, useMatchCommentary, useToggleMatchAlert } from '@/lib/api-hooks';
+import { useMatch, useToggleMatchAlert } from '@/lib/api-hooks';
 import { normalizeName, normalizeCapitalized } from '@/lib/normalize';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -35,35 +34,6 @@ const colors = {
   star: '#F5C518',
 };
 
-// ─── Types ───────────────────────────────────────────────────
-type DetailTab = 'scorecard' | 'live' | 'commentary' | 'stats';
-
-interface BatterRow {
-  name: string;
-  runs: string;
-  balls: string;
-  fours: string;
-  sixes: string;
-  sr: string;
-  isOut: boolean;
-}
-
-interface BowlerRow {
-  name: string;
-  overs: string;
-  maidens: string;
-  runs: string;
-  wickets: string;
-}
-
-// ─── Data ───────────────────────────────────────────────────
-const detailTabs: { key: DetailTab; label: string }[] = [
-  { key: 'scorecard', label: 'Scorecard' },
-  { key: 'live', label: 'Live' },
-  { key: 'commentary', label: 'Commentary' },
-  { key: 'stats', label: 'Stats' },
-];
-
 // ─── Table Components ────────────────────────────────────────
 
 function StatBox({ label, value }: { label: string; value: string }) {
@@ -79,7 +49,6 @@ function StatBox({ label, value }: { label: string; value: string }) {
 
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<DetailTab>('scorecard');
 
   const { data: matchData, isLoading, isError, refetch } = useMatch(id);
   const toggleAlert = useToggleMatchAlert();
@@ -87,23 +56,23 @@ export default function MatchDetailScreen() {
   const match = matchData;
   const teamALabel = match?.teamA?.name?.toUpperCase() || 'TEAM A';
   const teamBLabel = match?.teamB?.name?.toUpperCase() || 'TEAM B';
-  const teamAScore = match?.teamAScore || '0/0';
-  const teamBScore = match?.teamBScore || '0/0';
   const headerTitle = `${match?.teamA?.abbr || 'TBA'} VS ${match?.teamB?.abbr || 'TBA'}`;
   const description = match?.description || '';
+  const isLive = match?.status === 'live';
+  const watchUrl = match?.streamUrl || match?.liveUrl || match?.streamUrls?.[0]?.url;
 
-  const scorecard = match?.scorecard;
-  const battingRows: BatterRow[] = useMemo(() => {
-    if (scorecard?.batting) return scorecard.batting;
-    if (scorecard?.innings?.[0]?.batting) return scorecard.innings[0].batting;
-    return [];
-  }, [scorecard]);
-
-  const bowlingRows: BowlerRow[] = useMemo(() => {
-    if (scorecard?.bowling) return scorecard.bowling;
-    if (scorecard?.innings?.[1]?.bowling) return scorecard.innings[1].bowling;
-    return [];
-  }, [scorecard]);
+  const handleWatch = () => {
+    if (!watchUrl || !id) return;
+    router.push({
+      pathname: `/live-player/${id}`,
+      params: {
+        title: `${match?.teamA?.name || 'Team A'} vs ${match?.teamB?.name || 'Team B'}`,
+        streamUrl: watchUrl,
+        cat: normalizeCapitalized(match?.sport, 'Sports'),
+        type: 'match',
+      },
+    } as any);
+  };
 
   if (isLoading) {
     return (
@@ -163,7 +132,7 @@ export default function MatchDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Hero Score Card ────────────────────────── */}
+        {/* ── Hero Card ─────────────────────────────── */}
         <LinearGradient
           colors={[colors.primary, colors.primaryBlue]}
           start={{ x: 0, y: 0 }}
@@ -171,16 +140,16 @@ export default function MatchDetailScreen() {
           style={styles.heroCard}
         >
           {/* Live badge */}
-          <View style={styles.heroLiveBadge}>
-            <View style={styles.heroLiveDot} />
-            <Text style={styles.heroLiveText}>LIVE</Text>
-          </View>
+          {isLive && (
+            <View style={styles.heroLiveBadge}>
+              <View style={styles.heroLiveDot} />
+              <Text style={styles.heroLiveText}>LIVE</Text>
+            </View>
+          )}
 
           {/* Team A */}
           <View style={styles.heroTeamBlock}>
             <Text style={styles.heroTeamLabel}>{teamALabel}</Text>
-            <Text style={styles.heroScore}>{teamAScore}</Text>
-            <Text style={styles.heroOvers}>{match?.status || ''}</Text>
           </View>
 
           <Text style={styles.heroVs}>VS</Text>
@@ -188,8 +157,6 @@ export default function MatchDetailScreen() {
           {/* Team B */}
           <View style={styles.heroTeamBlock}>
             <Text style={styles.heroTeamLabel}>{teamBLabel}</Text>
-            <Text style={styles.heroScore}>{teamBScore}</Text>
-            <Text style={styles.heroOvers}>{match?.teamBStatus || ''}</Text>
           </View>
 
           {/* Need statement */}
@@ -215,132 +182,43 @@ export default function MatchDetailScreen() {
             <View style={styles.heroStatsDivider} />
             <StatBox label={typeof match?.tournament === 'string' ? 'Tournament' : 'Match'} value={normalizeName(match?.tournament, 'N/A')} />
           </View>
+
+          {/* Watch button */}
+          {watchUrl ? (
+            <TouchableOpacity style={styles.watchBtn} activeOpacity={0.85} onPress={handleWatch}>
+              <Ionicons name="play-circle" size={20} color={colors.primary} />
+              <Text style={styles.watchBtnText}>{isLive ? 'Watch Live' : 'Watch Match'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.watchBtnDisabled}>
+              <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.watchBtnDisabledText}>Stream not available yet</Text>
+            </View>
+          )}
         </LinearGradient>
 
-        {/* ── Detail Tabs ───────────────────────────── */}
-        <View style={styles.detailTabRow}>
-          {detailTabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.detailTab, activeTab === tab.key && styles.detailTabActive]}
-              onPress={() => setActiveTab(tab.key)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[styles.detailTabText, activeTab === tab.key && styles.detailTabTextActive]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* ── Scorecard Content ─────────────────────── */}
-        {activeTab === 'scorecard' && (
-          <View style={styles.scorecardSection}>
-            {/* Batting */}
-            <View style={styles.tableHeader}>
-              <Text style={styles.tableTitle}>{match?.teamA?.name || 'Team A'} Batting</Text>
-              {match?.status === 'live' && (
-                <View style={styles.liveSmallBadge}>
-                  <View style={styles.liveDotSmall} />
-                  <Text style={styles.liveSmallText}>Batting</Text>
-                </View>
-              )}
+        {/* ── Match Info ────────────────────────────── */}
+        <View style={styles.infoSection}>
+          {match?.venue ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="location-outline" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Venue</Text>
+              <Text style={styles.infoValue}>{match.venue}</Text>
             </View>
-
-            {battingRows.length > 0 ? (
-              <View style={styles.tableContainer}>
-                <View style={styles.tableColHeader}>
-                  <Text style={[styles.tableColText, { flex: 2.2 }]}>Player</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>R</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>B</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>4s</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>6s</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 44 }]}>SR</Text>
-                </View>
-                {battingRows.map((b, i) => (
-                  <View key={i} style={[styles.tableRow, i % 2 === 0 && styles.tableRowEven]}>
-                    <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.tableCellPlayer, b.isOut && styles.tableCellPlayerOut, !b.isOut && styles.tableCellPlayerBatting]}>{b.name}</Text>
-                      {!b.isOut && <Text style={styles.battingIndicator}>*</Text>}
-                    </View>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.runs}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.balls}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.fours}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.sixes}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 44 }]}>{b.sr}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyScorecard}>
-                <Text style={styles.emptyScorecardText}>Scorecard not available yet</Text>
-              </View>
-            )}
-
-            {/* Bowling */}
-            {bowlingRows.length > 0 && (
-              <View style={[styles.tableHeader, { marginTop: 24 }]}>
-                <Text style={styles.tableTitle}>{match?.teamB?.name || 'Team B'} Bowling</Text>
-              </View>
-            )}
-            {bowlingRows.length > 0 && (
-              <View style={styles.tableContainer}>
-                <View style={styles.tableColHeader}>
-                  <Text style={[styles.tableColText, { flex: 2.5 }]}>Player</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 40 }]}>O</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>M</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>R</Text>
-                  <Text style={[styles.tableColText, styles.tableColCenter, { width: 32 }]}>W</Text>
-                </View>
-                {bowlingRows.map((b, i) => (
-                  <View key={i} style={[styles.tableRow, i % 2 === 0 && styles.tableRowEven]}>
-                    <Text style={[styles.tableCellPlayer, { flex: 2.5 }]}>{b.name}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 40 }]}>{b.overs}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.maidens}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.runs}</Text>
-                    <Text style={[styles.tableCellNum, styles.tableColCenter, { width: 32 }]}>{b.wickets}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Full Scorecard link */}
-            <TouchableOpacity style={styles.fullScorecardBtn} activeOpacity={0.7}>
-              <Text style={styles.fullScorecardText}>Full Scorecard</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {activeTab === 'live' && (
-          <View style={styles.placeholderTab}>
-            <Ionicons name="radio-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.placeholderTitle}>Live Feed</Text>
-            <Text style={styles.placeholderSubtitle}>Real-time match updates</Text>
-          </View>
-        )}
-
-        {activeTab === 'commentary' && (
-          <TouchableOpacity
-            style={styles.placeholderTab}
-            activeOpacity={0.7}
-            onPress={() => router.push(`/match/${id}/commentary`)}
-          >
-            <Ionicons name="chatbubble-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.placeholderTitle}>Ball-by-Ball Commentary</Text>
-            <Text style={styles.placeholderSubtitle}>Tap to view full commentary →</Text>
-          </TouchableOpacity>
-        )}
-
-        {activeTab === 'stats' && (
-          <View style={styles.placeholderTab}>
-            <Ionicons name="stats-chart-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.placeholderTitle}>Match Statistics</Text>
-            <Text style={styles.placeholderSubtitle}>Wagon wheel, Manhattan, Run rate chart</Text>
-          </View>
-        )}
+          ) : null}
+          {match?.scheduledAt ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Scheduled</Text>
+              <Text style={styles.infoValue}>
+                {new Date(match.scheduledAt).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -430,22 +308,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroTeamLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-    marginBottom: 4,
-    letterSpacing: 1,
-  },
-  heroScore: {
-    fontSize: 38,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#fff',
-    letterSpacing: -1,
-  },
-  heroOvers: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   heroVs: {
     fontSize: 14,
@@ -496,159 +364,64 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Detail Tabs
-  detailTabRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 6,
-    marginTop: 20,
-    marginBottom: 16,
-  },
-  detailTab: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-  },
-  detailTabActive: {
-    backgroundColor: colors.primary,
-  },
-  detailTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  detailTabTextActive: {
-    color: '#fff',
-  },
-
-  // Scorecard
-  scorecardSection: {
-    paddingHorizontal: 24,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  tableTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  liveSmallBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  liveDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.live,
-  },
-  liveSmallText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.live,
-  },
-  tableContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  tableColHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: colors.surfaceLight,
-  },
-  tableColText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tableColCenter: {
-    textAlign: 'center',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  tableRowEven: {
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-  tableCellPlayer: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  tableCellPlayerOut: {
-    color: colors.textSecondary,
-  },
-  tableCellPlayerBatting: {
-    color: colors.text,
-    fontWeight: '700',
-  },
-  tableCellNum: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  battingIndicator: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary,
-    lineHeight: 16,
-  },
-
-  // Full Scorecard button
-  fullScorecardBtn: {
+  // Watch button
+  watchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 20,
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     paddingVertical: 14,
+    marginTop: 18,
   },
-  fullScorecardText: {
-    fontSize: 14,
-    fontWeight: '600',
+  watchBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.primary,
   },
-
-  // Empty Scorecard
-  emptyScorecard: {
+  watchBtnDisabled: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 48,
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    marginTop: 18,
   },
-  emptyScorecardText: {
+  watchBtnDisabledText: {
     fontSize: 14,
-    color: colors.textMuted,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
   },
 
-  // Placeholder tabs
-  placeholderTab: {
+  // Match Info
+  infoSection: {
+    marginTop: 20,
+    marginHorizontal: 24,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    gap: 14,
+  },
+  infoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 64,
+    gap: 10,
   },
-  placeholderTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-  },
-  placeholderSubtitle: {
+  infoLabel: {
     fontSize: 13,
     color: colors.textMuted,
-    marginTop: 6,
+    width: 80,
   },
+  infoValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+
   errorText: {
     fontSize: 15,
     color: colors.textSecondary,

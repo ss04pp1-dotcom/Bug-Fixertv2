@@ -1,5 +1,4 @@
 /**
-import { openExternalUrl } from '@/lib/safeLink';
  * AdBanner — Global Config-Aware Banner Component
  *
  * Priority for banner HTML:
@@ -38,6 +37,7 @@ import { WebView } from 'react-native-webview';
 import { Config } from '@/constants/config';
 import { useAuthStore } from '@/lib/auth-store';
 import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+import { openExternalUrl } from '@/lib/safeLink';
 import { getNextVastUrlForPosition } from '@/lib/global-ad-engine';
 
 // ─── Base URL for WebView ads ─────────────────────────────────────────────────

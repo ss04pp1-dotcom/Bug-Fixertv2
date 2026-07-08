@@ -47,8 +47,8 @@ const CARD_W = SCREEN_WIDTH - 48;
 interface LiveMatch {
   id: string;
   sport: string;
-  teamA: { name: string; score: string; abbr: string };
-  teamB: { name: string; score: string; abbr: string };
+  teamA: { name: string; abbr: string };
+  teamB: { name: string; abbr: string };
   status: string;
   tournament: string;
 }
@@ -147,12 +147,10 @@ function LiveMatchCard({ match, onPress }: { match: LiveMatch; onPress: () => vo
       <View style={styles.liveMatchScoreRow}>
         <View style={styles.liveMatchTeamBlock}>
           <Text style={styles.liveMatchTeamName}>{match.teamA.name}</Text>
-          <Text style={styles.liveMatchScore}>{match.teamA.score}</Text>
         </View>
         <Text style={styles.liveMatchVs}>VS</Text>
         <View style={styles.liveMatchTeamBlock}>
           <Text style={styles.liveMatchTeamName}>{match.teamB.name}</Text>
-          <Text style={styles.liveMatchScore}>{match.teamB.score}</Text>
         </View>
       </View>
 
@@ -288,8 +286,8 @@ export default function SportsScreen() {
       return {
         id: m.id,
         sport: capitalizeSport(sportName || 'Sport'),
-        teamA: { name: m.teamA?.name || '', score: m.teamAScore || '', abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
-        teamB: { name: m.teamB?.name || '', score: m.teamBScore || '', abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
+        teamA: { name: m.teamA?.name || '', abbr: m.teamA?.abbr || m.teamA?.name?.slice(0, 3).toUpperCase() || 'TBA' },
+        teamB: { name: m.teamB?.name || '', abbr: m.teamB?.abbr || m.teamB?.name?.slice(0, 3).toUpperCase() || 'TBA' },
         status: m.status || '',
         tournament: normalizeName(m.tournament),
       };
@@ -628,16 +626,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   liveMatchTeamName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  liveMatchScore: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
-    letterSpacing: -0.5,
   },
   liveMatchVs: {
     fontSize: 14,

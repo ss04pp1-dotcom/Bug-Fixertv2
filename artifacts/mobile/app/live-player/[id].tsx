@@ -82,12 +82,17 @@ export default function LivePlayerScreen() {
     streamUrl: passedUrl,
     logo: passedLogo,
     cat: passedCat,
+    type: sourceType,
     globalVastUrl,
     globalVastSkip,
   } = useLocalSearchParams<{
     id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
+    // type: 'match' — the id belongs to a sports match, not a channel. Skip the
+    // /channels/:id lookups entirely and play passedUrl directly.
+    type?: string;
     globalVastUrl?: string; globalVastSkip?: string;
   }>();
+  const isMatchSource = sourceType === 'match';
   const vastSkipSec = globalVastSkip ? parseInt(globalVastSkip, 10) : 5;
 
   const insets = useSafeAreaInsets();
@@ -104,7 +109,7 @@ export default function LivePlayerScreen() {
   const [sources, setSources]         = useState<PlayerSource[]>([]);
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
-  const [activeTab, setActiveTab]     = useState<'channels' | 'info'>('channels');
+  const [activeTab, setActiveTab]     = useState<'channels' | 'info'>(sourceType === 'match' ? 'info' : 'channels');
   const openPlayer = useGlobalPlayer((s) => s.open);
 
   // ── VAST pre-roll state ────────────────────────────────────────────────────
@@ -209,6 +214,16 @@ export default function LivePlayerScreen() {
   const loadStream = useCallback(async () => {
     setFetchLoad(true); setFetchError(false); setSources([]);
 
+    // Sports matches aren't channels — there's no /channels/:id record to
+    // look up. Play the passed stream URL directly and skip the network
+    // round-trips (which would otherwise 404 twice before falling back).
+    if (isMatchSource) {
+      if (passedUrl) setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
+      else setFetchError(true);
+      setFetchLoad(false);
+      return;
+    }
+
     try {
       let ch: any = null;
       let authFailed = false;
@@ -254,7 +269,7 @@ export default function LivePlayerScreen() {
     } finally {
       setFetchLoad(false);
     }
-  }, [id, passedUrl, buildSources, passedCat]);
+  }, [id, passedUrl, buildSources, passedCat, isMatchSource]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 
@@ -412,7 +427,7 @@ export default function LivePlayerScreen() {
 
         {/* Tab bar */}
         <View style={s.tabBar}>
-          {(['channels', 'info'] as const).map(tab => (
+          {(isMatchSource ? (['info'] as const) : (['channels', 'info'] as const)).map(tab => (
             <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={s.tabItem}>
               <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>
                 {tab === 'channels' ? 'RELATED CHANNELS' : 'INFO'}
@@ -456,13 +471,13 @@ export default function LivePlayerScreen() {
         {activeTab === 'info' && (
           <ScrollView contentContainerStyle={s.infoPad} showsVerticalScrollIndicator={false}>
             <View style={s.infoItem}>
-              <Ionicons name="tv-outline" size={16} color={C.primary} />
-              <Text style={s.infoLabel}>Channel</Text>
+              <Ionicons name={isMatchSource ? 'trophy-outline' : 'tv-outline'} size={16} color={C.primary} />
+              <Text style={s.infoLabel}>{isMatchSource ? 'Match' : 'Channel'}</Text>
               <Text style={s.infoVal}>{contentTitle}</Text>
             </View>
             <View style={s.infoItem}>
               <Ionicons name="folder-outline" size={16} color={C.primary} />
-              <Text style={s.infoLabel}>Category</Text>
+              <Text style={s.infoLabel}>{isMatchSource ? 'Sport' : 'Category'}</Text>
               <Text style={s.infoVal}>{category}</Text>
             </View>
             <View style={s.infoItem}>
