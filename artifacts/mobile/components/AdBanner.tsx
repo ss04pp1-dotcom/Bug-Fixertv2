@@ -1,4 +1,5 @@
 /**
+import { openExternalUrl } from '@/lib/safeLink';
  * AdBanner — Global Config-Aware Banner Component
  *
  * Priority for banner HTML:
@@ -343,7 +344,7 @@ function WebAdUnit({ html, fallbackHeight, onDismiss, showDismiss = true, contai
         domStorageEnabled
         thirdPartyCookiesEnabled
         cacheEnabled={false}
-        originWhitelist={['*']}
+        originWhitelist={['https://*', 'http://*']} // Restrict to HTTP(S); blocks javascript:/file:/data: scheme injection
         injectedJavaScript={AUTO_HEIGHT_JS}
         onMessage={handleMessage}
       />
@@ -392,7 +393,7 @@ function VastAdUnit({ vastUrl, vastHeight, skipSec, onDismiss }: VastAdUnitProps
         domStorageEnabled
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
-        originWhitelist={['*']}
+        originWhitelist={['https://*', 'http://*']} // Restrict to HTTP(S); blocks javascript:/file:/data: scheme injection
         onMessage={handleMessage}
       />
       {onDismiss && (
@@ -544,7 +545,7 @@ export function AdBanner({ placement, htmlCode: propHtmlCode, bannerHeight, styl
 
   const handlePress = () => {
     trackEvent(houseAd.id, 'click', placement);
-    if (houseAd.clickUrl) Linking.openURL(houseAd.clickUrl).catch(() => {});
+    if (houseAd.clickUrl) openExternalUrl(houseAd.clickUrl);
   };
 
   return (

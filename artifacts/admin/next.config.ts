@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  allowedDevOrigins: ["*.pike.replit.dev", "*.sisko.replit.dev", "*.replit.dev", "*.repl.co"],
+  // Only expose Replit preview origins in development — strip them from production builds
+  // where they serve no purpose and could confuse security scanners.
+  ...(!isProduction && {
+    allowedDevOrigins: ["*.pike.replit.dev", "*.sisko.replit.dev", "*.replit.dev", "*.repl.co"],
+  }),
   // Static export for Cloudflare Pages deployment — all admin logic must be
   // client-side. Server components, API routes, and middleware are not available.
   // To disable static export (e.g. for a Node.js host), remove this line and

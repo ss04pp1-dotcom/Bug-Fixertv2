@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { promises as dnsPromises } from 'dns';
+import { isIP } from 'net';
 import { Prisma, StreamType, HealthOverride, ServerSourceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate } from '../common/dto/pagination.dto';
@@ -163,7 +165,7 @@ export class ChannelsService {
     return { ...channel, servers };
   }
 
-  async getStreamUrl(id: string) {
+  async getStreamUrl(id: string, user?: { id: string; role?: string; isPremium?: boolean; subscriptionEndsAt?: Date | string | null } | null) {
     const channel = await this.prisma.channel.findFirst({
       where: { OR: [{ id }, { slug: id }], deletedAt: null, isActive: true },
       select: {
@@ -178,7 +180,23 @@ export class ChannelsService {
       },
     });
     if (!channel) throw new NotFoundException('Channel not found');
-    // Fall back to first enabled server link if primaryStreamUrl is not set
+
+    // Premium gate: block anonymous or non-premium users from premium channels.
+    // Admin/editor/moderator roles bypass the paywall for QA & moderation.
+    if (channel.isPremium) {
+      const staffRoles = new Set(['super_admin', 'admin', 'editor', 'moderator']);
+      const isStaff = user?.role ? staffRoles.has(user.role) : false;
+      if (!user) {
+        throw new ForbiddenException('Authentication required for premium channels');
+      }
+      const subActive = user.subscriptionEndsAt
+        ? new Date(user.subscriptionEndsAt).getTime() > Date.now()
+        : Boolean(user.isPremium);
+      if (!isStaff && !subActive) {
+        throw new ForbiddenException('Active premium subscription required');
+      }
+    }
+
     const streamUrl = channel.primaryStreamUrl || (channel as any).servers?.[0]?.link || null;
     if (!streamUrl) throw new NotFoundException('Stream URL not available for this channel');
     return {
@@ -205,13 +223,23 @@ export class ChannelsService {
   }
 
   async update(id: string, dto: Partial<CreateChannelDto>) {
-    await this.findOne(id);
-    return this.prisma.channel.update({ where: { id }, data: dto as Prisma.ChannelUpdateInput });
+    // Do NOT reuse findOne() here — it filters isActive:true, which blocks admins
+    // from re-activating a disabled channel. Look up by id or slug directly.
+    const existing = await this.prisma.channel.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Channel not found');
+    return this.prisma.channel.update({ where: { id: existing.id }, data: dto as Prisma.ChannelUpdateInput });
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    await this.prisma.channel.update({ where: { id }, data: { deletedAt: new Date() } });
+    const existing = await this.prisma.channel.findFirst({
+      where: { OR: [{ id }, { slug: id }], deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Channel not found');
+    await this.prisma.channel.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
     return { message: 'Channel deleted' };
   }
 
@@ -370,37 +398,70 @@ export class ChannelsService {
     return { imported, skipped, addedAsServer, errors, total: channels.length };
   }
 
+  private isPrivateHostname(h: string): boolean {
+    return (
+      h === 'localhost' || h === '0.0.0.0' || h === '::1' ||
+      h.endsWith('.local') || h.endsWith('.internal') ||
+      /^127\./.test(h) ||
+      /^10\./.test(h) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+      /^192\.168\./.test(h) ||
+      /^169\.254\./.test(h) ||  // AWS/Azure/GCP metadata
+      /^fc00:/i.test(h) || /^fe80:/i.test(h) || h === '::'
+    );
+  }
+
   private isPrivateUrl(urlStr: string): boolean {
     try {
       const { hostname, protocol } = new URL(urlStr);
       if (!['http:', 'https:'].includes(protocol)) return true;
-      const h = hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
-      return (
-        h === 'localhost' || h === '0.0.0.0' || h === '::1' ||
-        h.endsWith('.local') || h.endsWith('.internal') ||
-        /^127\./.test(h) ||
-        /^10\./.test(h) ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-        /^192\.168\./.test(h) ||
-        /^169\.254\./.test(h) ||  // AWS/Azure metadata
-        /^fc00:/i.test(h) || /^fe80:/i.test(h)  // IPv6 private ranges
-      );
+      const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      return this.isPrivateHostname(h);
     } catch { return true; }
   }
 
+  /**
+   * DNS-resolved SSRF guard. Attacker-controlled hostnames can resolve to
+   * private ranges even when the string check passes. Resolve all A/AAAA
+   * records and reject if any of them fall into a private/link-local range.
+   */
+  private async isPrivateUrlDeep(urlStr: string): Promise<boolean> {
+    if (this.isPrivateUrl(urlStr)) return true;
+    try {
+      const { hostname } = new URL(urlStr);
+      const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      // If it's already an IP literal, isPrivateUrl handled it.
+      if (isIP(h)) return false;
+      const addrs = await dnsPromises.lookup(h, { all: true, verbatim: true });
+      return addrs.some(a => this.isPrivateHostname(a.address.toLowerCase()));
+    } catch {
+      return true;
+    }
+  }
+
   async parsePlaylistUrl(url: string) {
-    if (this.isPrivateUrl(url)) {
-      throw new Error('URL must point to a publicly accessible host');
+    if (await this.isPrivateUrlDeep(url)) {
+      throw new BadRequestException('URL must point to a publicly accessible host');
     }
     let content: string;
+    let responseContentType: string | null = null;
     try {
       const res = await fetch(url, { headers: { 'User-Agent': 'Mini Player/1.1.2 (Linux;Android 16) AndroidXMedia3/1.8.0' }, signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      responseContentType = res.headers.get('content-type');
       content = await res.text();
     } catch (e: any) {
-      throw new Error(`Failed to fetch playlist: ${e?.message ?? 'Unknown error'}`);
+      throw new BadRequestException(`Failed to fetch playlist: ${e?.message ?? 'Unknown error'}`);
     }
-    return { content, contentType: url.includes('.json') ? 'json' : url.includes('.csv') ? 'csv' : 'm3u' };
+    // Prefer Content-Type header, fall back to URL extension sniffing.
+    const ct = (responseContentType || '').toLowerCase();
+    let contentType: 'json' | 'csv' | 'm3u' = 'm3u';
+    if (ct.includes('json') || /\.json(\?|$)/i.test(url)) contentType = 'json';
+    else if (ct.includes('csv') || /\.csv(\?|$)/i.test(url)) contentType = 'csv';
+    else if (/\.(m3u8?|mpegurl)(\?|$)/i.test(url) || ct.includes('mpegurl')) contentType = 'm3u';
+    else if (content.trim().startsWith('#EXTM3U')) contentType = 'm3u';
+    else if (content.trim().startsWith('{') || content.trim().startsWith('[')) contentType = 'json';
+    return { content, contentType };
   }
 
   async setHealthOverride(id: string, override: HealthOverride) {

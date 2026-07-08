@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -19,6 +19,7 @@ export class RegisterDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
+  @MaxLength(128) // bcrypt DoS guard: bcrypt truncates at 72 bytes but oversized inputs still spike CPU
   password: string;
 
   @ApiPropertyOptional()

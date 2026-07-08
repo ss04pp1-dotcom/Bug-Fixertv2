@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { openExternalUrl } from '@/lib/safeLink';
 import {
   View,
   Text,
@@ -88,7 +89,7 @@ export function AdNative({ placement, style }: AdNativeProps) {
 
   const handlePress = () => {
     trackEvent(ad.id, 'click', placement);
-    if (ad.clickUrl) Linking.openURL(ad.clickUrl).catch(() => {});
+    if (ad.clickUrl) openExternalUrl(ad.clickUrl);
   };
 
   return (

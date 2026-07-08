@@ -31,6 +31,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
 import { SkeletonHeroCard, SkeletonChannelRow, SkeletonCard } from '@/components/ui/Skeleton';
 import { normalizeName } from '@/lib/normalize';
+import { openExternalUrl } from '@/lib/safeLink';
 
 const { width: W } = Dimensions.get('window');
 
@@ -363,7 +364,7 @@ export default function HomeScreen() {
               renderItem={({ item }) => (
                 <View style={s.heroCardWrap}>
                   <Pressable style={s.heroCard} onPress={() => {
-                    if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
+                    if (item.link) { openExternalUrl(item.link); }
                     else router.push(`/player/${item.id}?type=${item.type || item.contentType || 'movie'}&title=${encodeURIComponent(item.title)}`);
                   }}>
                     <LinearGradient colors={['#3D1A5C', '#1a0535']} style={s.heroBg}>
@@ -379,7 +380,7 @@ export default function HomeScreen() {
                         </View>
                         <View style={s.heroBtns}>
                           <Pressable style={s.heroPlayBtn} onPress={() => {
-                            if (item.link) { require('react-native').Linking.openURL(item.link).catch(() => {}); }
+                            if (item.link) { openExternalUrl(item.link); }
                             else router.push(`/player/${item.id}?type=${item.type || item.contentType || 'movie'}&title=${encodeURIComponent(item.title)}`);
                           }}>
                             <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.heroPlayGrad}>

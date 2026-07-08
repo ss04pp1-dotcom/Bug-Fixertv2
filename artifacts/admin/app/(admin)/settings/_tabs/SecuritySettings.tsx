@@ -37,6 +37,7 @@ function Toggle({ on, onChange, label, desc }: { on: boolean; onChange: (v: bool
 
 export default function SecuritySettings({ settingsRaw, refetch }: Props) {
   const { call, loading } = useApiCallState();
+  const [forceLoading, setForceLoading] = useState(false);
 
   const [form, setForm] = useState({
     jwt_access_expiry:       "15m",
@@ -218,12 +219,25 @@ export default function SecuritySettings({ settingsRaw, refetch }: Props) {
 
       <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-white flex items-center gap-2"><Shield size={14} className="text-red-400" /> Force Logout All Devices</p>
-          <p className="text-xs text-[#8B92A5] mt-0.5">Invalidates all active sessions for all users immediately</p>
+          <p className="text-sm font-medium text-white flex items-center gap-2"><Shield size={14} className="text-red-400" /> Log Out All Your Devices</p>
+          <p className="text-xs text-[#8B92A5] mt-0.5">Invalidates all active sessions for your admin account across every device</p>
         </div>
-        <button onClick={() => { set("force_logout_all", true); toast.warning("Force logout initiated — all active sessions will be invalidated on next request"); }}
-          className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors shrink-0">
-          Force Logout
+        <button
+          disabled={forceLoading}
+          onClick={async () => {
+            setForceLoading(true);
+            try {
+              await call("post", "/v1/auth/logout-all", {});
+              toast.success("All your sessions invalidated — you'll need to log in again on every device.");
+            } catch (err) {
+              toast.error("Logout failed: " + getApiErrorMessage(err));
+            } finally {
+              setForceLoading(false);
+            }
+          }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors shrink-0 disabled:opacity-50">
+          {forceLoading ? <Loader2 size={12} className="animate-spin" /> : null}
+          {forceLoading ? "Logging out…" : "Force Logout"}
         </button>
       </div>
 

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { initSentry, captureException as sentryCapture } from './common/observability/sentry';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -16,6 +17,15 @@ function validateEnvironment(logger: Logger): void {
     logger.error(`Missing critical environment variables: ${missing.join(', ')}`);
     logger.error('Application cannot start without these variables. Check your .env file.');
     process.exit(1);
+  }
+
+  // Refuse to boot with the .env.example placeholder secrets — trivially forgeable JWTs.
+  for (const k of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {
+    const v = process.env[k] ?? '';
+    if (v.startsWith('CHANGE_THIS') || v.length < 32) {
+      logger.error(`${k} is a placeholder or too short. Generate with: openssl rand -hex 32`);
+      process.exit(1);
+    }
   }
 
   // SMTP, Firebase, and Storage (R2/S3/etc.) are all configurable from
@@ -62,22 +72,65 @@ async function diagnoseBoot(logger: Logger): Promise<void> {
     logger.warn('[BOOT] Redis — REDIS_URL not set (queues disabled)');
   }
 
+  // --- DIRECT_URL (Prisma migrations — non-pooled direct connection) ---
+  // Prisma's `prisma migrate deploy` uses DIRECT_URL so it bypasses PgBouncer
+  // and can run DDL statements. If DIRECT_URL is missing or unreachable,
+  // migrations will fail silently at deploy time while the app still boots.
+  const directUrl = process.env['DIRECT_URL'];
+  if (directUrl) {
+    try {
+      const { PrismaClient: PrismaClientDirect } = await import('@prisma/client');
+      const prismaD = new PrismaClientDirect({
+        datasources: { db: { url: directUrl } },
+      });
+      await prismaD.$connect();
+      await prismaD.$queryRaw`SELECT 1`;
+      await prismaD.$disconnect();
+      logger.log('[BOOT] DIRECT_URL ✓ reachable (Prisma migrations will work)');
+    } catch (err) {
+      logger.warn('[BOOT] DIRECT_URL ✗ FAILED — ' + (err instanceof Error ? err.message : String(err)));
+      logger.warn('[BOOT] Migrations use DIRECT_URL — if unset/wrong, `prisma migrate deploy` will fail');
+      logger.warn('[BOOT] Expected: postgresql://user:pass@host:5432/postgres (non-pooled, direct)');
+    }
+  } else {
+    logger.warn('[BOOT] DIRECT_URL not set — Prisma migrations fall back to DATABASE_URL');
+    logger.warn('[BOOT] For Supabase/PgBouncer pooler, set DIRECT_URL to the non-pooled connection string');
+  }
+
   logger.log('=== Boot diagnostics complete ===');
 }
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
+  initSentry();
 
   validateEnvironment(logger);
 
   await diagnoseBoot(logger);
 
   const app = await NestFactory.create(AppModule);
+  // Cap JSON/urlencoded body size so an unbounded payload can't spike memory.
+  // Multipart uploads still flow through @UploadedFile / Multer limits.
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { limit: '1mb', extended: true });
+
+  // Attach a correlation ID to every request so LoggingInterceptor + downstream services can trace.
+  const { randomUUID } = await import('crypto');
+  app.use((req: { headers: Record<string, string | string[] | undefined> }, res: { setHeader: (k: string, v: string) => void }, next: () => void) => {
+    const incoming = req.headers['x-request-id'];
+    const raw = Array.isArray(incoming) ? incoming[0] : incoming;
+    // Only accept a well-formed UUID from clients; otherwise mint a fresh one to prevent header injection / log-forging.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const id = raw && UUID_RE.test(raw) ? raw : randomUUID();
+    req.headers['x-request-id'] = id;
+    res.setHeader('X-Request-ID', id);
+    next();
+  });
 
   // Security
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    contentSecurityPolicy: process.env['NODE_ENV'] === 'production',
+    contentSecurityPolicy: process.env['CSP_DISABLED'] === 'true' ? false : undefined,
   }));
   app.use(compression());
 
@@ -155,11 +208,24 @@ async function bootstrap(): Promise<void> {
       .addServer('/api-server', 'API Server (proxied)')
       .build();
 
-    SwaggerModule.setup(
-      'docs',
-      app,
-      SwaggerModule.createDocument(app, swaggerConfig),
-    );
+    // In production, protect Swagger UI with basic auth (set SWAGGER_USER / SWAGGER_PASS).
+    if (process.env.NODE_ENV === 'production') {
+      const user = process.env.SWAGGER_USER;
+      const pass = process.env.SWAGGER_PASS;
+      if (!user || !pass) {
+        logger.warn('SWAGGER_ENABLED=true in production but SWAGGER_USER/SWAGGER_PASS not set — refusing to expose /docs.');
+      } else {
+        const expected = 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64');
+        app.use('/docs', (req: { headers: Record<string, string | string[] | undefined> }, res: { setHeader: (k: string, v: string) => void; status: (n: number) => { end: (b?: string) => void } }, next: () => void) => {
+          if (req.headers['authorization'] === expected) return next();
+          res.setHeader('WWW-Authenticate', 'Basic realm="Swagger"');
+          res.status(401).end('Authentication required');
+        });
+        SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+      }
+    } else {
+      SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+    }
   }
 
   app.enableShutdownHooks();
@@ -167,10 +233,11 @@ async function bootstrap(): Promise<void> {
   // Root route — satisfies Render/load-balancer health checks that hit GET /
   const httpAdapter = app.getHttpAdapter();
   httpAdapter.get('/', (_req: unknown, res: { json: (d: unknown) => void }) => {
-    res.json({ status: 'ok', service: 'StreamPro API', version: '1.0' });
+    res.json({ status: 'ok' });
   });
 
   const port = process.env['PORT'] ?? 8080;
+  runningApp = app;
   await app.listen(port, '0.0.0.0');
 
   const env = process.env['NODE_ENV'] ?? 'development';
@@ -185,6 +252,7 @@ async function bootstrap(): Promise<void> {
 // crashing the process with exit code 1.
 process.on('unhandledRejection', (reason: unknown) => {
   const logger = new Logger('Process');
+  sentryCapture(reason, { source: 'unhandledRejection' });
   logger.error(
     'Unhandled promise rejection (non-fatal):',
     reason instanceof Error ? reason.stack : String(reason),
@@ -193,15 +261,26 @@ process.on('unhandledRejection', (reason: unknown) => {
   // will retry or degrade gracefully.
 });
 
+// Track the running Nest app so we can close it before exit (drain in-flight requests, DB, queues).
+let runningApp: { close: () => Promise<void> } | undefined;
 process.on('uncaughtException', (err: Error) => {
   const logger = new Logger('Process');
-  logger.error('Uncaught exception — process is in an undefined state, shutting down:', err.stack);
-  // Node.js docs explicitly recommend terminating on uncaughtException: the process
-  // may be in a corrupted state (partially-freed resources, inconsistent state).
-  // Render will automatically restart the container, which is safer than limping
-  // along in an unknown state (risk of data corruption / silent security bypass).
-  process.exit(1);
+  sentryCapture(err, { source: 'uncaughtException' });
+  logger.error('Uncaught exception — attempting graceful shutdown:', err.stack);
+  const forceExitTimer = setTimeout(() => {
+    logger.error('Graceful shutdown timed out (10s) — forcing exit.');
+    process.exit(1);
+  }, 10_000);
+  forceExitTimer.unref();
+  Promise.resolve(runningApp?.close()).catch(() => undefined).finally(() => process.exit(1));
 });
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(sig, () => {
+    const logger = new Logger('Process');
+    logger.log(`Received ${sig}, closing app gracefully…`);
+    Promise.resolve(runningApp?.close()).catch(() => undefined).finally(() => process.exit(0));
+  });
+}
 
 bootstrap().catch((err: unknown) => {
   // Use console.error directly — a Nest Logger may not be available if

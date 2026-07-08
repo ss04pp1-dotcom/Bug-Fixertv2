@@ -215,25 +215,32 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  // Refresh-token lookup path filters on (userId, isActive, expiresAt) — cover it.
+  @@index([userId, isActive, expiresAt])
+
   @@map("sessions")
 }
 
 model Otp {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String?   @map("user_id") @db.Uuid
-  identifier String
-  code       String
-  type       String
-  expiresAt  DateTime  @map("expires_at")
-  usedAt     DateTime? @map("used_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  identifier     String
+  code           String
+  type           String
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  // Real brute-force counter — incremented on every wrong guess against this
+  // specific OTP. Verifier locks the OTP when this crosses the threshold.
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // A-072: speed up the forgotPassword/verifyOtp lookups which filter by
-  // (identifier, expiresAt) and the brute-force counter that counts unused
-  // unexpired OTPs per identifier.
+  // (identifier, type, usedAt, expiresAt) — covering index avoids seq-scan
+  // as the otps table grows.
   @@index([identifier, expiresAt])
+  @@index([identifier, type, usedAt, expiresAt])
   @@map("otps")
 }
 
@@ -314,6 +321,12 @@ model Channel {
   @@index([lastActiveAt])
   @@index([name])
   @@index([primaryStreamUrl])
+  // Public list queries filter by (isActive, deletedAt, categoryId?) and sort by
+  // createdAt or sortOrder — a composite index avoids full-table scans as the
+  // catalog grows past a few thousand rows.
+  @@index([isActive, deletedAt, categoryId])
+  @@index([isFeatured, isActive, deletedAt])
+  @@index([isTrending, isActive, deletedAt])
   @@unique([normalizedName])
   @@map("channels")
 }
@@ -494,6 +507,12 @@ model Movie {
   @@index([categoryId])
   @@index([createdAt])
   @@index([title])
+  // List-API composite: (isActive, deletedAt) is the base filter; categoryId is the most common
+  // additional filter. Covering these in one index avoids a seq-scan on large tables.
+  @@index([isActive, deletedAt, categoryId])
+  @@index([isFeatured, isActive, deletedAt])
+  @@index([isTrending, isActive, deletedAt])
+  @@index([isPremium, isActive, deletedAt])
   @@map("movies")
 }
 
@@ -532,6 +551,11 @@ model Series {
   @@index([categoryId])
   @@index([createdAt])
   @@index([title])
+  // Same list-API composite pattern as movies — category + status filter.
+  @@index([isActive, deletedAt, categoryId])
+  @@index([isFeatured, isActive, deletedAt])
+  @@index([isTrending, isActive, deletedAt])
+  @@index([isPremium, isActive, deletedAt])
   @@map("series")
 }
 
@@ -697,6 +721,9 @@ model Notification {
 
   readReceipts NotificationRead[]
 
+  // Scheduled-notification fan-out: find active notifications due to send.
+  @@index([isActive, scheduledAt])
+  @@index([targetAll, isActive])
   @@map("notifications")
 }
 
@@ -711,6 +738,9 @@ model NotificationRead {
 
   @@unique([userId, notificationId])
   @@index([userId])
+  // "Unread count" query: filter by userId + readAt IS NULL equivalent (no readAt field means
+  // all rows ARE reads; use this index to list a user's read receipt history by time).
+  @@index([userId, readAt])
   @@map("notification_reads")
 }
 
@@ -1009,6 +1039,22 @@ model SearchHistory {
   @@map("search_history")
 }
 
+// Persistent sink for BullMQ analytics events. Consumers write here so events
+// aren't dropped when no third-party analytics sink is configured.
+model AnalyticsEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  event      String
+  userId     String?  @map("user_id") @db.Uuid
+  properties Json?
+  occurredAt DateTime @map("occurred_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([event, occurredAt])
+  @@index([userId, occurredAt])
+  @@map("analytics_events")
+}
+
+
 model AuditLog {
   id         String     @id @default(uuid()) @db.Uuid
   userId     String?    @map("user_id") @db.Uuid
@@ -1026,6 +1072,10 @@ model AuditLog {
 
   @@index([userId])
   @@index([action])
+  // Admin audit-log filtering: by resource type + time, and by severity level + time.
+  @@index([resource, createdAt])
+  @@index([level, createdAt])
+  @@index([userId, createdAt])
   @@map("audit_logs")
 }
 
@@ -1271,6 +1321,10 @@ model Match {
   @@index([scheduledAt])
   @@index([teamAId])
   @@index([teamBId])
+  // "Upcoming matches" schedule view: filter by status + sort by scheduledAt.
+  @@index([status, scheduledAt, isActive])
+  // Admin list filter: (isActive, deletedAt) + sport filter.
+  @@index([isActive, deletedAt, sportId])
   @@map("matches")
 }
 

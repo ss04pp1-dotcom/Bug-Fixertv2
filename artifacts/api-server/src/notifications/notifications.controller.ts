@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { NotificationsService, CreateNotificationDto } from './notifications.service';
+import { TestPushDto } from './dto/test-push.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -24,7 +25,7 @@ export class NotificationsController {
 
   @Patch('user/:id/read')
   @ApiOperation({ summary: 'Mark a notification as read' })
-  markAsRead(@CurrentUser('id') userId: string, @Param('id') id: string) {
+  markAsRead(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.notificationsService.markAsRead(userId, id);
   }
 
@@ -50,7 +51,7 @@ export class NotificationsController {
   @Get(':id')
   @Roles('super_admin', 'admin', 'moderator')
   @ApiOperation({ summary: 'Get notification by ID (admin)' })
-  findOne(@Param('id') id: string) { return this.notificationsService.findOne(id); }
+  findOne(@Param('id', ParseUUIDPipe) id: string) { return this.notificationsService.findOne(id); }
 
   @Post()
   @Roles('super_admin', 'admin', 'moderator')
@@ -60,15 +61,15 @@ export class NotificationsController {
   @Post(':id/send')
   @Roles('super_admin', 'admin', 'moderator')
   @ApiOperation({ summary: 'Send notification via FCM (admin)' })
-  send(@Param('id') id: string) { return this.notificationsService.send(id); }
+  send(@Param('id', ParseUUIDPipe) id: string) { return this.notificationsService.send(id); }
 
   @Post('test-push')
   @Roles('super_admin', 'admin', 'moderator')
   @ApiOperation({ summary: 'Send a test push notification to a device token (admin)' })
-  testPush(@Body() body: { token: string }) { return this.notificationsService.testPush(body.token); }
+  testPush(@Body() body: TestPushDto) { return this.notificationsService.testPush(body.token); }
 
   @Delete(':id')
   @Roles('super_admin', 'admin', 'moderator')
   @ApiOperation({ summary: 'Delete notification (admin)' })
-  remove(@Param('id') id: string) { return this.notificationsService.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string) { return this.notificationsService.remove(id); }
 }

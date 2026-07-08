@@ -62,15 +62,52 @@ apiClient.interceptors.response.use(
   },
 );
 
+/**
+ * extractData — safely unwrap our standard API envelope: { success, message, data }
+ *
+ * Validates the expected shape before unwrapping. If the response doesn't match,
+ * it falls back gracefully rather than returning a corrupted T, and logs a warning
+ * in development so API contract drift is caught early.
+ *
+ * Expected envelope:
+ *   { success: boolean, message: string, data: T, errors: ... }
+ */
 export function extractData<T>(
-  response: { data?: { data?: T } | T } | T,
+  response: { data?: { data?: T; success?: boolean } | T } | T,
 ): T {
-  const r = response as { data?: { data?: T } | T };
-  const inner = r?.data;
-  if (inner && typeof inner === 'object' && 'data' in inner) {
-    return (inner as { data: T }).data;
+  const r = response as { data?: { data?: T; success?: boolean } | T };
+  const envelope = r?.data;
+
+  // Standard API envelope: { success, message, data }
+  if (
+    envelope !== null &&
+    typeof envelope === 'object' &&
+    'data' in (envelope as object) &&
+    ('success' in (envelope as object) || 'message' in (envelope as object))
+  ) {
+    if (__DEV_ADMIN__ && !(envelope as { success?: boolean }).success) {
+      // Log contract violations loudly in dev so they are caught before prod.
+      console.warn('[extractData] API returned success=false:', envelope);
+    }
+    return (envelope as { data: T }).data;
   }
-  return (inner as T | undefined) ?? (response as T);
+
+  // Unwrapped response (some endpoints return data directly without envelope).
+  if (envelope !== undefined && envelope !== null) {
+    return envelope as T;
+  }
+
+  return response as T;
+}
+
+// Compile-time flag for dev-only logging — overridden by build tools in production.
+declare const __DEV_ADMIN__: boolean;
+if (typeof __DEV_ADMIN__ === 'undefined') {
+  // Fallback: use NODE_ENV check at runtime when the constant is not defined.
+  Object.defineProperty(globalThis, '__DEV_ADMIN__', {
+    value: process.env.NODE_ENV !== 'production',
+    writable: false,
+  });
 }
 
 export function getApiErrorMessage(error: unknown): string {

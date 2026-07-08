@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, SubscriptionStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +14,39 @@ import {
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
   constructor(private prisma: PrismaService) {}
+
+  // Runs daily at 03:15 UTC — expires subscriptions whose endsAt has passed and clears
+  // the user's isPremium flag. Without this, users who never make requests keep
+  // premium access indefinitely (per-request expiry only fires on live traffic).
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async expireStaleSubscriptions(): Promise<void> {
+    const now = new Date();
+    try {
+      const expired = await this.prisma.subscription.findMany({
+        where: {
+          status: { in: ['active', 'trial'] as SubscriptionStatus[] },
+          endsAt: { lt: now },
+        },
+        select: { id: true, userId: true },
+      });
+      if (expired.length === 0) return;
+      const subIds = expired.map(s => s.id);
+      const userIds = Array.from(new Set(expired.map(s => s.userId)));
+      await this.prisma.$transaction([
+        this.prisma.subscription.updateMany({
+          where: { id: { in: subIds } },
+          data: { status: 'expired' as SubscriptionStatus },
+        }),
+        this.prisma.user.updateMany({
+          where: { id: { in: userIds } },
+          data: { isPremium: false },
+        }),
+      ]);
+      this.logger.log(`Expired ${expired.length} stale subscription(s)`);
+    } catch (err) {
+      this.logger.error('expireStaleSubscriptions failed', err instanceof Error ? err.stack : String(err));
+    }
+  }
 
   async getPlans(query: PaginationDto) {
     const [data, total] = await Promise.all([

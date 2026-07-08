@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { openExternalUrl } from '@/lib/safeLink';
 import {
   Modal,
   View,
@@ -130,7 +131,7 @@ export function AdRewarded({ placement, visible, onClose, onRewardEarned, reward
 
   const handlePress = () => {
     trackEvent(ad.id, 'click', placement);
-    if (ad.clickUrl) Linking.openURL(ad.clickUrl).catch(() => {});
+    if (ad.clickUrl) openExternalUrl(ad.clickUrl);
   };
 
   return (

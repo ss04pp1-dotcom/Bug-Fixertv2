@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Res, Req, HttpStatus, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, Res, Req, HttpStatus, ForbiddenException } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ChannelsService } from './channels.service';
@@ -13,6 +13,9 @@ import { Throttle } from '@nestjs/throttler';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { ChannelQueryDto } from './dto/channel-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/interfaces';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -128,7 +131,7 @@ export class ChannelsController {
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get channel by ID or slug (public — credentials stripped)' })
-  async findOne(@Param('id') id: string, @Req() req: Request) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.channelsService.findOne(id);
   }
@@ -137,7 +140,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor', 'moderator', 'user')
   @ApiOperation({ summary: 'Get channel with full server credentials for authenticated playback (mobile)' })
-  async findOneWithSources(@Param('id') id: string, @Req() req: Request) {
+  async findOneWithSources(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     await this.enforceGeoBlock(req);
     return this.channelsService.findOneWithSources(id);
   }
@@ -146,29 +149,30 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Get channel by ID or slug with full server credentials (admin only)' })
-  async findOneAdmin(@Param('id') id: string) {
+  async findOneAdmin(@Param('id', ParseUUIDPipe) id: string) {
     return this.channelsService.findOneAdmin(id);
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id/stream')
-  @ApiOperation({ summary: 'Get stream URL for a channel' })
-  async getStream(@Param('id') id: string, @Req() req: Request) {
+  @ApiOperation({ summary: 'Get stream URL for a channel (premium channels require an authenticated premium subscription)' })
+  async getStream(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request, @CurrentUser() user: AuthenticatedUser | null) {
     await this.enforceGeoBlock(req);
-    return this.channelsService.getStreamUrl(id);
+    return this.channelsService.getStreamUrl(id, user ?? null);
   }
 
   @Public()
   @Post(':id/view')
   @Throttle({ default: { limit: 1, ttl: 300000 } })
   @ApiOperation({ summary: 'Increment view count' })
-  incrementView(@Param('id') id: string) { return this.channelsService.incrementViewCount(id); }
+  incrementView(@Param('id', ParseUUIDPipe) id: string) { return this.channelsService.incrementViewCount(id); }
 
   @Get(':id/health')
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'moderator')
   @ApiOperation({ summary: 'Get full health stats for a channel' })
-  async getHealth(@Param('id') id: string) {
+  async getHealth(@Param('id', ParseUUIDPipe) id: string) {
     const mode = await this.getHealthMode();
     return this.channelsService.getChannelHealthStats(id, mode);
   }
@@ -177,7 +181,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Set manual health override for a channel' })
-  setOverride(@Param('id') id: string, @Body('override') override: HealthOverride) {
+  setOverride(@Param('id', ParseUUIDPipe) id: string, @Body('override') override: HealthOverride) {
     return this.channelsService.setHealthOverride(id, override);
   }
 
@@ -185,7 +189,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Update a channel' })
-  update(@Param('id') id: string, @Body() dto: Partial<CreateChannelDto>) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateChannelDto>) {
     return this.channelsService.update(id, dto);
   }
 
@@ -199,7 +203,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Delete a channel' })
-  remove(@Param('id') id: string) { return this.channelsService.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string) { return this.channelsService.remove(id); }
 
   // ── Admin overrides ─────────────────────────────────────────────────────────
 
@@ -207,7 +211,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Set admin overrides for a GitHub-synced channel' })
-  updateOverrides(@Param('id') id: string, @Body() dto: UpdateOverridesDto) {
+  updateOverrides(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateOverridesDto) {
     return this.channelsService.updateOverrides(id, dto);
   }
 
@@ -215,7 +219,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Reset a specific admin override back to GitHub value' })
-  resetOverride(@Param('id') id: string, @Param('field') field: string) {
+  resetOverride(@Param('id', ParseUUIDPipe) id: string, @Param('field') field: string) {
     return this.channelsService.resetOverride(id, field);
   }
 
@@ -225,7 +229,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor', 'moderator')
   @ApiOperation({ summary: 'Get all servers for a channel (admin — includes disabled)' })
-  getServers(@Param('id') id: string) {
+  getServers(@Param('id', ParseUUIDPipe) id: string) {
     return this.channelsService.getServers(id);
   }
 
@@ -233,7 +237,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Add an admin-managed server to a channel' })
-  addServer(@Param('id') id: string, @Body() dto: AddServerDto) {
+  addServer(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddServerDto) {
     return this.channelsService.addServer(id, dto);
   }
 
@@ -241,7 +245,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Bulk-reorder servers (set priorities)' })
-  reorderServers(@Param('id') id: string, @Body() body: ReorderServersDto) {
+  reorderServers(@Param('id', ParseUUIDPipe) id: string, @Body() body: ReorderServersDto) {
     return this.channelsService.reorderServers(id, body.servers);
   }
 
@@ -250,7 +254,7 @@ export class ChannelsController {
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Update a single server (enabled, link, headers)' })
   updateServer(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Param('serverId') serverId: string,
     @Body() dto: UpdateServerDto,
   ) {
@@ -261,7 +265,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor', 'moderator')
   @ApiOperation({ summary: 'Test server reachability from the API host' })
-  testServer(@Param('id') id: string, @Param('serverId') serverId: string) {
+  testServer(@Param('id', ParseUUIDPipe) id: string, @Param('serverId') serverId: string) {
     return this.channelsService.testServer(id, serverId);
   }
 
@@ -269,7 +273,7 @@ export class ChannelsController {
   @ApiBearerAuth()
   @Roles('super_admin', 'admin', 'editor')
   @ApiOperation({ summary: 'Soft-delete a server from a channel' })
-  deleteServer(@Param('id') id: string, @Param('serverId') serverId: string) {
+  deleteServer(@Param('id', ParseUUIDPipe) id: string, @Param('serverId') serverId: string) {
     return this.channelsService.deleteServer(id, serverId);
   }
 }

@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AppCacheModule } from './cache/cache.module';
 import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
 import { RawBodyMiddleware } from './common/middleware/raw-body.middleware';
+import { LocaleMiddleware } from './common/middleware/locale.middleware';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CategoriesModule } from './categories/categories.module';
@@ -55,7 +56,11 @@ import configuration from './config/configuration';
       load: [configuration],
       envFilePath: ['.env.local', '.env'],
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 1000, limit: 10 },   // 10 req/sec burst
+      { name: 'medium', ttl: 60_000, limit: 100 }, // 100 req/min sustained
+      { name: 'long', ttl: 3_600_000, limit: 1000 }, // 1000 req/hr total
+    ]),
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
@@ -112,5 +117,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RawBodyMiddleware).forRoutes('/v1/payments/webhook');
     consumer.apply(MaintenanceMiddleware).forRoutes('*');
+    // Attach req.locale from Accept-Language header — used by services for i18n error messages.
+    consumer.apply(LocaleMiddleware).forRoutes('*');
   }
 }

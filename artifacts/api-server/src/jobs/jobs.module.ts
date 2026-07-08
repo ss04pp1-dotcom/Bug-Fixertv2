@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsQueueConsumer } from './consumers/notifications.consumer';
 import { EmailQueueConsumer } from './consumers/email.consumer';
 import { AnalyticsQueueConsumer } from './consumers/analytics.consumer';
@@ -27,7 +28,17 @@ const bullConnection = REDIS_URL
 
 const bullImports = bullConnection
   ? [
-      BullModule.forRoot({ connection: bullConnection }),
+      BullModule.forRoot({
+        connection: bullConnection,
+        // Every queue inherits sensible retry semantics — without this BullMQ retries 0 times
+        // and any transient failure (Redis blip, downstream 5xx) is silently dropped.
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { count: 1000, age: 24 * 3600 },
+          removeOnFail: { count: 5000, age: 7 * 24 * 3600 },
+        },
+      }),
       BullModule.registerQueue(
         { name: QUEUE_NOTIFICATIONS },
         { name: QUEUE_EMAIL },
@@ -43,7 +54,7 @@ const bullProviders = bullConnection
 const bullExports = bullConnection ? [BullModule] : [];
 
 @Module({
-  imports: [...bullImports],
+  imports: [PrismaModule, ...bullImports],
   providers: [...bullProviders],
   exports: [...bullExports],
 })

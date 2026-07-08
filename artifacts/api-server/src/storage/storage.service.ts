@@ -56,11 +56,14 @@ export class StorageService {
   ) {}
 
   generateKey(folder: string, filename: string): string {
+    // Defence-in-depth: strip any path segments so an unexpected caller can't traverse
+    // out of the intended folder even if the controller allow-list ever regresses.
+    const safeFolder = path.basename(folder || 'uploads').replace(/[^a-zA-Z0-9_-]/g, '') || 'uploads';
     const rawExt = path.extname(filename);
     const ext = rawExt.replace(/[^a-zA-Z0-9.]/g, '').slice(0, 12);
     const hash = crypto.randomBytes(12).toString('hex');
     const timestamp = Date.now();
-    return `${folder}/${timestamp}-${hash}${ext}`;
+    return `${safeFolder}/${timestamp}-${hash}${ext}`;
   }
 
   private async getConfig(): Promise<StorageConfig | null> {

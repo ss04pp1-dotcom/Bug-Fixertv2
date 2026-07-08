@@ -1,4 +1,4 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsString, MinLength, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ResetPasswordDto {
@@ -13,5 +13,6 @@ export class ResetPasswordDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
+  @MaxLength(128) // bcrypt DoS guard
   newPassword: string;
 }

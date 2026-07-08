@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -33,7 +33,7 @@ export class UsersController {
   @Get(':id')
   @Roles('super_admin', 'admin', 'moderator', 'support')
   @ApiOperation({ summary: 'Get user by ID' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findOne(id);
   }
 
@@ -47,7 +47,7 @@ export class UsersController {
   @Put(':id')
   @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Update user' })
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto, @Req() req: Request) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto, @Req() req: Request) {
     const callerRole = (req.user as { role?: string } | undefined)?.role;
     return this.usersService.update(id, dto, callerRole);
   }
@@ -55,7 +55,7 @@ export class UsersController {
   @Delete(':id')
   @Roles('super_admin', 'admin')
   @ApiOperation({ summary: 'Delete user (soft delete)' })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.remove(id);
   }
 }

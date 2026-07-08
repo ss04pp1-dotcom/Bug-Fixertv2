@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Req, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, Req, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AdvertisementsService } from './advertisements.service';
@@ -29,13 +29,13 @@ export class AdvertisementsController {
   create(@Body() dto: CreateAdDto) { return this.svc.create(dto); }
 
   @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad (full replace)' })
-  update(@Param('id') id: string, @Body() dto: CreateAdDto) { return this.svc.update(id, dto); }
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateAdDto) { return this.svc.update(id, dto); }
 
   @Patch(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Partial update ad (e.g. toggle isActive)' })
-  partialUpdate(@Param('id') id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
+  partialUpdate(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateAdDto>) { return this.svc.update(id, dto); }
 
   @Delete(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete ad' })
-  remove(@Param('id') id: string) { return this.svc.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string) { return this.svc.remove(id); }
 
   @Public() @Post('event') @Throttle({ default: { limit: 60, ttl: 60000 } }) @ApiOperation({ summary: 'Track ad event — impression, click, revenue, error, skip, close' })
   trackEvent(@Body() dto: AdEventDto, @Req() req: Request) {
@@ -53,13 +53,13 @@ export class AdvertisementsController {
   createProvider(@Body() dto: CreateAdProviderDto) { return this.svc.createProvider(dto); }
 
   @Put('providers/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update ad provider' })
-  updateProvider(@Param('id') id: string, @Body() dto: UpdateAdProviderDto) { return this.svc.updateProvider(id, dto); }
+  updateProvider(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAdProviderDto) { return this.svc.updateProvider(id, dto); }
 
   @Delete('providers/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete ad provider' })
-  deleteProvider(@Param('id') id: string) { return this.svc.deleteProvider(id); }
+  deleteProvider(@Param('id', ParseUUIDPipe) id: string) { return this.svc.deleteProvider(id); }
 
   @Post('providers/:id/activate') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Set active ad provider' })
-  activateProvider(@Param('id') id: string) { return this.svc.activateProvider(id); }
+  activateProvider(@Param('id', ParseUUIDPipe) id: string) { return this.svc.activateProvider(id); }
 
   @Public() @Get('placements/public') @ApiOperation({ summary: 'Get active placements by slug (mobile ad fetching)' })
   getPublicPlacements(@Query('slug') slug?: string) { return this.svc.getPublicPlacements(slug); }
@@ -71,10 +71,10 @@ export class AdvertisementsController {
   createPlacement(@Body() dto: CreateAdPlacementDto) { return this.svc.createPlacement(dto); }
 
   @Put('placements/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update placement' })
-  updatePlacement(@Param('id') id: string, @Body() dto: Partial<CreateAdPlacementDto>) { return this.svc.updatePlacement(id, dto); }
+  updatePlacement(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateAdPlacementDto>) { return this.svc.updatePlacement(id, dto); }
 
   @Delete('placements/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete placement' })
-  deletePlacement(@Param('id') id: string) { return this.svc.deletePlacement(id); }
+  deletePlacement(@Param('id', ParseUUIDPipe) id: string) { return this.svc.deletePlacement(id); }
 
   @Get('settings') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Get ad settings' })
   getSettings() { return this.svc.getSettings(); }

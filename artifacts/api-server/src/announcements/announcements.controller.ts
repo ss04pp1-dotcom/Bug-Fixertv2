@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AnnouncementsService, CreateAnnouncementDto } from './announcements.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -20,14 +20,14 @@ export class AnnouncementsController {
   findAll(@Query() query: PaginationDto) { return this.announcementsService.findAll(query); }
 
   @Get(':id') @ApiBearerAuth() @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Get announcement' })
-  findOne(@Param('id') id: string) { return this.announcementsService.findOne(id); }
+  findOne(@Param('id', ParseUUIDPipe) id: string) { return this.announcementsService.findOne(id); }
 
   @Post() @ApiBearerAuth() @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Create announcement' })
   create(@Body() dto: CreateAnnouncementDto) { return this.announcementsService.create(dto); }
 
   @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin', 'moderator') @ApiOperation({ summary: 'Update announcement' })
-  update(@Param('id') id: string, @Body() dto: Partial<CreateAnnouncementDto>) { return this.announcementsService.update(id, dto); }
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateAnnouncementDto>) { return this.announcementsService.update(id, dto); }
 
   @Delete(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete announcement' })
-  remove(@Param('id') id: string) { return this.announcementsService.remove(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string) { return this.announcementsService.remove(id); }
 }

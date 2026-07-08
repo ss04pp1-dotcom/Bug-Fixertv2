@@ -23,6 +23,25 @@ const SIZE = {
 
 type UploadFolder = 'avatars' | 'logos' | 'banners' | 'posters' | 'categories' | 'ads' | 'uploads';
 
+// Magic-byte signatures — client-supplied Content-Type is trivially spoofed, so we
+// inspect the file's leading bytes and reject anything that doesn't match a real
+// image/video container. This blocks polyglot payloads (e.g. HTML/JS renamed .png).
+const MAGIC: Array<{ mime: string; test: (b: Buffer) => boolean }> = [
+  { mime: 'image/jpeg', test: b => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: 'image/png',  test: b => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { mime: 'image/gif',  test: b => b.length > 6 && b.slice(0, 6).toString('ascii').startsWith('GIF8') },
+  { mime: 'image/webp', test: b => b.length > 12 && b.slice(0, 4).toString('ascii') === 'RIFF' && b.slice(8, 12).toString('ascii') === 'WEBP' },
+  { mime: 'video/mp4',  test: b => b.length > 12 && b.slice(4, 8).toString('ascii') === 'ftyp' },
+  { mime: 'video/webm', test: b => b.length > 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3 },
+  { mime: 'video/quicktime', test: b => b.length > 12 && b.slice(4, 8).toString('ascii') === 'ftyp' && b.slice(8, 12).toString('ascii').startsWith('qt') },
+];
+
+function sniffMime(buf: Buffer | undefined): string | null {
+  if (!buf || buf.length < 4) return null;
+  const hit = MAGIC.find(m => m.test(buf));
+  return hit?.mime ?? null;
+}
+
 function validateFile(
   file: Express.Multer.File | undefined,
   allowedMime: string[],
@@ -38,6 +57,13 @@ function validateFile(
   if (file.size > maxSize) {
     throw new BadRequestException(
       `${label}: exceeds limit of ${Math.round(maxSize / 1024 / 1024)} MB`,
+    );
+  }
+  // Magic-byte check — reject files whose real content contradicts the declared MIME.
+  const sniffed = sniffMime(file.buffer);
+  if (!sniffed || !allowedMime.includes(sniffed)) {
+    throw new BadRequestException(
+      `${label}: file content does not match a permitted ${allowedMime.includes('image/jpeg') ? 'image' : 'media'} format`,
     );
   }
 }

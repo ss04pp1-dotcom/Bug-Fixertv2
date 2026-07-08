@@ -24,8 +24,22 @@ module.exports = {
         UIBackgroundModes: ['audio', 'fetch'],
         UIRequiresFullScreen: false,
         NSAppTransportSecurity: {
-          NSAllowsArbitraryLoads: true,
+          // NSAllowsArbitraryLoads: false — do NOT re-enable; it allows HTTP for
+          // all networking, not just media, which Apple flags in App Store review.
+          // NSAllowsArbitraryLoadsForMedia scopes the exception to AV/media layers
+          // only (AVPlayer, ExoPlayer bridge), which is the minimum needed for IPTV.
+          NSAllowsArbitraryLoads: false,
           NSAllowsArbitraryLoadsForMedia: true,
+          // Add your API server as an explicit HTTPS-only domain so NSAllowsArbitraryLoads=false
+          // does not inadvertently block API calls on non-ATS code paths.
+          NSExceptionDomains: {
+            "livetv-aokw.onrender.com": {
+              NSIncludesSubdomains: false,
+              NSExceptionAllowsInsecureHTTPLoads: false,
+              NSRequiresCertificateTransparency: false,
+            },
+            // Add staging / preview domains here as needed.
+          },
         },
       },
     },
@@ -36,7 +50,12 @@ module.exports = {
         backgroundColor: '#05070F',
       },
       package: 'com.soltv.app',
-      usesCleartextTraffic: true,
+      // usesCleartextTraffic is intentionally NOT set here.
+      // The ./plugins/withNetworkSecurityConfig plugin writes
+      // res/xml/network_security_config.xml which is the authoritative source
+      // for OkHttp / Media3 and takes precedence over the manifest flag.
+      // Enabling it here would redundantly add android:usesCleartextTraffic="true"
+      // to the <application> tag; the XML config already handles IPTV HTTP streams.
       permissions: [
         'android.permission.INTERNET',
         'android.permission.FOREGROUND_SERVICE',

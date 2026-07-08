@@ -31,6 +31,16 @@ export class AuthService {
     private settingsService: SettingsService,
   ) {}
 
+  /**
+   * Deterministic hash of a refresh token so we can store & look it up in DB
+   * without keeping the raw JWT at rest. HMAC-SHA256 keyed with the refresh
+   * secret — a DB dump alone can't be replayed against /auth/refresh unless
+   * the attacker also has the server's JWT_REFRESH_SECRET.
+   */
+  static hashRefreshToken(token: string): string {
+    return crypto.createHmac('sha256', jwtConfig.refreshSecret).update(token).digest('hex');
+  }
+
   async register(dto: RegisterDto) {
     dto.email = dto.email?.trim() || undefined;
     dto.phone = dto.phone?.trim() || undefined;
@@ -89,7 +99,7 @@ export class AuthService {
     await this.prisma.session.create({
       data: {
         userId: user.id,
-        refreshToken: tokens.refreshToken,
+        refreshToken: AuthService.hashRefreshToken(tokens.refreshToken),
         deviceName: dto.deviceName,
         deviceType: dto.deviceType,
         platform: dto.platform,
@@ -113,7 +123,7 @@ export class AuthService {
 
     await this.prisma.session.update({
       where: { id: sessionId, userId },
-      data: { refreshToken: tokens.refreshToken, expiresAt },
+      data: { refreshToken: AuthService.hashRefreshToken(tokens.refreshToken), expiresAt },
     });
 
     // Controller sets the refresh token as an httpOnly cookie; only return accessToken + user to the client.
@@ -190,38 +200,37 @@ export class AuthService {
 
   async verifyOtp(dto: VerifyOtpDto) {
     const hashedInput = crypto.createHash('sha256').update(dto.code).digest('hex');
+    const MAX_ATTEMPTS = 5;
 
-    // Brute-force protection: count recent failed attempts for this identifier
-    const recentFailures = await this.prisma.otp.count({
+    // Get the latest active OTP for this identifier+type (forgotPassword invalidates
+    // older ones, so there is at most one). Brute-force is tracked on this row via
+    // `failedAttempts` — the old "count of unused OTPs with different code" heuristic
+    // could never actually trip because every request invalidates previous OTPs.
+    const active = await this.prisma.otp.findFirst({
       where: {
         identifier: dto.identifier,
         type: dto.type,
         usedAt: null,
         expiresAt: { gt: new Date() },
-        code: { not: hashedInput },
       },
+      orderBy: { createdAt: 'desc' },
     });
-    // If 5+ valid but unused OTPs exist (each failed attempt creates a new OTP),
-    // we block further attempts. This limits replay + brute-force attacks.
-    // A simpler approach: track failed attempts in a rate-limit per identifier.
-    // Here we use a practical threshold — 5 unused OTPs for the same identifier
-    // means too many codes were generated/attempted.
-    if (recentFailures >= 5) {
+    if (!active) throw new BadRequestException('Invalid or expired OTP');
+    if (active.failedAttempts >= MAX_ATTEMPTS) {
+      // Burn this OTP so the user must request a fresh one.
+      await this.prisma.otp.update({ where: { id: active.id }, data: { usedAt: new Date() } });
       throw new BadRequestException('Too many failed attempts. Please request a new OTP.');
     }
 
-    const otp = await this.prisma.otp.findFirst({
-      where: {
-        identifier: dto.identifier,
-        type: dto.type,
-        code: hashedInput,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    });
-    if (!otp) throw new BadRequestException('Invalid or expired OTP');
+    if (active.code !== hashedInput) {
+      await this.prisma.otp.update({
+        where: { id: active.id },
+        data: { failedAttempts: { increment: 1 } },
+      });
+      throw new BadRequestException('Invalid or expired OTP');
+    }
 
-    await this.prisma.otp.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+    await this.prisma.otp.update({ where: { id: active.id }, data: { usedAt: new Date() } });
     return { message: 'OTP verified successfully', verified: true };
   }
 
@@ -420,7 +429,7 @@ export class AuthService {
     await this.prisma.session.create({
       data: {
         userId: user.id,
-        refreshToken: tokens.refreshToken,
+        refreshToken: AuthService.hashRefreshToken(tokens.refreshToken),
         deviceName: `${dto.provider} OAuth`,
         expiresAt,
       },
@@ -442,8 +451,24 @@ export class AuthService {
           { signal: AbortSignal.timeout(5000) },
         );
         if (!res.ok) return null;
-        const data = await res.json() as { email?: string; error?: string };
+        const data = await res.json() as { email?: string; error?: string; aud?: string; azp?: string; email_verified?: string | boolean };
         if (data.error || !data.email) return null;
+        // Reject unverified Google accounts.
+        const verified = data.email_verified === true || data.email_verified === 'true';
+        if (!verified) return null;
+        // Audience check: only accept tokens minted for our OAuth client(s).
+        // Configured via settings key `google_client_ids` (comma-separated) or
+        // env GOOGLE_OAUTH_CLIENT_IDS. Missing config is treated as a security
+        // misconfiguration and we refuse the login.
+        const configured = await this.settingsService.get('google_client_ids').catch(() => null);
+        const raw = (configured?.value ? String(configured.value) : '') || process.env.GOOGLE_OAUTH_CLIENT_IDS || '';
+        const allowed = raw.split(',').map(s => s.trim()).filter(Boolean);
+        if (allowed.length === 0) {
+          this.logger.error('Google Sign-In: google_client_ids not configured — refusing login (received aud=' + (data.aud ?? '') + ')');
+          return null;
+        }
+        const aud = data.aud || data.azp || '';
+        if (!allowed.includes(aud)) return null;
         if (claimedEmail && data.email.toLowerCase() !== claimedEmail.toLowerCase()) return null;
         return data.email;
       }

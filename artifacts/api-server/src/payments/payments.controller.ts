@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Headers, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, Req, Headers, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, CreateGatewayDto, WebhookDto, RefundDto, UpsertGatewayDto, PaymentsQueryDto } from './dto/payments.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -36,7 +36,7 @@ export class PaymentsController {
   createGateway(@Body() dto: CreateGatewayDto) { return this.svc.createGateway(dto); }
 
   @Put('gateways/:id') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update payment gateway' })
-  updateGateway(@Param('id') id: string, @Body() dto: Partial<CreateGatewayDto>) {
+  updateGateway(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateGatewayDto>) {
     return this.svc.updateGateway(id, dto);
   }
 
@@ -57,10 +57,13 @@ export class PaymentsController {
   }
 
   @Delete('gateways/:id') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete payment gateway' })
-  deleteGateway(@Param('id') id: string) { return this.svc.deleteGateway(id); }
+  deleteGateway(@Param('id', ParseUUIDPipe) id: string) { return this.svc.deleteGateway(id); }
 
   @Public()
-  @SkipThrottle()
+  @SkipThrottle({ default: true })
+  // Dedicated moderate limit — SkipThrottle removes the global user-scoped limit, but we
+  // still need an IP-scoped ceiling so a webhook flood can't DoS this endpoint.
+  @Throttle({ default: { limit: 300, ttl: 60000 } })
   @Post('webhook')
   @ApiOperation({ summary: 'Payment gateway webhook (public)' })
   webhook(@Body() payload: WebhookDto, @Headers('x-gateway-signature') signature: string, @Req() req: Request) {
@@ -73,13 +76,13 @@ export class PaymentsController {
   }
 
   @Post(':id/verify') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Verify payment (admin)' })
-  verify(@Param('id') id: string) { return this.svc.verify(id); }
+  verify(@Param('id', ParseUUIDPipe) id: string) { return this.svc.verify(id); }
 
   @Post(':id/refund') @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Refund payment' })
-  refund(@Param('id') id: string, @Body() dto: RefundDto) { return this.svc.refund(id, dto); }
+  refund(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RefundDto) { return this.svc.refund(id, dto); }
 
   @Get(':id/invoice') @ApiOperation({ summary: 'Get payment invoice' })
-  getInvoice(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  getInvoice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string) {
     return this.svc.getInvoice(id, userId);
   }
 }

@@ -1,4 +1,23 @@
 -- =============================================================================
+-- ⚠️  ARCHIVED — DO NOT RUN THIS IN ANY ENVIRONMENT  ⚠️
+-- =============================================================================
+-- This file was an ad-hoc emergency SQL script used to patch missing columns
+-- BEFORE proper Prisma migrations existed. It is now SUPERSEDED by:
+--
+--   prisma/migrations/  ← use `prisma migrate deploy` instead
+--
+-- Running this script against a database that was already migrated via Prisma
+-- will cause duplicate-column errors or silently conflict with migration state.
+--
+-- If you need to replay schema changes, run:
+--   pnpm --filter @workspace/api-server run migrate:deploy
+--
+-- This file is kept for historical reference ONLY. It will be deleted in the
+-- next major release. Do not add new statements here — always create a Prisma
+-- migration instead: `pnpm --filter @workspace/api-server run migrate:create`
+-- =============================================================================
+
+-- =============================================================================
 -- StreamPro — safe incremental migration
 -- Run this in Render → PostgreSQL → PSQL Console (or any SQL client)
 -- Every statement uses IF NOT EXISTS / DO $$ … $$ so it is safe to re-run.

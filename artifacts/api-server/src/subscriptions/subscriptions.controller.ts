@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SubscriptionStatus } from '@prisma/client';
 import { SubscriptionsService } from './subscriptions.service';
@@ -26,10 +26,10 @@ export class SubscriptionsController {
   createPlan(@Body() dto: CreatePlanDto) { return this.svc.createPlan(dto); }
 
   @Put('plans/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update plan' })
-  updatePlan(@Param('id') id: string, @Body() dto: Partial<CreatePlanDto>) { return this.svc.updatePlan(id, dto); }
+  updatePlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreatePlanDto>) { return this.svc.updatePlan(id, dto); }
 
   @Delete('plans/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete plan' })
-  deletePlan(@Param('id') id: string) { return this.svc.deletePlan(id); }
+  deletePlan(@Param('id', ParseUUIDPipe) id: string) { return this.svc.deletePlan(id); }
 
   @Post('subscribe') @ApiBearerAuth() @ApiOperation({ summary: 'Subscribe to a plan' })
   subscribe(@Body() dto: CreateSubscriptionDto, @CurrentUser('id') userId: string) {
@@ -57,7 +57,7 @@ export class SubscriptionsController {
   getAllSubscriptions(@Query() query: PaginationDto) { return this.svc.getAllSubscriptions(query); }
 
   @Put(':id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update subscription status (admin)' })
-  updateStatus(@Param('id') id: string, @Body('status') status: string) {
+  updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body('status') status: string) {
     const valid = Object.values(SubscriptionStatus) as string[];
     if (!valid.includes(status)) {
       throw new BadRequestException(`Invalid status. Must be one of: ${valid.join(', ')}`);
@@ -72,10 +72,10 @@ export class SubscriptionsController {
   createCoupon(@Body() dto: CreateCouponDto) { return this.svc.createCoupon(dto); }
 
   @Put('coupons/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Update coupon (admin)' })
-  updateCoupon(@Param('id') id: string, @Body() dto: Partial<CreateCouponDto>) { return this.svc.updateCoupon(id, dto); }
+  updateCoupon(@Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<CreateCouponDto>) { return this.svc.updateCoupon(id, dto); }
 
   @Delete('coupons/:id') @ApiBearerAuth() @Roles('super_admin', 'admin') @ApiOperation({ summary: 'Delete coupon (admin)' })
-  deleteCoupon(@Param('id') id: string) { return this.svc.deleteCoupon(id); }
+  deleteCoupon(@Param('id', ParseUUIDPipe) id: string) { return this.svc.deleteCoupon(id); }
 
   @Post('apply-coupon') @ApiBearerAuth() @ApiOperation({ summary: 'Validate and preview coupon discount (authenticated)' })
   applyCoupon(@Body() dto: ApplyCouponDto) { return this.svc.validateCoupon(dto); }

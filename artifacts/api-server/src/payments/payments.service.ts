@@ -222,7 +222,7 @@ export class PaymentsService {
     // Per-gateway signature verification — each gateway has its own signing scheme.
     // Stripe uses `t=timestamp,v1=hex` HMAC; SSLCommerz/PayPal/bKash have different formats.
     // See verifyStripeSignature / verifySslcommerzSignature / verifyPaypalSignature below.
-    this.verifyGatewaySignature(gatewaySlug, rawBody, signature ?? '', gateway.webhookSecret);
+    await this.verifyGatewaySignature(gatewaySlug, rawBody, signature ?? '', gateway.webhookSecret);
 
     if (payload.transactionId) {
       // Idempotency check: if the payment is already 'completed' the webhook is a replay
@@ -297,7 +297,7 @@ export class PaymentsService {
    * Throws UnauthorizedException when the signature is invalid or NotImplemented
    * for gateways that haven't been wired up yet.
    */
-  private verifyGatewaySignature(gatewaySlug: string, rawBody: string, signature: string, secret: string): void {
+  private async verifyGatewaySignature(gatewaySlug: string, rawBody: string, signature: string, secret: string): Promise<void> {
     switch (gatewaySlug) {
       case 'stripe':
         if (!this.verifyStripeSignature(rawBody, signature, secret)) {
@@ -310,7 +310,7 @@ export class PaymentsService {
         }
         return;
       case 'paypal':
-        if (!this.verifyPaypalSignature(rawBody, signature, secret)) {
+        if (!(await this.verifyPaypalSignature(rawBody, signature, secret))) {
           throw new UnauthorizedException('Invalid webhook signature');
         }
         return;
@@ -359,27 +359,90 @@ export class PaymentsService {
   }
 
   /**
-   * SSLCommerz signature verification — STUB.
-   * TODO: implement verify_key/verify_sign POST param validation per SSLCommerz docs.
-   * Throws NotImplemented until wired up — callers must configure the gateway slug as
-   * something other than `sslcommerz` until this is implemented.
+   * SSLCommerz IPN validation.
+   * SSLCommerz posts form-encoded fields to your IPN URL and includes a
+   * `verify_sign` (MD5 of alphabetically-sorted key=value pairs + store_passwd MD5)
+   * plus `verify_key` (comma-separated list of keys used). We parse the raw body
+   * (application/x-www-form-urlencoded), rebuild the string per SSLCommerz's
+   * documented algorithm, and compare in constant time.
+   * https://developer.sslcommerz.com/doc/v4/#ipn-validation
    */
-  private verifySslcommerzSignature(_rawBody: string, _signature: string, _secret: string): boolean {
-    // NOTE: SSLCommerz uses a verify_key/verify_sign POST-param flow rather than a
-    // header signature. Full implementation pending — not used in production yet.
-    // Returning true here would be insecure; throw so it can't be silently bypassed.
-    throw new Error('SSLCommerz signature verification not implemented yet — configure gateway slug as something else or implement me.');
+  private verifySslcommerzSignature(rawBody: string, _signatureHeader: string, storePasswd: string): boolean {
+    try {
+      const params = new URLSearchParams(rawBody);
+      const verifySign = params.get('verify_sign');
+      const verifyKey = params.get('verify_key');
+      if (!verifySign || !verifyKey) return false;
+      const keys = verifyKey.split(',').filter(Boolean).sort();
+      const storePasswdMd5 = crypto.createHash('md5').update(storePasswd).digest('hex');
+      const pieces = keys.map(k => `${k}=${params.get(k) ?? ''}`);
+      pieces.push(`store_passwd=${storePasswdMd5}`);
+      pieces.sort();
+      const expected = crypto.createHash('md5').update(pieces.join('&')).digest('hex');
+      const a = Buffer.from(expected);
+      const b = Buffer.from(verifySign);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch {
+      return false;
+    }
   }
 
   /**
-   * PayPal signature verification — STUB.
-   * TODO: implement PayPal-Transmission-Sig + certificate chain verification.
-   * https://developer.paypal.com/api/rest/webhooks/
+   * PayPal webhook signature verification.
+   * PayPal signs webhooks with a cert-chain scheme. Rather than re-implementing
+   * cert-chain crypto ourselves, we call PayPal's `/v1/notifications/verify-webhook-signature`
+   * endpoint with the transmission headers and the raw event body. `webhookSecret`
+   * MUST be a JSON string containing `{ "clientId": "...", "clientSecret": "...",
+   * "webhookId": "...", "env": "live"|"sandbox" }`.
+   * https://developer.paypal.com/api/rest/webhooks/rest/#link-verifywebhooksignature
+   *
+   * NOTE: this method is async internally but the interface stays sync-boolean
+   * because verifyGatewaySignature is called from a sync context. We block on
+   * a synchronous XHR-equivalent by returning a Promise-like via deasync? No —
+   * we widen the signature at the caller instead (see verifyGatewaySignature).
    */
-  private verifyPaypalSignature(_rawBody: string, _signature: string, _secret: string): boolean {
-    // NOTE: PayPal requires cert-chain verification (PayPal-Cert-Url + PayPal-Auth-Algo +
-    // transmission signature). Full implementation pending.
-    throw new Error('PayPal signature verification not implemented yet — configure gateway slug as something else or implement me.');
+  private async verifyPaypalSignature(rawBody: string, signatureHeader: string, secret: string): Promise<boolean> {
+    try {
+      const cfg = JSON.parse(secret) as {
+        clientId: string; clientSecret: string; webhookId: string; env?: 'live' | 'sandbox';
+      };
+      if (!cfg.clientId || !cfg.clientSecret || !cfg.webhookId) return false;
+      // signatureHeader is a JSON-encoded object of the required PayPal headers,
+      // set by the webhook controller when it forwards the request here.
+      const headers = JSON.parse(signatureHeader) as Record<string, string>;
+      const base = cfg.env === 'sandbox'
+        ? 'https://api-m.sandbox.paypal.com'
+        : 'https://api-m.paypal.com';
+      const basic = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64');
+      const tokenRes = await fetch(`${base}/v1/oauth2/token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'grant_type=client_credentials',
+      });
+      if (!tokenRes.ok) return false;
+      const { access_token } = await tokenRes.json() as { access_token: string };
+      const verifyRes = await fetch(`${base}/v1/notifications/verify-webhook-signature`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auth_algo: headers['paypal-auth-algo'] ?? headers['PAYPAL-AUTH-ALGO'],
+          cert_url: headers['paypal-cert-url'] ?? headers['PAYPAL-CERT-URL'],
+          transmission_id: headers['paypal-transmission-id'] ?? headers['PAYPAL-TRANSMISSION-ID'],
+          transmission_sig: headers['paypal-transmission-sig'] ?? headers['PAYPAL-TRANSMISSION-SIG'],
+          transmission_time: headers['paypal-transmission-time'] ?? headers['PAYPAL-TRANSMISSION-TIME'],
+          webhook_id: cfg.webhookId,
+          webhook_event: JSON.parse(rawBody),
+        }),
+      });
+      if (!verifyRes.ok) return false;
+      const { verification_status } = await verifyRes.json() as { verification_status: string };
+      return verification_status === 'SUCCESS';
+    } catch {
+      return false;
+    }
   }
 
   async getStats() {

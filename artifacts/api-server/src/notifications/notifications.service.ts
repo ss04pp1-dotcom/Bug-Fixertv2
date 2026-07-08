@@ -34,19 +34,21 @@ interface FcmApp {
 }
 
 let fcmApp: FcmApp | null = null;
-let fcmInitAttempted = false;
+let fcmLastAttemptAt = 0;
+const FCM_RETRY_COOLDOWN_MS = 60_000; // don't hammer if init fails
 
 async function initFcm(
   logger: Logger,
   overrides?: { projectId: string; clientEmail: string; privateKey: string },
 ): Promise<FcmApp | null> {
-  // If explicit overrides provided (from DB settings), always re-init
-  if (overrides) {
-    fcmInitAttempted = false;
-    fcmApp = null;
+  // Already initialized — reuse.
+  if (fcmApp) return fcmApp;
+  // Explicit overrides always force a fresh init attempt.
+  if (!overrides) {
+    // Passive retry gate: if init recently failed, wait before hammering it again.
+    if (Date.now() - fcmLastAttemptAt < FCM_RETRY_COOLDOWN_MS) return null;
   }
-  if (fcmInitAttempted) return fcmApp;
-  fcmInitAttempted = true;
+  fcmLastAttemptAt = Date.now();
 
   const projectId   = overrides?.projectId   ?? process.env['FIREBASE_PROJECT_ID'];
   const privateKey  = (overrides?.privateKey  ?? process.env['FIREBASE_PRIVATE_KEY'])?.replace(/\\n/g, '\n');
@@ -172,6 +174,25 @@ export class NotificationsService {
             });
             totalSent += result.successCount;
             totalFailed += result.failureCount;
+
+            // Reap dead tokens — FCM returns UNREGISTERED / INVALID_ARGUMENT for uninstalled or
+            // rotated apps. Leaving them in the DB wastes quota and slowly collapses delivery rate.
+            const dead: string[] = [];
+            result.responses.forEach((r, i) => {
+              const code = r.error && (r.error as { code?: string }).code;
+              if (code === 'messaging/registration-token-not-registered' ||
+                  code === 'messaging/invalid-registration-token' ||
+                  code === 'messaging/invalid-argument') {
+                dead.push(tokens[i]);
+              }
+            });
+            if (dead.length) {
+              await this.prisma.user.updateMany({
+                where: { fcmToken: { in: dead } },
+                data: { fcmToken: null },
+              });
+              this.logger.log(`Cleaned ${dead.length} dead FCM tokens`);
+            }
           }
           if (users.length < batchSize) break;
           skip += batchSize;

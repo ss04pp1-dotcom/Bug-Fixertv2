@@ -40,8 +40,8 @@ export class SettingsController {
   @Post('test-email') @ApiBearerAuth() @Roles('super_admin', 'admin') @HttpCode(200) @ApiOperation({ summary: 'Test SMTP configuration' })
   testEmail(@Body() dto: TestEmailDto) { return this.settingsService.testEmail(dto.to); }
 
-  @Post('storage/test') @ApiBearerAuth() @Roles('super_admin', 'admin') @HttpCode(200) @ApiOperation({ summary: 'Test storage configuration' })
-  testStorage() { return this.settingsService.testStorage(); }
+  @Post('storage/test') @ApiBearerAuth() @Roles('super_admin', 'admin') @HttpCode(200) @ApiOperation({ summary: 'Test storage configuration (pass current form values to test before saving)' })
+  testStorage(@Body() overrides: Record<string, string> = {}) { return this.settingsService.testStorage(overrides); }
 
   @Delete(':key') @ApiBearerAuth() @Roles('super_admin') @ApiOperation({ summary: 'Delete setting' })
   delete(@Param('key') key: string) { return this.settingsService.delete(key); }

@@ -17,4 +17,29 @@ config.resolver = {
   ],
 };
 
+// ── Platform-specific module exclusions ──────────────────────────────────────
+// hls.js is a web-only HLS player library. It must not be bundled into the
+// native (iOS/Android) build because:
+//   1. It's 250KB of browser-specific code that does nothing on native.
+//   2. It references browser globals (document, window.performance) that
+//      cause runtime errors in the native JS engine (JSI/Hermes).
+// On native, HLS is handled natively by AVPlayer (iOS) / ExoPlayer (Android)
+// via react-native-video — hls.js is completely unnecessary.
+//
+// Metro's `resolveRequest` hook intercepts the import and returns an empty
+// stub on non-web platforms, effectively tree-shaking the entire library.
+config.resolver = {
+  ...config.resolver,
+  resolveRequest: (context, moduleName, platform) => {
+    // Redirect hls.js to an empty stub on native platforms.
+    if (moduleName === 'hls.js' && platform !== 'web') {
+      return {
+        filePath: require.resolve('./stubs/hls-stub.js'),
+        type: 'sourceFile',
+      };
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
+};
+
 module.exports = config;

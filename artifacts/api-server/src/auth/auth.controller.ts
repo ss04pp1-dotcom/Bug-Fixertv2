@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Delete, Body, Param, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, ParseUUIDPipe, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -135,7 +135,7 @@ export class AuthController {
   @Delete('sessions/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke a specific session' })
-  revokeSession(@CurrentUser('id') userId: string, @Param('id') sessionId: string) {
+  revokeSession(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) sessionId: string) {
     return this.authService.revokeSession(userId, sessionId);
   }
 

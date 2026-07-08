@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,44 @@ import {
 import { clearToken } from "@/lib/auth";
 import { apiClient } from "@/lib/axios-client";
 import { useApiQuery } from "@/lib/use-api";
+
+// ─── Role-based visibility ──────────────────────────────────────────────────
+// Decode the JWT's role claim client-side so we can hide navigation items that
+// the current user's role cannot access. This is a UX convenience — real
+// enforcement happens API-side. Never trust client-side role checks for security.
+async function getAdminRole(): Promise<string | null> {
+  try {
+    if (typeof window === 'undefined') return null;
+    // Dynamic import to avoid circular deps; getToken is a tiny sync function.
+    const authMod = await import('@/lib/auth');
+    const token = authMod.getToken();
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return (payload?.role as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Items only visible to super_admin (system configuration, RBAC management).
+const SUPER_ADMIN_ONLY_PATHS = new Set([
+  '/roles', '/permissions', '/audit-logs', '/feature-flags', '/geo-block',
+  '/settings', '/billing',
+]);
+
+// Items visible to admin and above (everything except super_admin exclusives).
+const ADMIN_ONLY_PATHS = new Set([
+  '/users', '/reports', '/analytics', '/live-users', '/support',
+]);
+
+function isNavItemVisible(path: string, role: string | null): boolean {
+  if (!role) return false;
+  if (role === 'super_admin') return true; // super_admin sees everything
+  if (SUPER_ADMIN_ONLY_PATHS.has(path)) return false;
+  if (role === 'admin') return true;
+  if (ADMIN_ONLY_PATHS.has(path)) return false; // moderator/editor/support can't see these
+  return true;
+}
 
 const NAV_ITEMS = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/"              },
@@ -90,6 +129,9 @@ function NavItem({ item, collapsed }: { item: (typeof NAV_ITEMS)[0]; collapsed: 
 
 export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
   const router = useRouter();
+  // Decode JWT role claim for client-side nav filtering. Refreshed on mount.
+  const [adminRole, setAdminRole] = React.useState<string | null>(null);
+  React.useEffect(() => { getAdminRole().then(setAdminRole); }, []);
   // D-008: same query key as DashboardLayout — React Query dedupes the
   // in-flight request so we don't fetch /v1/auth/profile twice on mount.
   const { data: profile } = useApiQuery<AdminProfile>(
@@ -156,7 +198,7 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2 space-y-0.5">
-        {NAV_ITEMS.map(item => <NavItem key={item.path} item={item} collapsed={collapsed} />)}
+        {NAV_ITEMS.filter(item => isNavItemVisible(item.path, adminRole)).map(item => <NavItem key={item.path} item={item} collapsed={collapsed} />)}
       </nav>
 
       <div className="border-t border-border p-2 shrink-0">
