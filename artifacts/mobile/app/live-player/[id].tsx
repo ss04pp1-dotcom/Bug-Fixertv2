@@ -511,24 +511,7 @@ export default function LivePlayerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Server switcher — only shown when multiple sources exist */}
-        {sources.length > 1 && (
-          <View style={s.serverRow}>
-            <Ionicons name="server-outline" size={13} color={C.dim} />
-            <Text style={s.serverLabel}>Server:</Text>
-            {sources.map((src, idx) => (
-              <TouchableOpacity
-                key={idx}
-                onPress={() => switchSource(idx)}
-                style={[s.serverBtn, activeSourceIdx === idx && s.serverBtnActive]}
-              >
-                <Text style={[s.serverBtnTxt, activeSourceIdx === idx && s.serverBtnTxtActive]}>
-                  {src.label ?? `S${idx + 1}`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        {/* Server switcher lives inside the player overlay — no duplicate here */}
 
         {/* HTML Banner Ad — position & HTML driven by global ad config */}
         <AdBanner placement="channel_banner" />

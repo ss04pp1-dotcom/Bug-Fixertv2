@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -175,9 +175,14 @@ export function TopOverlay(props: TopOverlayProps) {
             </View>
           )}
 
-          {/* Server pills */}
+          {/* Server pills — horizontal scroll so 20+ servers never push LIVE badge down */}
           {!isLocked && sources.length > 1 && (
-            <View style={g.pillRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={g.pillRow}
+              style={{ flexGrow: 0 }}
+            >
               {sources.map((s, i) => (
                 <TouchableOpacity
                   key={i}
@@ -189,7 +194,7 @@ export function TopOverlay(props: TopOverlayProps) {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           )}
 
           {/* LIVE badge */}

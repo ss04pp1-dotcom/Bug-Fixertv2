@@ -50,7 +50,7 @@ export const g = StyleSheet.create({
   formatBadge: { color: C.dim, fontSize: 10, marginTop: 1 },
   topRight:  { flexDirection: 'row', gap: 8 },
 
-  pillRow:       { flexDirection: 'row', gap: 6, paddingHorizontal: 14, flexWrap: 'wrap', marginTop: 2 },
+  pillRow:       { flexDirection: 'row', gap: 6, paddingHorizontal: 14, marginTop: 2 },
   pill:          { paddingHorizontal: 12, paddingVertical: 5, backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 14, borderWidth: 1, borderColor: C.border },
   pillActive:    { borderColor: C.primary, backgroundColor: 'rgba(139,92,246,0.2)' },
   pillExpired:   { borderColor: 'rgba(239,68,68,0.5)', backgroundColor: 'rgba(239,68,68,0.12)' },
