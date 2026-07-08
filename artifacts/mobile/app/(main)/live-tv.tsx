@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLiveChannelsInfinite, useCategories } from '@/lib/api-hooks';
+import { useLiveChannels, useLiveChannelsInfinite, useCategories } from '@/lib/api-hooks';
 import { Config } from '@/constants/config';
 import { AdBanner } from '@/components/AdBanner';
 import { useChannelAdGateContext } from '@/lib/channel-ad-gate-context';
@@ -152,6 +152,10 @@ export default function LiveTVScreen() {
     isFetchingNextPage, isLoading, refetch: refetchBrowse,
   } = useLiveChannelsInfinite(hookParams);
 
+  // ── All channels (used as client-side search fallback) ─────────────────────
+  // Only fetched when a search term is active and server-side search may return 0.
+  const { data: allChannelsRaw } = useLiveChannels(debouncedSearch ? { limit: 500 } : undefined);
+
   // ── Ad gate context (must be declared before any usage of globalConfig) ──────
   const { requestChannel, globalConfig } = useChannelAdGateContext();
 
@@ -162,8 +166,24 @@ export default function LiveTVScreen() {
     );
   }, [infiniteData]);
 
-  // Server handles both search and category filtering — no client-side filter needed
-  const filtered = allChannels;
+  // ── Client-side search fallback ────────────────────────────────────────────
+  // When the server returns 0 results for a search term, filter the full
+  // channel list (up to 500) client-side so local channels are always findable.
+  const clientSearchResults = useMemo(() => {
+    if (!debouncedSearch || !Array.isArray(allChannelsRaw)) return [];
+    const q = debouncedSearch.toLowerCase().trim();
+    return (allChannelsRaw as any[])
+      .filter((ch: any) => (ch.name || '').toLowerCase().includes(q))
+      .map((ch: any, i: number) => mapChannel(ch, i));
+  }, [debouncedSearch, allChannelsRaw]);
+
+  // Use server results when available; fall back to client-side when server gives nothing.
+  const filtered = useMemo(() => {
+    if (debouncedSearch && allChannels.length === 0 && clientSearchResults.length > 0) {
+      return clientSearchResults;
+    }
+    return allChannels;
+  }, [debouncedSearch, allChannels, clientSearchResults]);
 
   // ── Chunked grid rows (enables banner injection between channel rows) ────────
   type RowItem =

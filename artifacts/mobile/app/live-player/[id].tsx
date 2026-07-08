@@ -80,13 +80,15 @@ export default function LivePlayerScreen() {
     id,
     title: titleParam,
     streamUrl: passedUrl,
+    streamSources: passedStreamSources,
     logo: passedLogo,
     cat: passedCat,
     type: sourceType,
     globalVastUrl,
     globalVastSkip,
   } = useLocalSearchParams<{
-    id: string; title?: string; streamUrl?: string; logo?: string; cat?: string;
+    id: string; title?: string; streamUrl?: string; streamSources?: string;
+    logo?: string; cat?: string;
     // type: 'match' — the id belongs to a sports match, not a channel. Skip the
     // /channels/:id lookups entirely and play passedUrl directly.
     type?: string;
@@ -222,10 +224,27 @@ export default function LivePlayerScreen() {
     setFetchLoad(true); setFetchError(false); setSources([]); setActiveSourceIdx(0);
 
     // Sports matches aren't channels — there's no /channels/:id record to
-    // look up. Play the passed stream URL directly and skip the network
+    // look up. Play the passed stream URLs directly and skip the network
     // round-trips (which would otherwise 404 twice before falling back).
     if (isMatchSource) {
-      if (passedUrl) setSources([{ url: passedUrl, label: 'Server 1', quality: 'HD' }]);
+      // Try to parse multi-server sources passed as JSON; fall back to single URL
+      let matchSources: PlayerSource[] = [];
+      if (passedStreamSources) {
+        try {
+          const parsed = JSON.parse(passedStreamSources);
+          if (Array.isArray(parsed)) {
+            matchSources = parsed
+              .filter((s: any) => s?.url)
+              .map((s: any, i: number) => ({ url: s.url, label: s.label || `Server ${i + 1}`, quality: 'HD' }));
+          }
+        } catch {
+          // JSON parse failed — fall through to single URL
+        }
+      }
+      if (matchSources.length === 0 && passedUrl) {
+        matchSources = [{ url: passedUrl, label: 'Server 1', quality: 'HD' }];
+      }
+      if (matchSources.length > 0) setSources(matchSources);
       else setFetchError(true);
       setFetchLoad(false);
       return;
@@ -276,7 +295,7 @@ export default function LivePlayerScreen() {
     } finally {
       setFetchLoad(false);
     }
-  }, [id, passedUrl, buildSources, passedCat, isMatchSource]);
+  }, [id, passedUrl, passedStreamSources, buildSources, passedCat, isMatchSource]);
 
   useEffect(() => { if (id) loadStream(); }, [id, loadStream]);
 

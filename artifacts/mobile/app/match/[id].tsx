@@ -65,11 +65,18 @@ export default function MatchDetailScreen() {
 
   const handleWatch = () => {
     if (!watchUrl || !id) return;
+    // Build stream sources array from all available stream URLs
+    const rawUrls: { label: string; url: string }[] = Array.isArray(match?.streamUrls) && match.streamUrls.length > 0
+      ? match.streamUrls.filter((u: any) => u?.url)
+      : [{ label: 'Server 1', url: watchUrl }];
+    const streamSources = JSON.stringify(rawUrls);
+
     router.push({
       pathname: `/live-player/${id}`,
       params: {
         title: `${match?.teamA?.name || 'Team A'} vs ${match?.teamB?.name || 'Team B'}`,
         streamUrl: watchUrl,
+        streamSources,
         cat: normalizeCapitalized(match?.sport, 'Sports'),
         type: 'match',
       },
