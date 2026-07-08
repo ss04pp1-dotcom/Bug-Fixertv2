@@ -1,0 +1,50 @@
+2026-07-08T05:06:06.379336889Z └─────────────────────────────────────────────────────────┘
+2026-07-08T05:06:06.379347569Z ✔ Generated Prisma Client (v6.19.3) to ./../../node_modules/.pnpm/@prisma+client@6.19.3_prisma@6.19.3_typescript@5.9.3__typescript@5.9.3/node_modules/@prisma/client in 377ms
+2026-07-08T05:06:06.379351369Z 
+2026-07-08T05:06:06.379355919Z Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-07-08T05:06:06.379359589Z 
+2026-07-08T05:06:06.379363719Z Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+2026-07-08T05:06:06.37937851Z 
+2026-07-08T05:06:13.418358718Z src/auth/tests/public-routes.e2e-spec.ts:3:26 - error TS2307: Cannot find module 'supertest' or its corresponding type declarations.
+2026-07-08T05:06:13.418376908Z 
+2026-07-08T05:06:13.418380848Z 3 import * as request from 'supertest';
+2026-07-08T05:06:13.418384589Z                            ~~~~~~~~~~~
+2026-07-08T05:06:13.418387829Z src/auth/tests/public-routes.e2e-spec.ts:66:26 - error TS2345: Argument of type '{ type: 1; }' is not assignable to parameter of type 'VersioningOptions | undefined'.
+2026-07-08T05:06:13.418390909Z   Type '{ type: 1; }' is not assignable to type 'VersioningCommonOptions & HeaderVersioningOptions'.
+2026-07-08T05:06:13.418393439Z     Property 'header' is missing in type '{ type: 1; }' but required in type 'HeaderVersioningOptions'.
+2026-07-08T05:06:13.418395719Z 
+2026-07-08T05:06:13.418398869Z 66     app.enableVersioning({ type: 1 }); // URI versioning
+2026-07-08T05:06:13.418401339Z                             ~~~~~~~~~~~
+2026-07-08T05:06:13.418403649Z 
+2026-07-08T05:06:13.418409629Z   ../../node_modules/.pnpm/@nestjs+common@10.4.22_class-transformer@0.5.1_class-validator@0.14.4_reflect-metadata@0.2.2_rxjs@7.8.2/node_modules/@nestjs/common/interfaces/version-options.interface.d.ts:35:5
+2026-07-08T05:06:13.418412139Z     35     header: string;
+2026-07-08T05:06:13.418414599Z            ~~~~~~
+2026-07-08T05:06:13.418417909Z     'header' is declared here.
+2026-07-08T05:06:13.41842102Z src/main.ts:114:7 - error TS2339: Property 'useBodyParser' does not exist on type 'INestApplication<any>'.
+2026-07-08T05:06:13.41842344Z 
+2026-07-08T05:06:13.41842591Z 114   app.useBodyParser('json', { limit: '1mb' });
+2026-07-08T05:06:13.4184283Z           ~~~~~~~~~~~~~
+2026-07-08T05:06:13.41843083Z src/main.ts:115:7 - error TS2339: Property 'useBodyParser' does not exist on type 'INestApplication<any>'.
+2026-07-08T05:06:13.41843311Z 
+2026-07-08T05:06:13.41843555Z 115   app.useBodyParser('urlencoded', { limit: '1mb', extended: true });
+2026-07-08T05:06:13.41843798Z           ~~~~~~~~~~~~~
+2026-07-08T05:06:13.41844131Z src/notifications/notifications.service.ts:181:20 - error TS2339: Property 'responses' does not exist on type '{ successCount: number; failureCount: number; }'.
+2026-07-08T05:06:13.41844362Z 
+2026-07-08T05:06:13.41844597Z 181             result.responses.forEach((r, i) => {
+2026-07-08T05:06:13.41844837Z                        ~~~~~~~~~
+2026-07-08T05:06:13.41845084Z src/notifications/notifications.service.ts:181:39 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+2026-07-08T05:06:13.41845313Z 
+2026-07-08T05:06:13.41845551Z 181             result.responses.forEach((r, i) => {
+2026-07-08T05:06:13.418457941Z                                           ~
+2026-07-08T05:06:13.418460481Z src/notifications/notifications.service.ts:181:42 - error TS7006: Parameter 'i' implicitly has an 'any' type.
+2026-07-08T05:06:13.418462751Z 
+2026-07-08T05:06:13.418465161Z 181             result.responses.forEach((r, i) => {
+2026-07-08T05:06:13.418467591Z                                              ~
+2026-07-08T05:06:13.418469871Z 
+2026-07-08T05:06:13.418545713Z Found 7 error(s).
+2026-07-08T05:06:13.418552373Z 
+2026-07-08T05:06:13.508301518Z /opt/render/project/src/artifacts/api-server:
+2026-07-08T05:06:13.508317658Z  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 build: `pnpm exec prisma generate && pnpm exec nest build`
+2026-07-08T05:06:13.508321438Z Exit status 1
+2026-07-08T05:06:13.5644979Z ==> Build failed 😞
+2026-07-08T05:06:13.56451496Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys

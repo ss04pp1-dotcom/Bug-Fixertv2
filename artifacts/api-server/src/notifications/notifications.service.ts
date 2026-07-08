@@ -25,7 +25,11 @@ interface FcmApp {
       tokens: string[];
       notification: { title: string; body: string };
       data?: Record<string, string>;
-    }) => Promise<{ successCount: number; failureCount: number }>;
+    }) => Promise<{
+      successCount: number;
+      failureCount: number;
+      responses: Array<{ success: boolean; error?: { code?: string; message?: string } }>;
+    }>;
     send: (msg: {
       token: string;
       notification: { title: string; body: string };

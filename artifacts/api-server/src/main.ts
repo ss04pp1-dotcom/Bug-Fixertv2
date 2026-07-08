@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
@@ -108,7 +109,7 @@ async function bootstrap(): Promise<void> {
 
   await diagnoseBoot(logger);
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // Cap JSON/urlencoded body size so an unbounded payload can't spike memory.
   // Multipart uploads still flow through @UploadedFile / Multer limits.
   app.useBodyParser('json', { limit: '1mb' });
@@ -232,7 +233,7 @@ async function bootstrap(): Promise<void> {
 
   // Root route — satisfies Render/load-balancer health checks that hit GET /
   const httpAdapter = app.getHttpAdapter();
-  httpAdapter.get('/', (_req: unknown, res: { json: (d: unknown) => void }) => {
+  httpAdapter.get('/', (_req: unknown, res: any) => {
     res.json({ status: 'ok' });
   });
 
