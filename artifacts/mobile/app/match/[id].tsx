@@ -63,24 +63,59 @@ export default function MatchDetailScreen() {
   const isLive = match?.status === 'live';
   const watchUrl = match?.streamUrl || match?.liveUrl || match?.streamUrls?.[0]?.url;
 
-  const handleWatch = () => {
-    if (!watchUrl || !id) return;
-    // Build stream sources array from all available stream URLs
-    const rawUrls: { label: string; url: string }[] = Array.isArray(match?.streamUrls) && match.streamUrls.length > 0
-      ? match.streamUrls.filter((u: any) => u?.url)
-      : [{ label: 'Server 1', url: watchUrl }];
-    const streamSources = JSON.stringify(rawUrls);
+  // Build channel list from linked channels (new flow) or fall back to old streamUrls
+  const matchChannelList: { id: string; name: string; logo: string | null; servers: { label: string; url: string }[] }[] =
+    Array.isArray(match?.channels) && match.channels.length > 0
+      ? match.channels
+          .map((mc: any) => ({
+            id: mc.channel.id,
+            name: mc.channel.name,
+            logo: mc.channel.logo ?? null,
+            servers: Array.isArray(mc.channel.servers)
+              ? mc.channel.servers
+                  .filter((s: any) => s?.link)
+                  .map((s: any, i: number) => ({ label: `Server ${i + 1}`, url: s.link }))
+              : [],
+          }))
+          .filter((c: any) => c.servers.length > 0)
+      : [];
 
-    router.push({
-      pathname: `/live-player/${id}`,
-      params: {
-        title: `${match?.teamA?.name || 'Team A'} vs ${match?.teamB?.name || 'Team B'}`,
-        streamUrl: watchUrl,
-        streamSources,
-        cat: normalizeCapitalized(match?.sport, 'Sports'),
-        type: 'match',
-      },
-    } as any);
+  const canWatch = matchChannelList.length > 0 || !!watchUrl;
+
+  const handleWatch = () => {
+    if (!canWatch || !id) return;
+    const title = `${match?.teamA?.name || 'Team A'} vs ${match?.teamB?.name || 'Team B'}`;
+    const cat = normalizeCapitalized(match?.sport, 'Sports');
+
+    if (matchChannelList.length > 0) {
+      // New flow: pass linked channels
+      router.push({
+        pathname: `/live-player/${id}`,
+        params: {
+          title,
+          cat,
+          type: 'match',
+          matchChannels: JSON.stringify(matchChannelList),
+          streamUrl: matchChannelList[0].servers[0]?.url ?? '',
+        },
+      } as any);
+    } else {
+      // Legacy flow: pass flat stream URLs
+      const rawUrls: { label: string; url: string }[] =
+        Array.isArray(match?.streamUrls) && match.streamUrls.length > 0
+          ? match.streamUrls.filter((u: any) => u?.url)
+          : [{ label: 'Server 1', url: watchUrl! }];
+      router.push({
+        pathname: `/live-player/${id}`,
+        params: {
+          title,
+          streamUrl: watchUrl,
+          streamSources: JSON.stringify(rawUrls),
+          cat,
+          type: 'match',
+        },
+      } as any);
+    }
   };
 
   if (isLoading) {
@@ -207,7 +242,7 @@ export default function MatchDetailScreen() {
           </View>
 
           {/* Watch button */}
-          {watchUrl ? (
+          {canWatch ? (
             <TouchableOpacity style={styles.watchBtn} activeOpacity={0.85} onPress={handleWatch}>
               <Ionicons name="play-circle" size={20} color={colors.primary} />
               <Text style={styles.watchBtnText}>{isLive ? 'Watch Live' : 'Watch Match'}</Text>

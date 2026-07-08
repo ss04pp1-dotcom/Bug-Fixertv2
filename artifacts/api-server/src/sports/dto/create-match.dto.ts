@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsDateString, IsNotEmpty, IsEnum, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsDateString, IsNotEmpty, IsEnum, IsArray, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MatchStatus } from '@prisma/client';
 
@@ -68,4 +68,11 @@ export class CreateMatchDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Channel IDs to link to this match (replaces manual stream URLs) */
+  @ApiPropertyOptional({ type: 'array', items: { type: 'string', format: 'uuid' } })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  channelIds?: string[];
 }

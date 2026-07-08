@@ -81,6 +81,7 @@ export default function LivePlayerScreen() {
     title: titleParam,
     streamUrl: passedUrl,
     streamSources: passedStreamSources,
+    matchChannels: passedMatchChannels,
     logo: passedLogo,
     cat: passedCat,
     type: sourceType,
@@ -88,14 +89,19 @@ export default function LivePlayerScreen() {
     globalVastSkip,
   } = useLocalSearchParams<{
     id: string; title?: string; streamUrl?: string; streamSources?: string;
+    matchChannels?: string;
     logo?: string; cat?: string;
-    // type: 'match' — the id belongs to a sports match, not a channel. Skip the
-    // /channels/:id lookups entirely and play passedUrl directly.
     type?: string;
     globalVastUrl?: string; globalVastSkip?: string;
   }>();
   const isMatchSource = sourceType === 'match';
   const vastSkipSec = globalVastSkip ? parseInt(globalVastSkip, 10) : 5;
+
+  // Parse linked channels for sports matches (new flow)
+  const allMatchChannels = useMemo<{ id: string; name: string; logo: string | null; servers: { label: string; url: string }[] }[]>(() => {
+    if (!passedMatchChannels) return [];
+    try { return JSON.parse(passedMatchChannels); } catch { return []; }
+  }, [passedMatchChannels]);
 
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
@@ -112,7 +118,11 @@ export default function LivePlayerScreen() {
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
   const [activeSourceIdx, setActiveSourceIdx] = useState(0);
-  const [activeTab, setActiveTab]     = useState<'channels' | 'info'>(sourceType === 'match' ? 'info' : 'channels');
+  const [activeMatchChannelIdx, setActiveMatchChannelIdx] = useState(0);
+  // For match source: show CHANNELS tab if linked channels exist, else INFO
+  const [activeTab, setActiveTab] = useState<'channels' | 'info'>(
+    sourceType === 'match' && passedMatchChannels ? 'channels' : sourceType === 'match' ? 'info' : 'channels'
+  );
   const openPlayer = useGlobalPlayer((s) => s.open);
 
   // ── VAST pre-roll state ────────────────────────────────────────────────────
@@ -227,7 +237,19 @@ export default function LivePlayerScreen() {
     // look up. Play the passed stream URLs directly and skip the network
     // round-trips (which would otherwise 404 twice before falling back).
     if (isMatchSource) {
-      // Try to parse multi-server sources passed as JSON; fall back to single URL
+      // New flow: linked channels — load the first channel's servers
+      if (allMatchChannels.length > 0) {
+        const firstCh = allMatchChannels[0];
+        const srcs: PlayerSource[] = firstCh.servers.map((s, i) => ({
+          url: s.url, label: s.label || `Server ${i + 1}`, quality: 'HD',
+        }));
+        if (srcs.length > 0) setSources(srcs);
+        else setFetchError(true);
+        setFetchLoad(false);
+        return;
+      }
+
+      // Legacy flow: flat stream URLs
       let matchSources: PlayerSource[] = [];
       if (passedStreamSources) {
         try {
@@ -360,7 +382,7 @@ export default function LivePlayerScreen() {
   const globalAdConfig  = useGlobalAdConfig();
   const channelAdGate   = useChannelAdGate(globalAdConfig);
 
-  // Switch to another channel — always goes through the global ad engine so
+  // Switch to another related channel — always goes through the global ad engine so
   // Smartlink / VAST fire according to the persistent switch counter.
   const switchChannel = useCallback((ch: typeof related[0]) => {
     channelAdGate.requestChannel(
@@ -369,6 +391,29 @@ export default function LivePlayerScreen() {
       { replace: true }, // replace so back button doesn't loop between channels
     );
   }, [channelAdGate]);
+
+  // Switch between linked channels in a sports match
+  const switchMatchChannel = useCallback((idx: number) => {
+    if (idx < 0 || idx >= allMatchChannels.length) return;
+    const ch = allMatchChannels[idx];
+    const srcs: PlayerSource[] = ch.servers.map((s, i) => ({
+      url: s.url, label: s.label || `Server ${i + 1}`, quality: 'HD',
+    }));
+    if (srcs.length === 0) return;
+    setActiveMatchChannelIdx(idx);
+    setActiveSourceIdx(0);
+    setSources(srcs);
+    openPlayer({
+      title: contentTitle,
+      logo: ch.logo ?? '',
+      contentId: id,
+      contentType: 'channel',
+      sources: srcs,
+      isLive: true,
+      startInTop: true,
+      playerRoute: `/live-player/${id}`,
+    });
+  }, [allMatchChannels, contentTitle, id, openPlayer]);
 
   // ── Loading / error state for the metadata area ────────────────────────────
   if (fetchLoading && sources.length === 0) {
@@ -490,18 +535,72 @@ export default function LivePlayerScreen() {
 
         {/* Tab bar */}
         <View style={s.tabBar}>
-          {(isMatchSource ? (['info'] as const) : (['channels', 'info'] as const)).map(tab => (
+          {(
+            isMatchSource && allMatchChannels.length > 0
+              ? (['channels', 'info'] as const)
+              : isMatchSource
+              ? (['info'] as const)
+              : (['channels', 'info'] as const)
+          ).map(tab => (
             <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={s.tabItem}>
               <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>
-                {tab === 'channels' ? 'RELATED CHANNELS' : 'INFO'}
+                {tab === 'channels'
+                  ? (isMatchSource && allMatchChannels.length > 0 ? 'CHANNELS' : 'RELATED CHANNELS')
+                  : 'INFO'}
               </Text>
               {activeTab === tab && <View style={s.tabLine} />}
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Related channels */}
-        {activeTab === 'channels' && (
+        {/* Match channels (new flow) */}
+        {activeTab === 'channels' && isMatchSource && allMatchChannels.length > 0 && (
+          <ScrollView contentContainerStyle={{ padding: 14, gap: 8 }} showsVerticalScrollIndicator={false}>
+            {allMatchChannels.map((ch, idx) => {
+              const isActive = idx === activeMatchChannelIdx;
+              return (
+                <TouchableOpacity
+                  key={ch.id}
+                  onPress={() => switchMatchChannel(idx)}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    backgroundColor: isActive ? 'rgba(139,92,246,0.15)' : '#111827',
+                    borderRadius: 14, padding: 12,
+                    borderWidth: 1,
+                    borderColor: isActive ? C.primary : 'rgba(255,255,255,0.06)',
+                  }}
+                >
+                  {/* Logo */}
+                  <View style={[s.chLogoCircle, { width: 44, height: 44, borderRadius: 22 }]}>
+                    {ch.logo ? (
+                      <Image source={{ uri: ch.logo }} style={{ width: 38, height: 38, borderRadius: 19 }} resizeMode="contain" />
+                    ) : (
+                      <LinearGradient colors={[C.primary, C.accent]} style={[s.chLogoFallback, { width: 44, height: 44, borderRadius: 22 }]}>
+                        <Ionicons name="tv-outline" size={18} color="rgba(255,255,255,0.8)" />
+                      </LinearGradient>
+                    )}
+                  </View>
+                  {/* Info */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{ch.name}</Text>
+                    <Text style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>{ch.servers.length} server{ch.servers.length !== 1 ? 's' : ''}</Text>
+                  </View>
+                  {isActive && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.live }} />
+                      <Text style={{ color: C.live, fontSize: 10, fontWeight: '700' }}>LIVE</Text>
+                    </View>
+                  )}
+                  <Ionicons name={isActive ? 'radio-button-on' : 'radio-button-off'} size={18} color={isActive ? C.primary : C.dim} />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Related channels (normal channel mode) */}
+        {activeTab === 'channels' && !isMatchSource && (
           <FlatList
             data={related}
             keyExtractor={item => item.id}

@@ -72,6 +72,11 @@ export class SportsService {
           tournament: { select: { id: true, name: true, slug: true, logo: true } },
           teamA: { select: { id: true, name: true, shortName: true, abbr: true, logo: true } },
           teamB: { select: { id: true, name: true, shortName: true, abbr: true, logo: true } },
+          // Include linked channels so the admin edit form can pre-populate channelIds
+          channels: {
+            orderBy: { sortOrder: 'asc' },
+            include: { channel: { select: { id: true, name: true, logo: true } } },
+          },
         },
       }),
       this.prisma.match.count({ where }),
@@ -126,6 +131,21 @@ export class SportsService {
           orderBy: { timestamp: 'desc' },
           take: 50,
         },
+        channels: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            channel: {
+              select: {
+                id: true, name: true, logo: true, slug: true,
+                servers: {
+                  where: { deletedAt: null, enabled: true },
+                  orderBy: { priority: 'asc' },
+                  select: { id: true, link: true, priority: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
     if (!match) throw new NotFoundException('Match not found');
@@ -145,26 +165,43 @@ export class SportsService {
     if (!teamA) throw new NotFoundException('Team A not found');
     if (!teamB) throw new NotFoundException('Team B not found');
 
-    // Derive primary streamUrl from streamUrls[0] if not explicitly provided.
     const primaryUrl = dto.streamUrl ?? dto.streamUrls?.[0]?.url;
 
-    return this.prisma.match.create({
-      data: {
-        title: dto.title,
-        sportId: dto.sportId,
-        tournamentId: dto.tournamentId,
-        teamAId: dto.teamAId,
-        teamBId: dto.teamBId,
-        scheduledAt: new Date(dto.scheduledAt),
-        status: dto.status ?? MatchStatus.upcoming,
-        venue: dto.venue,
-        streamUrl: primaryUrl,
-        liveUrl: dto.liveUrl ?? primaryUrl,
-        streamUrls: dto.streamUrls ? (dto.streamUrls as any) : undefined,
-        description: dto.description,
-        isActive: dto.isActive ?? true,
-      },
+    // Atomic: create match + channel links in one transaction
+    const match = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.match.create({
+        data: {
+          title: dto.title,
+          sportId: dto.sportId,
+          tournamentId: dto.tournamentId,
+          teamAId: dto.teamAId,
+          teamBId: dto.teamBId,
+          scheduledAt: new Date(dto.scheduledAt),
+          status: dto.status ?? MatchStatus.upcoming,
+          venue: dto.venue,
+          streamUrl: primaryUrl,
+          liveUrl: dto.liveUrl ?? primaryUrl,
+          streamUrls: dto.streamUrls ? (dto.streamUrls as any) : undefined,
+          description: dto.description,
+          isActive: dto.isActive ?? true,
+        },
+      });
+
+      if (dto.channelIds && dto.channelIds.length > 0) {
+        await tx.matchChannel.createMany({
+          data: dto.channelIds.map((channelId, i) => ({
+            matchId: created.id,
+            channelId,
+            sortOrder: i,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
     });
+
+    return match;
   }
 
   async updateMatch(id: string, dto: Partial<CreateMatchDto>) {
@@ -185,7 +222,27 @@ export class SportsService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    return this.prisma.match.update({ where: { id }, data });
+    // Atomic: update match + sync channel links in one transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.match.update({ where: { id }, data });
+
+      // Only sync channel links when channelIds is explicitly sent
+      if (dto.channelIds !== undefined) {
+        await tx.matchChannel.deleteMany({ where: { matchId: id } });
+        if (dto.channelIds.length > 0) {
+          await tx.matchChannel.createMany({
+            data: dto.channelIds.map((channelId, i) => ({
+              matchId: id,
+              channelId,
+              sortOrder: i,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+
+    return this.findOneMatch(id);
   }
 
   async removeMatch(id: string) {

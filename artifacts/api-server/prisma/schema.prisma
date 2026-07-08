@@ -314,6 +314,7 @@ model Channel {
   playbackEvents  PlaybackEvent[]
   servers         ChannelServer[]
   watchHistory    WatchHistory[]
+  matchChannels   MatchChannel[]
 
   @@index([isActive])
   @@index([categoryId])
@@ -1314,6 +1315,7 @@ model Match {
   winner        SportTeam?  @relation("Winner", fields: [winnerId], references: [id], onDelete: SetNull)
   commentary    MatchCommentary[]
   alerts        MatchAlert[]
+  channels      MatchChannel[]
 
   @@index([sportId])
   @@index([tournamentId])
@@ -1326,6 +1328,21 @@ model Match {
   // Admin list filter: (isActive, deletedAt) + sport filter.
   @@index([isActive, deletedAt, sportId])
   @@map("matches")
+}
+
+model MatchChannel {
+  id        String   @id @default(uuid()) @db.Uuid
+  matchId   String   @db.Uuid @map("match_id")
+  channelId String   @db.Uuid @map("channel_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, channelId])
+  @@index([matchId])
+  @@map("match_channels")
 }
 
 model MatchCommentary {

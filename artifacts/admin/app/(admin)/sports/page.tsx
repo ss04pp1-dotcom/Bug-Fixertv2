@@ -31,6 +31,7 @@ interface Match {
   tournament?: { name: string } | null;
   teamA?: { name: string; logo?: string; abbr?: string } | null;
   teamB?: { name: string; logo?: string; abbr?: string } | null;
+  channels?: { id: string; channel: { id: string; name: string; logo?: string } }[];
 }
 
 interface PaginatedResponse<T> {
@@ -105,42 +106,63 @@ export default function Sports() {
 interface MatchForm {
   title: string; sportId: string; tournamentId: string;
   teamAId: string; teamBId: string; scheduledAt: string;
-  venue: string; streamUrls: { label: string; url: string }[];
+  venue: string; channelIds: { id: string; name: string }[];
   description: string; status: string; isActive: boolean;
 }
 
 const blankMatchForm = (): MatchForm => ({
   title: '', sportId: '', tournamentId: '', teamAId: '', teamBId: '',
-  scheduledAt: '', venue: '', streamUrls: [{ label: 'Server 1', url: '' }],
+  scheduledAt: '', venue: '', channelIds: [],
   description: '', status: 'upcoming', isActive: true,
 });
 
 function matchToForm(m: Match): MatchForm {
-  let urls: { label: string; url: string }[] = [];
-  if ((m as any).streamUrls && Array.isArray((m as any).streamUrls)) {
-    urls = (m as any).streamUrls;
-  } else if (m.streamUrl) {
-    urls = [{ label: 'Server 1', url: m.streamUrl }];
-  }
-  if (urls.length === 0) urls = [{ label: 'Server 1', url: '' }];
+  const channelIds = Array.isArray(m.channels)
+    ? m.channels.map(mc => ({ id: mc.channel.id, name: mc.channel.name }))
+    : [];
   return {
     title: m.title ?? '', sportId: m.sportId ?? '', tournamentId: m.tournamentId ?? '',
     teamAId: m.teamAId ?? '', teamBId: m.teamBId ?? '',
     scheduledAt: m.scheduledAt ? m.scheduledAt.slice(0, 16) : '',
-    venue: m.venue ?? '', streamUrls: urls,
+    venue: m.venue ?? '', channelIds,
     description: m.description ?? '', status: m.status ?? 'upcoming',
     isActive: m.isActive ?? true,
   };
+}
+
+/* ─── MatchChannelsList ───────────────────────────────────────────────────── */
+function MatchChannelsList({
+  channels,
+  onRemove,
+}: {
+  channels: { id: string; name: string }[];
+  onRemove: (id: string) => void;
+}) {
+  if (channels.length === 0) return (
+    <p className="text-xs text-[#8B92A5] py-1">No channels added yet. Search above to add.</p>
+  );
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {channels.map((ch, i) => (
+        <div key={ch.id} className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-lg px-3 py-1.5 text-xs text-white">
+          <Tv size={11} className="text-primary shrink-0" />
+          <span className="truncate max-w-[160px]">{i + 1}. {ch.name}</span>
+          <button type="button" onClick={() => onRemove(ch.id)}
+            className="ml-1 text-[#8B92A5] hover:text-red-400 text-sm leading-none">&times;</button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /* ─── ChannelSearchPicker ─────────────────────────────────────────────────── */
 function ChannelSearchPicker({
   channels,
   onSelect,
-  placeholder = "Search channels to add a stream URL…",
+  placeholder = "Search channels to add…",
 }: {
   channels: { id: string; name: string; primaryStreamUrl?: string; streamUrl?: string }[];
-  onSelect: (url: string, channelName: string) => void;
+  onSelect: (id: string, channelName: string) => void;
   placeholder?: string;
 }) {
   const [q, setQ] = useState("");
@@ -190,9 +212,8 @@ function ChannelSearchPicker({
               type="button"
               onMouseDown={e => {
                 e.preventDefault();
-                const url = ch.primaryStreamUrl || ch.streamUrl || '';
-                onSelect(url, ch.name);
-                setQ(ch.name);
+                onSelect(ch.id, ch.name);
+                setQ('');
                 setOpen(false);
               }}
               className="w-full px-4 py-2.5 text-left hover:bg-white/5 flex items-center gap-3 group"
@@ -317,24 +338,19 @@ function MatchesTab() {
     catch (e: any) { alert(e?.response?.data?.message ?? e?.message ?? "Failed to delete match"); }
   };
 
-  const buildPayload = (f: MatchForm) => {
-    const validUrls = f.streamUrls.filter(u => (u.url ?? "").trim());
-    return {
-      title: f.title,
-      sportId: f.sportId || undefined,
-      tournamentId: f.tournamentId || undefined,
-      teamAId: f.teamAId || undefined,
-      teamBId: f.teamBId || undefined,
-      scheduledAt: f.scheduledAt || undefined,
-      venue: f.venue || undefined,
-      streamUrl: validUrls[0]?.url || undefined,
-      liveUrl: validUrls[0]?.url || undefined,
-      streamUrls: validUrls.length > 0 ? validUrls : undefined,
-      description: f.description || undefined,
-      status: f.status,
-      isActive: f.isActive,
-    };
-  };
+  const buildPayload = (f: MatchForm) => ({
+    title: f.title,
+    sportId: f.sportId || undefined,
+    tournamentId: f.tournamentId || undefined,
+    teamAId: f.teamAId || undefined,
+    teamBId: f.teamBId || undefined,
+    scheduledAt: f.scheduledAt || undefined,
+    venue: f.venue || undefined,
+    description: f.description || undefined,
+    status: f.status,
+    isActive: f.isActive,
+    channelIds: f.channelIds.map(c => c.id),
+  });
 
   const handleSave = async () => {
     if (!form.title.trim()) { setMutationError("Title is required"); return; }
@@ -554,15 +570,11 @@ function MatchesTab() {
           <ModalField label="Venue">
             <input value={form.venue} onChange={e=>pf("venue",e.target.value)} className={inputClass} placeholder="Stadium / venue name"/>
           </ModalField>
-          <ModalField label="Search Channel → adds stream URL">
-            <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
-              const empty=form.streamUrls.findIndex(u=>!(u.url ?? "").trim());
-              if(empty>=0){const next=[...form.streamUrls];next[empty]={label:name,url};pf("streamUrls",next);}
-              else pf("streamUrls",[...form.streamUrls,{label:name,url}]);
+          <ModalField label="Channels (search to add)">
+            <ChannelSearchPicker channels={channels.filter(c=>!form.channelIds.some(x=>x.id===c.id))} onSelect={(id,name)=>{
+              if(!form.channelIds.some(c=>c.id===id)) pf("channelIds",[...form.channelIds,{id,name}]);
             }}/>
-          </ModalField>
-          <ModalField label="Stream Servers">
-            <StreamUrlsEditor urls={form.streamUrls} onChange={v=>pf("streamUrls",v)}/>
+            <MatchChannelsList channels={form.channelIds} onRemove={id=>pf("channelIds",form.channelIds.filter(c=>c.id!==id))}/>
           </ModalField>
           <ModalField label="Description">
             <textarea value={form.description} onChange={e=>pf("description",e.target.value)} rows={2} className={cn(inputClass,"resize-none")} placeholder="Match description"/>
@@ -645,15 +657,11 @@ function MatchesTab() {
           <ModalField label="Venue">
             <input value={editForm.venue} onChange={e=>pe("venue",e.target.value)} className={inputClass}/>
           </ModalField>
-          <ModalField label="Search Channel → adds stream URL">
-            <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
-              const empty=editForm.streamUrls.findIndex(u=>!(u.url ?? "").trim());
-              if(empty>=0){const next=[...editForm.streamUrls];next[empty]={label:name,url};pe("streamUrls",next);}
-              else pe("streamUrls",[...editForm.streamUrls,{label:name,url}]);
+          <ModalField label="Channels (search to add)">
+            <ChannelSearchPicker channels={channels.filter(c=>!editForm.channelIds.some(x=>x.id===c.id))} onSelect={(id,name)=>{
+              if(!editForm.channelIds.some(c=>c.id===id)) pe("channelIds",[...editForm.channelIds,{id,name}]);
             }}/>
-          </ModalField>
-          <ModalField label="Stream Servers">
-            <StreamUrlsEditor urls={editForm.streamUrls} onChange={v=>pe("streamUrls",v)}/>
+            <MatchChannelsList channels={editForm.channelIds} onRemove={id=>pe("channelIds",editForm.channelIds.filter(c=>c.id!==id))}/>
           </ModalField>
           <ModalField label="Description">
             <textarea value={editForm.description} onChange={e=>pe("description",e.target.value)} rows={2} className={cn(inputClass,"resize-none")}/>
