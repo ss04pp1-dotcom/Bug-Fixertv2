@@ -480,7 +480,7 @@ const s = StyleSheet.create({
   liveTxt: { color: C.live, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   // Empty / error
-  centerBox:  { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 32 },
+  centerBox:  { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 32 },
   emptyTitle: { color: C.text, fontSize: 20, fontWeight: '700' },
   emptyTxt:   { color: C.textSec, fontSize: 14, textAlign: 'center' },
   retryBtn:   { borderRadius: 12, overflow: 'hidden', marginTop: 8 },

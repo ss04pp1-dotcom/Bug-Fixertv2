@@ -109,6 +109,7 @@ export default function LivePlayerScreen() {
   const [sources, setSources]         = useState<PlayerSource[]>([]);
   const [fetchLoading, setFetchLoad]  = useState(true);
   const [fetchError, setFetchError]   = useState(false);
+  const [activeSourceIdx, setActiveSourceIdx] = useState(0);
   const [activeTab, setActiveTab]     = useState<'channels' | 'info'>(sourceType === 'match' ? 'info' : 'channels');
   const openPlayer = useGlobalPlayer((s) => s.open);
 
@@ -218,7 +219,7 @@ export default function LivePlayerScreen() {
 
   // ── Load stream URL ────────────────────────────────────────────────────────
   const loadStream = useCallback(async () => {
-    setFetchLoad(true); setFetchError(false); setSources([]);
+    setFetchLoad(true); setFetchError(false); setSources([]); setActiveSourceIdx(0);
 
     // Sports matches aren't channels — there's no /channels/:id record to
     // look up. Play the passed stream URL directly and skip the network
@@ -300,6 +301,24 @@ export default function LivePlayerScreen() {
     });
   }, [sources, globalVastUrl, vastDone, contentTitle, logoUrl, id, openPlayer]);
 
+  // ── Switch to a specific server source ─────────────────────────────────────
+  const switchSource = useCallback((idx: number) => {
+    if (idx < 0 || idx >= sources.length) return;
+    if (idx === activeSourceIdx) return; // already active, no-op
+    setActiveSourceIdx(idx);
+    const src = sources[idx];
+    openPlayer({
+      title: contentTitle,
+      logo: logoUrl,
+      contentId: id,
+      contentType: 'channel',
+      sources: [src, ...sources.filter((_, i) => i !== idx)],
+      isLive: true,
+      startInTop: true,
+      playerRoute: `/live-player/${id}`,
+    });
+  }, [sources, contentTitle, logoUrl, id, openPlayer]);
+
   // ── VAST pre-roll complete handler ─────────────────────────────────────────
   const handleVastComplete = useCallback(() => {
     setVastDone(true);
@@ -335,7 +354,7 @@ export default function LivePlayerScreen() {
   // ── Loading / error state for the metadata area ────────────────────────────
   if (fetchLoading && sources.length === 0) {
     return (
-      <View style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
         <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
         <Ionicons name="tv-outline" size={48} color={C.primary} />
         <Text style={{ color: C.dim, marginTop: 12 }}>Loading channel…</Text>
@@ -427,6 +446,25 @@ export default function LivePlayerScreen() {
             <Ionicons name="refresh-outline" size={20} color={C.dim} />
           </TouchableOpacity>
         </View>
+
+        {/* Server switcher — only shown when multiple sources exist */}
+        {sources.length > 1 && (
+          <View style={s.serverRow}>
+            <Ionicons name="server-outline" size={13} color={C.dim} />
+            <Text style={s.serverLabel}>Server:</Text>
+            {sources.map((src, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => switchSource(idx)}
+                style={[s.serverBtn, activeSourceIdx === idx && s.serverBtnActive]}
+              >
+                <Text style={[s.serverBtnTxt, activeSourceIdx === idx && s.serverBtnTxtActive]}>
+                  {src.label ?? `S${idx + 1}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* HTML Banner Ad — position & HTML driven by global ad config */}
         <AdBanner placement="channel_banner" />
@@ -579,6 +617,13 @@ const s = StyleSheet.create({
   chLiveTxt: { color: C.live, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
   chSameCatBadge: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: C.primary },
+
+  serverRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)', flexWrap: 'wrap' },
+  serverLabel:     { color: C.dim, fontSize: 12, marginRight: 2 },
+  serverBtn:       { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  serverBtnActive: { borderColor: C.primary, backgroundColor: 'rgba(139,92,246,0.2)' },
+  serverBtnTxt:    { color: C.dim, fontSize: 12, fontWeight: '600' },
+  serverBtnTxtActive: { color: '#fff' },
 
   relatedHeader:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10 },
   relatedHeaderTxt: { color: C.dim, fontSize: 12 },

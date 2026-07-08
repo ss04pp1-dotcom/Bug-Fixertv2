@@ -8,7 +8,9 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator as RNActivityIndicator,
+  Image,
 } from 'react-native';
+import { Config } from '@/constants/config';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -149,6 +151,13 @@ export default function MatchDetailScreen() {
 
           {/* Team A */}
           <View style={styles.heroTeamBlock}>
+            {match?.teamA?.logo ? (
+              <Image
+                source={{ uri: Config.imageUrl(match.teamA.logo) }}
+                style={styles.teamLogo}
+                resizeMode="contain"
+              />
+            ) : null}
             <Text style={styles.heroTeamLabel}>{teamALabel}</Text>
           </View>
 
@@ -156,6 +165,13 @@ export default function MatchDetailScreen() {
 
           {/* Team B */}
           <View style={styles.heroTeamBlock}>
+            {match?.teamB?.logo ? (
+              <Image
+                source={{ uri: Config.imageUrl(match.teamB.logo) }}
+                style={styles.teamLogo}
+                resizeMode="contain"
+              />
+            ) : null}
             <Text style={styles.heroTeamLabel}>{teamBLabel}</Text>
           </View>
 
@@ -306,6 +322,11 @@ const styles = StyleSheet.create({
   heroTeamBlock: {
     alignItems: 'center',
     flex: 1,
+  },
+  teamLogo: {
+    width: 52,
+    height: 52,
+    marginBottom: 8,
   },
   heroTeamLabel: {
     fontSize: 16,
