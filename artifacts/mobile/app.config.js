@@ -133,9 +133,9 @@ module.exports = {
       typedRoutes: true,
     },
     extra: {
-      apiUrl: 'https://livetv-aokw.onrender.com',
-      wsUrl: 'wss://livetv-aokw.onrender.com',
-      imageUrl: 'https://livetv-aokw.onrender.com',
+      apiUrl: 'https://livetv1.onrender.com',
+      wsUrl: 'wss://livetv1.onrender.com',
+      imageUrl: 'https://livetv1.onrender.com',
       cdnUrl: '',
       eas: {
         projectId: '1abc2260-4d2e-4fb7-a146-65ba20b98991',
