@@ -106,7 +106,7 @@ module.exports = {
     ],
     updates: {
       enabled: true,
-      url: 'https://u.expo.dev/41ae0d59-922c-4851-8b9a-8b5d8c657d13',
+      url: 'https://u.expo.dev/1abc2260-4d2e-4fb7-a146-65ba20b98991',
       fallbackToCacheTimeout: 30000,
       checkAutomatically: 'NEVER',
     },
@@ -122,9 +122,9 @@ module.exports = {
       imageUrl: 'https://livetv-aokw.onrender.com',
       cdnUrl: '',
       eas: {
-        projectId: '41ae0d59-922c-4851-8b9a-8b5d8c657d13',
+        projectId: '1abc2260-4d2e-4fb7-a146-65ba20b98991',
       },
-      easProjectId: '41ae0d59-922c-4851-8b9a-8b5d8c657d13',
+      easProjectId: '1abc2260-4d2e-4fb7-a146-65ba20b98991',
       note:
         "Verify this EAS project ID matches an active project via 'eas project:info'. If placeholder, set updates.enabled=false.",
     },

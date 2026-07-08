@@ -76,6 +76,24 @@ export class SolTvGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.handshake.headers['x-forwarded-for'] ?? client.handshake.address ?? 'unknown'
     ) as string;
 
+    // Auto-register presence on connect — JWT is already verified so we have
+    // all the info we need. presence:identify can still be sent later to enrich
+    // with deviceType/appVersion, but the user is counted as online immediately.
+    const entry: PresenceEntry = {
+      socketId:       client.id,
+      userId:         client.data.userId as string,
+      displayName:    (client.data.email as string) ?? 'Unknown',
+      email:          (client.data.email as string) ?? '',
+      role:           (client.data.role as string) ?? 'user',
+      deviceType:     'unknown',
+      ipAddress:      client.data.ipAddress as string,
+      connectedAt:    new Date(),
+      lastActivityAt: new Date(),
+    };
+    this.presence.add(entry);
+    this.broadcastPresenceAdd(entry);
+    this.broadcastStats();
+
     client.emit('presence:ack', { socketId: client.id, timestamp: new Date().toISOString() });
     this.logger.log(`Connected: ${client.id} | authed: ${client.data.authed as boolean}`);
   }

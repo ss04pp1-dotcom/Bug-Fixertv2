@@ -11,6 +11,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import * as SplashScreen from 'expo-splash-screen';
 import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { Config } from '@/constants/config';
+import { usePresenceTracking } from '@/hooks/usePresenceTracking';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
@@ -30,6 +31,9 @@ export const useFeatureFlagsContext = () => useContext(FeatureFlagsContext);
 // ─── App Guards (inside QueryClientProvider) ──────────────────────────────────
 function AppGuards({ children }: { children: React.ReactNode }) {
   const unwrap = (r: any) => r?.data?.data;
+
+  // Track user presence for live-user count in admin dashboard
+  usePresenceTracking();
 
   useEffect(() => {
     // Register safe navigation handler now that router is mounted.
