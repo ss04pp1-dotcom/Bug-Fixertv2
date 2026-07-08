@@ -78,13 +78,8 @@ export default function LoginScreen() {
           : 'free',
       });
       const pending = PendingLink.get();
-      if (pending) {
-        PendingLink.clear();
-        router.replace('/(main)/' as any);
-        router.push(pending as any);
-      } else {
-        router.replace('/(main)/' as any);
-      }
+      PendingLink.clear();
+      router.replace((pending ?? '/(main)/') as any);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(', ') : msg || 'Invalid credentials. Please try again.');
@@ -115,13 +110,8 @@ export default function LoginScreen() {
         : 'free',
     });
     const pending = PendingLink.get();
-    if (pending) {
-      PendingLink.clear();
-      router.replace('/(main)/' as any);
-      router.push(pending as any);
-    } else {
-      router.replace('/(main)/' as any);
-    }
+    PendingLink.clear();
+    router.replace((pending ?? '/(main)/') as any);
   };
 
   const handleSocialLogin = async (label: string) => {

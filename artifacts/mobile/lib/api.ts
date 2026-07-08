@@ -147,9 +147,25 @@ apiClient.interceptors.response.use(
       const method = (originalRequest.method || 'get').toUpperCase();
       const isSafeToRetry = method !== 'POST';
       if (!isSafeToRetry) {
-        // POST is not retried (would create duplicates). Surface a clear error
-        // instead of silently rejecting so the UI can show a "Session expired — please log in" message.
-        const postAuthError = new Error('AUTH_EXPIRED: your session has expired. Please log in again.');
+        // POST is not replayed after refresh (would create duplicates), but we
+        // still need to refresh the token so subsequent requests don't keep
+        // failing. Kick off a silent refresh then reject with AUTH_EXPIRED so
+        // the caller can show a "please try again" message.
+        if (!isRefreshing) {
+          isRefreshing = true;
+          tokenStorage.getRefreshToken().then(async (rt) => {
+            if (!rt) throw new Error('No refresh token');
+            const { data } = await axios.post(`${Config.API_BASE}/auth/refresh`, { refreshToken: rt }, { headers: { 'X-Client': 'mobile' } });
+            const { accessToken } = data.data;
+            const newRefresh = data.data.refreshToken || rt;
+            await tokenStorage.setTokens(accessToken, newRefresh);
+            processQueue(null, accessToken);
+          }).catch((refreshError) => {
+            processQueue(refreshError, null);
+            tokenStorage.clearTokens().then(() => { if (_onUnauthenticated) _onUnauthenticated(); });
+          }).finally(() => { isRefreshing = false; });
+        }
+        const postAuthError = new Error('AUTH_EXPIRED: your session has expired. Please try again.');
         (postAuthError as unknown as { isAuthError: boolean }).isAuthError = true;
         return Promise.reject(postAuthError);
       }

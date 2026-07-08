@@ -41,11 +41,14 @@ export function useDeepLink() {
     Linking.getInitialURL().then((url) => {
       if (!url) return;
       const path = parseDeepLink(url);
-      if (path) routeTo(path, isAuthenticated);
+      if (!path) return;
+      // Read auth state fresh from the store — the closure's isAuthenticated
+      // is stale here because getInitialURL() resolves asynchronously after
+      // mount, by which time auth may have already resolved from cache.
+      const authed = useAuthStore.getState().isAuthenticated;
+      routeTo(path, authed);
     });
-    // Run once on mount only — isAuthenticated is intentionally excluded so
-    // we don't re-process the initial URL on every auth state change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 2. Foreground: subscribe to links while the app is open ──────────────

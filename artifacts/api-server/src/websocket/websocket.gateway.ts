@@ -31,7 +31,7 @@ interface HeartbeatPayload {
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) => {
       const allowed = process.env.CORS_ORIGIN || '';
-      if (!allowed || !origin || allowed.split(',').includes(origin)) {
+      if (!allowed || !origin || allowed.split(',').map((s) => s.trim()).includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'), false);
