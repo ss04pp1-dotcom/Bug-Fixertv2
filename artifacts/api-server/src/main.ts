@@ -62,6 +62,20 @@ async function diagnoseBoot(logger: Logger): Promise<void> {
       const client = new Redis(redisUrl, { connectTimeout: 4000, lazyConnect: true, maxRetriesPerRequest: 0 });
       await client.connect();
       await client.ping();
+
+      // BullMQ requires maxmemory-policy=noeviction or it spams IMPORTANT warnings
+      // and can drop jobs under memory pressure. Fix it automatically on every boot
+      // so managed Redis instances (Render, Upstash, etc.) with wrong defaults are
+      // corrected without needing manual shell access.
+      try {
+        await client.config('SET', 'maxmemory-policy', 'noeviction');
+        logger.log('[BOOT] Redis ✓ eviction policy set to noeviction');
+      } catch {
+        // Some hosted Redis providers (e.g. Upstash free tier) forbid CONFIG SET.
+        // The warning is cosmetic — BullMQ still works; jobs just won't be evicted.
+        logger.warn('[BOOT] Redis — could not set maxmemory-policy (read-only config). BullMQ warnings expected but non-fatal.');
+      }
+
       await client.quit();
       logger.log('[BOOT] Redis ✓ connected');
     } catch (err) {
