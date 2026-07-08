@@ -99,6 +99,8 @@ export class SolTvGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket): void {
+    // client or client.id can be undefined during server shutdown — guard everything.
+    if (!client?.id) return;
     const removed = this.presence.remove(client.id);
     if (removed) {
       this.broadcastPresenceRemove(client.id);
@@ -231,6 +233,8 @@ export class SolTvGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private broadcastStats(): void {
+    // Guard: server or sockets map can be undefined during startup/shutdown transitions.
+    if (!this.server?.sockets?.sockets) return;
     this.server.to(ADMIN_ROOM).emit('presence:stats', this.presence.getStats());
     // Only emit online_count to authenticated sockets — broadcasting it to every
     // connected socket (including any unauthed/anonymous sockets if the gateway is
