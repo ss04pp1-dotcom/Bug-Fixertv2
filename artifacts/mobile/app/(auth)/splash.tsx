@@ -5,8 +5,8 @@ import {
   StyleSheet,
   Dimensions,
   Animated as RNAnimated,
+  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { tokenStorage } from '@/lib/api';
@@ -99,14 +99,11 @@ export default function SplashScreenComponent() {
 
         {/* Logo */}
         <RNAnimated.View style={[styles.logoArea, { transform: [{ scale: logoScale }] }]}>
-          <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.sIconWrapper}
-          >
-            <Text style={styles.sIconText}>S</Text>
-          </LinearGradient>
+          <Image
+            source={require('@/assets/images/icon.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>{appName}</Text>
         </RNAnimated.View>
 
@@ -160,24 +157,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  sIconWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 120,
+    height: 120,
     marginBottom: 24,
-    shadowColor: '#EC4899',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 20,
-  },
-  sIconText: {
-    fontSize: 56,
-    fontWeight: '900',
-    color: '#fff',
-    fontFamily: 'Outfit',
   },
   appName: {
     fontSize: 42,
