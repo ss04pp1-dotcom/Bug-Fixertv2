@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import apiClient, { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePublicSettings } from '@/lib/api-hooks';
@@ -34,7 +35,7 @@ export default function LoginScreen() {
 
   const { data: settings } = usePublicSettings();
 
-  const appName: string = settings?.['app_name'] ?? 'SOL TV';
+  const appName: string = Constants.expoConfig?.name ?? 'SOL TV';
   const appLogo: string | null = settings?.['app_logo'] ?? null;
   const googleEnabled: boolean = Boolean(settings?.['google_auth_enabled']);
   const facebookEnabled: boolean = Boolean(settings?.['facebook_auth_enabled']);

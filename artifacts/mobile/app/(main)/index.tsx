@@ -30,6 +30,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { AdBanner } from '@/components/AdBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Config } from '@/constants/config';
+import Constants from 'expo-constants';
 import { SkeletonHeroCard, SkeletonChannelRow, SkeletonCard } from '@/components/ui/Skeleton';
 import { normalizeName } from '@/lib/normalize';
 import { openExternalUrl } from '@/lib/safeLink';
@@ -99,7 +100,7 @@ export default function HomeScreen() {
   const heroRef = useRef<FlatList>(null);
   const qc = useQueryClient();
   const { data: publicSettings } = usePublicSettings();
-  const appName: string = publicSettings?.['app_name'] ?? 'SOL TV';
+  const appName: string = Constants.expoConfig?.name ?? 'SOL TV';
 
   const { data: bannersData, isLoading: bannersLoading } = useBanners();
   const { data: continueData } = useContinueWatching();

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { usePublicSettings } from '@/lib/api-hooks';
@@ -19,8 +20,8 @@ export default function SplashScreenComponent() {
   const glowOpacity = useRef(new RNAnimated.Value(0.3)).current;
   const barWidth = useRef(new RNAnimated.Value(0)).current;
   const checkAuth = useAuthStore((s) => s.checkAuth);
-  const { data: settings } = usePublicSettings();
-  const appName: string = settings?.['app_name'] ?? 'SOL TV';
+  usePublicSettings(); // keep hook alive for other consumers
+  const appName: string = Constants.expoConfig?.name ?? 'SOL TV';
 
   useEffect(() => {
     let isMounted = true;
