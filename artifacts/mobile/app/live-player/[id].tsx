@@ -373,10 +373,10 @@ export default function LivePlayerScreen() {
   // ── Loading / error state for the metadata area ────────────────────────────
   if (fetchLoading && sources.length === 0) {
     return (
-      <View style={[s.root, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center', width: W, height: H }]}>
         <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
         <Ionicons name="tv-outline" size={48} color={C.primary} />
-        <Text style={{ color: C.dim, marginTop: 12 }}>Loading channel…</Text>
+        <Text style={{ color: C.dim, marginTop: 12, textAlign: 'center' }}>Loading channel…</Text>
       </View>
     );
   }
