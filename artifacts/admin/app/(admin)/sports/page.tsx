@@ -148,7 +148,7 @@ function ChannelSearchPicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = q
-    ? channels.filter(c => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 60)
+    ? channels.filter(c => (c.name ?? "").toLowerCase().includes(q.toLowerCase())).slice(0, 60)
     : channels.slice(0, 60);
 
   useEffect(() => {
@@ -318,7 +318,7 @@ function MatchesTab() {
   };
 
   const buildPayload = (f: MatchForm) => {
-    const validUrls = f.streamUrls.filter(u => u.url.trim());
+    const validUrls = f.streamUrls.filter(u => (u.url ?? "").trim());
     return {
       title: f.title,
       sportId: f.sportId || undefined,
@@ -556,7 +556,7 @@ function MatchesTab() {
           </ModalField>
           <ModalField label="Search Channel → adds stream URL">
             <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
-              const empty=form.streamUrls.findIndex(u=>!u.url.trim());
+              const empty=form.streamUrls.findIndex(u=>!(u.url ?? "").trim());
               if(empty>=0){const next=[...form.streamUrls];next[empty]={label:name,url};pf("streamUrls",next);}
               else pf("streamUrls",[...form.streamUrls,{label:name,url}]);
             }}/>
@@ -647,7 +647,7 @@ function MatchesTab() {
           </ModalField>
           <ModalField label="Search Channel → adds stream URL">
             <ChannelSearchPicker channels={channels} onSelect={(url,name)=>{
-              const empty=editForm.streamUrls.findIndex(u=>!u.url.trim());
+              const empty=editForm.streamUrls.findIndex(u=>!(u.url ?? "").trim());
               if(empty>=0){const next=[...editForm.streamUrls];next[empty]={label:name,url};pe("streamUrls",next);}
               else pe("streamUrls",[...editForm.streamUrls,{label:name,url}]);
             }}/>

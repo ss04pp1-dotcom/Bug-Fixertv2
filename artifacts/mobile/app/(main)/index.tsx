@@ -24,6 +24,7 @@ import {
   useLiveChannels,
   useLiveMatches,
   useUpcomingMatches,
+  usePublicSettings,
 } from '@/lib/api-hooks';
 import { useAuthStore } from '@/lib/auth-store';
 import { AdBanner } from '@/components/AdBanner';
@@ -97,6 +98,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const heroRef = useRef<FlatList>(null);
   const qc = useQueryClient();
+  const { data: publicSettings } = usePublicSettings();
+  const appName: string = publicSettings?.['app_name'] ?? 'StreamPro';
 
   const { data: bannersData, isLoading: bannersLoading } = useBanners();
   const { data: continueData } = useContinueWatching();
@@ -294,7 +297,7 @@ export default function HomeScreen() {
       {/* Fixed Header */}
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
         <View style={s.headerLeft}>
-          <Text style={s.headerBrand}>StreamPro</Text>
+          <Text style={s.headerBrand}>{appName}</Text>
         </View>
         <View style={s.headerRight}>
           <Pressable onPress={() => router.push('/search-screen')} style={s.iconBtn}>

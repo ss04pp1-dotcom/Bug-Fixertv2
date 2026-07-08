@@ -458,13 +458,27 @@ export class AuthService {
         if (!verified) return null;
         // Audience check: only accept tokens minted for our OAuth client(s).
         // Configured via settings key `google_client_ids` (comma-separated) or
-        // env GOOGLE_OAUTH_CLIENT_IDS. Missing config is treated as a security
-        // misconfiguration and we refuse the login.
-        const configured = await this.settingsService.get('google_client_ids').catch(() => null);
-        const raw = (configured?.value ? String(configured.value) : '') || process.env.GOOGLE_OAUTH_CLIENT_IDS || '';
+        // env GOOGLE_OAUTH_CLIENT_IDS, PLUS whichever of the per-platform client
+        // IDs the admin has actually configured in Settings → Authentication
+        // (google_client_id_web / _android / _ios). Those are the only fields
+        // the admin UI exposes, so they must count as allowed audiences —
+        // otherwise every Google sign-in is refused even when fully configured.
+        const [configured, webId, androidId, iosId] = await Promise.all([
+          this.settingsService.get('google_client_ids').catch(() => null),
+          this.settingsService.get('google_client_id_web').catch(() => null),
+          this.settingsService.get('google_client_id_android').catch(() => null),
+          this.settingsService.get('google_client_id_ios').catch(() => null),
+        ]);
+        const raw = [
+          configured?.value ? String(configured.value) : '',
+          webId?.value ? String(webId.value) : '',
+          androidId?.value ? String(androidId.value) : '',
+          iosId?.value ? String(iosId.value) : '',
+          process.env.GOOGLE_OAUTH_CLIENT_IDS || '',
+        ].join(',');
         const allowed = raw.split(',').map(s => s.trim()).filter(Boolean);
         if (allowed.length === 0) {
-          this.logger.error('Google Sign-In: google_client_ids not configured — refusing login (received aud=' + (data.aud ?? '') + ')');
+          this.logger.error('Google Sign-In: no google client IDs configured — refusing login (received aud=' + (data.aud ?? '') + ')');
           return null;
         }
         const aud = data.aud || data.azp || '';

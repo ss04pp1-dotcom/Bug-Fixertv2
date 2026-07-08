@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { usePublicSettings } from '@/lib/api-hooks';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -18,6 +19,8 @@ export default function SplashScreenComponent() {
   const glowOpacity = useRef(new RNAnimated.Value(0.3)).current;
   const barWidth = useRef(new RNAnimated.Value(0)).current;
   const checkAuth = useAuthStore((s) => s.checkAuth);
+  const { data: settings } = usePublicSettings();
+  const appName: string = settings?.['app_name'] ?? 'StreamPro';
 
   useEffect(() => {
     let isMounted = true;
@@ -103,7 +106,7 @@ export default function SplashScreenComponent() {
           >
             <Text style={styles.sIconText}>S</Text>
           </LinearGradient>
-          <Text style={styles.appName}>StreamPro</Text>
+          <Text style={styles.appName}>{appName}</Text>
         </RNAnimated.View>
 
         <Text style={styles.tagline}>

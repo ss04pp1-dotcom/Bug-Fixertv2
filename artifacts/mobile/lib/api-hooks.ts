@@ -369,6 +369,12 @@ export const usePublicSettings = () => useQuery({
       return acc;
     }, {} as Record<string, any>);
   },
-  staleTime: 1000 * 60 * 10,
+  // Branding (app name/logo, auth toggles) can be changed by the admin at
+  // any time. A 10-minute staleTime meant returning users kept seeing the
+  // old app name for up to 10 minutes after every screen mount that reused
+  // the cache. Refetch on every mount instead so admin changes show up the
+  // next time a user opens the login/signup screen.
+  staleTime: 1000 * 30,
+  refetchOnMount: 'always',
   retry: false,
 });

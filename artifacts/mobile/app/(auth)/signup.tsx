@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -16,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient, { tokenStorage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { usePublicSettings } from '@/lib/api-hooks';
+import { signInWithGoogle, signInWithFacebook, SocialAuthResult } from '@/lib/social-auth';
 
 export default function SignupScreen() {
   const insets = useSafeAreaInsets();
@@ -29,6 +32,74 @@ export default function SignupScreen() {
   const [showPass, setShowPass] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const { data: settings } = usePublicSettings();
+  const googleEnabled: boolean = Boolean(settings?.['google_auth_enabled']);
+  const facebookEnabled: boolean = Boolean(settings?.['facebook_auth_enabled']);
+  const appleEnabled: boolean = Boolean(settings?.['apple_auth_enabled']);
+  const googleClientIdWeb: string = settings?.['google_client_id_web'] ?? '';
+  const googleClientIdAndroid: string = settings?.['google_client_id_android'] ?? '';
+  const googleClientIdIos: string = settings?.['google_client_id_ios'] ?? '';
+  const facebookAppId: string = settings?.['facebook_app_id'] ?? '';
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
+
+  const socialProviders = [
+    { icon: 'logo-google' as const,   label: 'Google',   enabled: googleEnabled },
+    { icon: 'logo-facebook' as const, label: 'Facebook', enabled: facebookEnabled },
+    { icon: 'logo-apple' as const,    label: 'Apple',    enabled: appleEnabled },
+  ].filter((p) => p.enabled);
+
+  const finishSocialLogin = async (result: SocialAuthResult) => {
+    const { data } = await apiClient.post('/auth/social', {
+      provider: result.provider,
+      accessToken: result.accessToken,
+      code: result.code,
+      redirectUri: result.redirectUri,
+      codeVerifier: result.codeVerifier,
+      email: result.email,
+      name: result.name,
+    });
+    const { accessToken, refreshToken, user } = data.data;
+    await tokenStorage.setTokens(accessToken, refreshToken);
+    setUser({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      plan: user.subscription?.status === 'active' || user.subscription?.status === 'trial'
+        ? (user.subscription?.plan?.name || 'premium')
+        : 'free',
+    });
+    router.replace('/(main)/' as any);
+  };
+
+  const handleSocialSignup = async (label: string) => {
+    if (label === 'Apple') {
+      Alert.alert('Apple Sign-In', 'Apple sign-in is coming soon. Please use the form above to create an account.');
+      return;
+    }
+    setError('');
+    setSocialLoading(label);
+    try {
+      let result: SocialAuthResult | null = null;
+      if (label === 'Google') {
+        result = await signInWithGoogle({
+          web: googleClientIdWeb,
+          android: googleClientIdAndroid,
+          ios: googleClientIdIos,
+        });
+      } else if (label === 'Facebook') {
+        result = await signInWithFacebook(facebookAppId);
+      }
+      if (!result) return; // user cancelled
+      await finishSocialLogin(result);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message;
+      Alert.alert(`${label} Sign-Up Failed`, Array.isArray(msg) ? msg.join(', ') : msg || 'Something went wrong. Please try again.');
+    } finally {
+      setSocialLoading(null);
+    }
+  };
 
   const handleSignup = async () => {
     setError('');
@@ -131,6 +202,33 @@ export default function SignupScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
+            {socialProviders.length > 0 && (
+              <>
+                <View style={s.divider}>
+                  <View style={s.line} />
+                  <Text style={s.dividerTxt}>or continue with</Text>
+                  <View style={s.line} />
+                </View>
+
+                <View style={s.social}>
+                  {socialProviders.map(({ icon, label }) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={s.socialBtn}
+                      disabled={socialLoading !== null}
+                      onPress={() => handleSocialSignup(label)}
+                    >
+                      {socialLoading === label ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Ionicons name={icon} size={24} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
             <View style={s.bottom}>
               <Text style={s.bottomTxt}>Already have an account? </Text>
               <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
@@ -160,6 +258,11 @@ const s = StyleSheet.create({
   eye: { padding: 8 },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,59,48,0.12)', borderWidth: 1, borderColor: 'rgba(255,59,48,0.3)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 },
   errorTxt: { color: '#FF3B30', fontSize: 14, fontFamily: 'Inter', flex: 1 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 },
+  line: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  dividerTxt: { color: '#A1A1AA', fontSize: 14, fontFamily: 'Inter' },
+  social: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 24 },
+  socialBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
   btn: { borderRadius: 16, overflow: 'hidden', marginBottom: 32 },
   btnGrad: { height: 56, alignItems: 'center', justifyContent: 'center' },
   btnTxt: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontFamily: 'Inter' },

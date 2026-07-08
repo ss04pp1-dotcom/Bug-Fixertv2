@@ -3,3 +3,4 @@
 - [Monetization route scope](monetization-route-scope.md) — ChannelAdGateProvider is in (main)/_layout.tsx; screens outside (main) must use useChannelAdGate() directly, not useChannelAdGateContext()
 - [expo-router blank screen under pnpm](expo-router-app-root-pnpm.md) — never hardcode a path into expo-router's _ctx.*.js; only literal process.env.EXPO_ROUTER_APP_ROOT gets babel-rewritten correctly
 - [Mobile bug audit findings](mobile-bugs-fixed.md) — running log of confirmed crash/ad/settings bugs found across artifacts/mobile + backend ad placement logic, with fixes and lessons
+- [StreamPro bug reports vs production deployment](streampro-bugfixes.md) — mobile/admin default to external Render/Cloudflare hosts, not this repl's local servers; fixes can't be live-verified here

@@ -132,7 +132,15 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Fresh-auth endpoints (login, register, social login, refresh) have no
+    // session to "expire" — a 401 here means invalid credentials / OAuth
+    // verification failure, not an expired token. Let the real backend
+    // message through instead of mislabeling it AUTH_EXPIRED, and never try
+    // to refresh a token off the back of one of these calls.
+    const requestUrl = originalRequest.url || '';
+    const isAuthFlowEndpoint = /\/auth\/(login|register|social|refresh)(\?|$)/.test(requestUrl);
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthFlowEndpoint) {
       // Only exclude POST from auto-retry after 401 — retrying a POST risks creating
       // duplicate resources (e.g. double-adding a favorite). PATCH, DELETE, PUT, GET
       // are idempotent and safe to replay after a token refresh.
