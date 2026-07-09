@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import apiClient from './api';
 import { tokenStorage } from './api';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 interface User {
   id: string;
@@ -38,6 +39,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   logout: async () => {
     await tokenStorage.clearTokens();
+    // Sign out from Google so the account-picker shows next time instead of
+    // auto-selecting the last account and bypassing the login screen.
+    try { await GoogleSignin.signOut(); } catch { /* not configured or already signed out */ }
     // Also reset isLoading so a concurrent checkAuth can't leave the store stuck
     set({ user: null, isAuthenticated: false, isLoading: false });
   },
