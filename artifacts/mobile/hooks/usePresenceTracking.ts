@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { useAuthStore } from '@/lib/auth-store';
 import { SocketService } from '@/services/socket.service';
 
@@ -8,30 +9,25 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // 30s — well within server's 90s timeou
  * Manages WebSocket presence tracking for the authenticated user.
  *
  * Server auto-registers the user as online the moment the socket connects
- * (JWT is verified at handshake time). This hook only needs to:
- *  1. Connect the socket when user is authenticated
- *  2. Send a heartbeat every 30s so the server doesn't time the user out
- *  3. Disconnect when the user logs out
+ * (JWT is verified at handshake time). This hook:
+ *  1. Connects the socket when user is authenticated
+ *  2. Sends a heartbeat every 30s so the server doesn't time the user out
+ *  3. Reconnects when the app returns to foreground (covers Render restarts
+ *     that happened while the app was backgrounded)
+ *  4. Disconnects cleanly on logout
  *
- * Race safety: a generation counter ensures that if auth flips to logged-out
- * while connect() is still in flight, the stale completion immediately
- * disconnects the newly created socket instead of leaving it alive.
- *
- * Heartbeat lifecycle: interval is tied to socket connect/disconnect events
- * so timers are never orphaned across reconnects or transient disconnects.
+ * The socket.io client is configured with reconnectionAttempts: Infinity and
+ * a dynamic auth callback that fetches a fresh token on every reconnect, so
+ * expired JWTs never permanently block reconnection.
  */
 export function usePresenceTracking() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userId = useAuthStore((s) => s.user?.id);
 
-  // Incremented each time the effect re-runs so stale async completions can
-  // detect they are no longer the "current" session and self-abort.
-  const generationRef = useRef(0);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Stable refs for socket event listeners so they can be removed on cleanup.
-  const startHeartbeatRef = useRef<() => void>(() => {});
-  const stopHeartbeatRef  = useRef<() => void>(() => {});
+  const generationRef    = useRef(0);
+  const heartbeatRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startHbRef       = useRef<() => void>(() => {});
+  const stopHbRef        = useRef<() => void>(() => {});
 
   useEffect(() => {
     const generation = ++generationRef.current;
@@ -44,7 +40,7 @@ export function usePresenceTracking() {
     };
 
     const startHeartbeat = () => {
-      if (heartbeatRef.current) return; // already running
+      if (heartbeatRef.current) return;
       heartbeatRef.current = setInterval(() => {
         if (SocketService.getSocket()?.connected) {
           SocketService.getSocket()?.emit('presence:heartbeat', { currentScreen: 'app' });
@@ -52,10 +48,8 @@ export function usePresenceTracking() {
       }, HEARTBEAT_INTERVAL_MS);
     };
 
-    // Keep stable refs so the cleanup closure can remove the same function
-    // instances that were added as listeners.
-    startHeartbeatRef.current = startHeartbeat;
-    stopHeartbeatRef.current  = stopHeartbeat;
+    startHbRef.current = startHeartbeat;
+    stopHbRef.current  = stopHeartbeat;
 
     if (!isAuthenticated || !userId) {
       stopHeartbeat();
@@ -63,37 +57,53 @@ export function usePresenceTracking() {
       return;
     }
 
-    (async () => {
+    const doConnect = async () => {
       try {
         const socket = await SocketService.connect();
 
-        // Auth may have changed while we were awaiting — immediately tear down
-        // the socket we just created and bail out.
+        // Auth changed while we were awaiting — tear down immediately.
         if (generation !== generationRef.current) {
           socket.disconnect();
           return;
         }
 
-        // Tie heartbeat lifecycle to actual socket connect/disconnect events.
-        socket.on('connect',    startHeartbeat);
-        socket.on('disconnect', stopHeartbeat);
+        socket.on('connect',    startHbRef.current);
+        socket.on('disconnect', stopHbRef.current);
 
         if (socket.connected) startHeartbeat();
       } catch (err) {
         if (__DEV__) console.warn('[Presence] Socket connect failed:', err);
       }
-    })();
+    };
+
+    doConnect();
+
+    // ── AppState: reconnect when app returns to foreground ────────────────────
+    // Covers the case where Render restarted while the app was backgrounded.
+    // socket.io's own reconnect logic handles short interruptions; this catches
+    // the case where the socket gave up (max backoff reached) while backgrounded.
+    const handleAppState = (next: AppStateStatus) => {
+      if (next === 'active' && isAuthenticated && userId) {
+        const sock = SocketService.getSocket();
+        if (!sock?.connected) {
+          doConnect();
+        }
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', handleAppState);
 
     return () => {
-      // Bump generation so any in-flight connect() self-aborts.
       generationRef.current++;
-      stopHeartbeatRef.current();
+      stopHbRef.current();
 
       const sock = SocketService.getSocket();
       if (sock) {
-        sock.off('connect',    startHeartbeatRef.current);
-        sock.off('disconnect', stopHeartbeatRef.current);
+        sock.off('connect',    startHbRef.current);
+        sock.off('disconnect', stopHbRef.current);
       }
+
+      appStateSub.remove();
       SocketService.disconnect();
     };
   }, [isAuthenticated, userId]); // eslint-disable-line react-hooks/exhaustive-deps
