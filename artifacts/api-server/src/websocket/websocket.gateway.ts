@@ -27,11 +27,33 @@ interface HeartbeatPayload {
   watchingTitle?: string;
 }
 
+// Mirror the REST API's CORS matching (src/main.ts): entries with a `*` are
+// wildcard subdomain patterns (single level, e.g. "https://*.replit.dev"),
+// everything else is an exact string match. The previous implementation only
+// did exact `.includes()` matching, so wildcard entries in CORS_ORIGIN never
+// matched a real origin — REST calls would pass CORS but the WebSocket
+// handshake would silently fail for any origin covered only by a wildcard.
+function buildOriginMatchers(raw: string): Array<string | RegExp> {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((o) => {
+      if (o.includes('*')) {
+        const escaped = o.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]+');
+        return new RegExp(`^${escaped}$`);
+      }
+      return o;
+    });
+}
+
 @WebSocketGateway({
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) => {
       const allowed = process.env.CORS_ORIGIN || '';
-      if (!allowed || !origin || allowed.split(',').map((s) => s.trim()).includes(origin)) {
+      const matchers = buildOriginMatchers(allowed);
+      const isAllowed = !origin || matchers.some((m) => (typeof m === 'string' ? m === origin : m.test(origin)));
+      if (!allowed || isAllowed) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'), false);

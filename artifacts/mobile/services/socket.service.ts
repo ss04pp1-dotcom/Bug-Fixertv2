@@ -27,7 +27,13 @@ export const SocketService = {
         const token = await tokenStorage.getAccessToken();
         cb({ token });
       },
-      transports: ['websocket'],
+      // Some carriers/corporate networks and proxies in front of Render block a
+      // raw WebSocket upgrade from React Native's WS client while still allowing
+      // HTTP long-polling. Admin (browser) already falls back to 'polling'; the
+      // mobile client only offered 'websocket', so on those networks the socket
+      // never connects (silently — connect_error fires but the UI has no visible
+      // WS status), which reads as "app never gets live viewer/presence updates".
+      transports: ['websocket', 'polling'],
       reconnection: true,
       // No upper limit on attempts — server restarts on Render's free tier
       // are frequent; a 5-attempt cap means mobile users never reconnect.

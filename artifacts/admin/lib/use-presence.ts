@@ -70,9 +70,15 @@ export function usePresence() {
     const socket = io(`${getWsUrl()}/ws`, {
       auth:       (cb: (payload: { token: string }) => void) => cb({ token: `Bearer ${getToken()}` }),
       transports: ["websocket", "polling"],
-      reconnection:        true,
-      reconnectionAttempts: 10,
-      reconnectionDelay:   2000,
+      reconnection:          true,
+      // Render's free tier spins down after idle and can take 30-60s to cold-start.
+      // A 10-attempt / 2s-delay cap gives up after ~20s — long before the server
+      // wakes up — so the admin panel would never receive presence:stats after
+      // an idle period. Match the mobile app's unlimited-retry / backoff config.
+      reconnectionAttempts: Infinity,
+      reconnectionDelay:    2000,
+      reconnectionDelayMax: 30_000,
+      randomizationFactor:  0.4,
     });
     socketRef.current = socket;
 
@@ -139,8 +145,13 @@ export function usePresenceStats() {
       const socket = io(`${getWsUrl()}/ws`, {
         auth:       (cb: (payload: { token: string }) => void) => cb({ token: `Bearer ${getToken()}` }),
         transports: ["websocket", "polling"],
-        reconnection: true,
-        reconnectionAttempts: 10,
+        reconnection:          true,
+        // See connect() above — unlimited retries with backoff to survive Render
+        // free-tier cold starts (30-60s) instead of giving up after ~20s.
+        reconnectionAttempts:  Infinity,
+        reconnectionDelay:     2000,
+        reconnectionDelayMax:  30_000,
+        randomizationFactor:   0.4,
       });
       if (!mounted) { socket.disconnect(); return; }
       socketRef.current = socket;
