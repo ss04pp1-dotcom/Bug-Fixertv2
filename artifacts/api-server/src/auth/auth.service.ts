@@ -72,7 +72,18 @@ export class AuthService {
       },
     });
 
-    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, {});
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    // Pre-generate the session id (schema uses a UUID default, so we can pick it ourselves)
+    // so it can be embedded in the access token payload before the session row exists —
+    // avoids a two-step create-then-update with a placeholder refreshToken, which would
+    // collide on Session.refreshToken's unique constraint under concurrent auth requests.
+    const sessionId = crypto.randomUUID();
+    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, { sessionId });
+    await this.prisma.session.create({
+      data: { id: sessionId, userId: user.id, refreshToken: AuthService.hashRefreshToken(tokens.refreshToken), expiresAt },
+    });
+
     // refreshToken is intentionally included so the controller can set it as an httpOnly cookie.
     // The controller is responsible for stripping it from the JSON response body before returning.
     return { user: this.sanitizeUser(user), accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
@@ -94,10 +105,13 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, {});
-
+    // Pre-generate the session id (see register() for why) to avoid a placeholder-refreshToken
+    // create-then-update race on Session.refreshToken's unique constraint.
+    const sessionId = crypto.randomUUID();
+    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, { sessionId });
     await this.prisma.session.create({
       data: {
+        id: sessionId,
         userId: user.id,
         refreshToken: AuthService.hashRefreshToken(tokens.refreshToken),
         deviceName: dto.deviceName,
@@ -117,7 +131,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.isActive || user.deletedAt !== null) throw new UnauthorizedException();
 
-    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, {});
+    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, { sessionId });
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -425,10 +439,11 @@ export class AuthService {
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
-    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, {});
-
+    const sessionId = crypto.randomUUID();
+    const tokens = await this.generateTokens(user.id, user.email || user.phone || '', user.role, { sessionId });
     await this.prisma.session.create({
       data: {
+        id: sessionId,
         userId: user.id,
         refreshToken: AuthService.hashRefreshToken(tokens.refreshToken),
         deviceName: `${dto.provider} OAuth`,

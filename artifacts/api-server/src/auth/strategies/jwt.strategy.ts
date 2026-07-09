@@ -39,6 +39,21 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       },
     });
     if (!user || !user.isActive) throw new UnauthorizedException();
+
+    // Access tokens are short-lived (15m default) but logout/session-revoke previously
+    // only flipped Session.isActive — the still-valid JWT kept working for up to 15
+    // more minutes. Checking the session here makes logout/revoke take effect
+    // immediately at the cost of one extra indexed lookup per authenticated request.
+    if (payload.sessionId) {
+      const session = await this.prisma.session.findUnique({
+        where: { id: payload.sessionId },
+        select: { isActive: true, userId: true },
+      });
+      if (!session || !session.isActive || session.userId !== user.id) {
+        throw new UnauthorizedException();
+      }
+    }
+
     return { ...user, sessionId: payload.sessionId };
   }
 }
