@@ -35,7 +35,7 @@ export const g = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', gap: 10,
     backgroundColor: 'transparent',
   },
-  bufferingTxt: { color: C.dim, fontSize: 13, marginTop: 6 },
+  bufferingTxt: { color: C.dim, fontSize: 13, marginTop: 6, textAlign: 'center' },
   errorTxt:  { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 8, textAlign: 'center' },
   errorSub:  { color: C.dim, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
   errorActions: { flexDirection: 'row', gap: 10, marginTop: 14 },

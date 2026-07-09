@@ -332,7 +332,7 @@ function WebAdUnit({ html, fallbackHeight, onDismiss, showDismiss = true, contai
   }, []);
 
   return (
-    <View style={[styles.container, { height, width: '100%', alignSelf: 'stretch' }, containerStyle]}>
+    <View style={[styles.container, { height }, containerStyle]}>
       <View style={styles.adLabel}>
         <Text style={styles.adLabelText}>AD</Text>
       </View>
@@ -384,7 +384,7 @@ function VastAdUnit({ vastUrl, vastHeight, skipSec, onDismiss }: VastAdUnitProps
   if (done) return null;
 
   return (
-    <View style={[styles.container, { height: vastHeight, width: '100%', alignSelf: 'stretch' }]}>
+    <View style={[styles.container, { height: vastHeight }]}>
       <WebView
         source={{ html: makeVastHtml(vastUrl, skipSec) }}
         style={{ flex: 1, width: '100%', backgroundColor: '#000' }}
