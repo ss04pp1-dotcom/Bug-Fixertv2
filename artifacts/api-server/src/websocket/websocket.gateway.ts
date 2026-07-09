@@ -50,10 +50,13 @@ function buildOriginMatchers(raw: string): Array<string | RegExp> {
 @WebSocketGateway({
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) => {
+      // Deny-by-default when CORS_ORIGIN is unset, mirroring the REST API's
+      // posture in src/main.ts — an empty allowlist must reject every
+      // browser-originated handshake, not silently allow all origins.
       const allowed = process.env.CORS_ORIGIN || '';
       const matchers = buildOriginMatchers(allowed);
-      const isAllowed = !origin || matchers.some((m) => (typeof m === 'string' ? m === origin : m.test(origin)));
-      if (!allowed || isAllowed) {
+      const isAllowed = matchers.length > 0 && (!origin || matchers.some((m) => (typeof m === 'string' ? m === origin : m.test(origin))));
+      if (isAllowed) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'), false);
