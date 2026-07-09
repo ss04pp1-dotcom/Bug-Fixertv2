@@ -112,6 +112,15 @@ module.exports = {
           enablePictureInPicture: true,
         },
       ],
+      [
+        'expo-notifications',
+        {
+          icon: './assets/images/icon.png',
+          color: '#8B5CF6',
+          defaultChannel: 'default',
+          sounds: [],
+        },
+      ],
       'expo-screen-orientation',
       '@react-native-google-signin/google-signin',
       './plugins/withPipSupport',

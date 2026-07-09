@@ -26,4 +26,10 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(500)
   avatar?: string;
+
+  @ApiPropertyOptional({ description: 'FCM device token for push notifications' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  fcmToken?: string;
 }

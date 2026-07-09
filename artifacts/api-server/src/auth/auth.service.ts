@@ -305,7 +305,7 @@ export class AuthService {
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
-  async updateProfile(userId: string, data: { name?: string; language?: string; country?: string; phone?: string; email?: string; avatar?: string }) {
+  async updateProfile(userId: string, data: { name?: string; language?: string; country?: string; phone?: string; email?: string; avatar?: string; fcmToken?: string }) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -333,7 +333,8 @@ export class AuthService {
         ...(data.country !== undefined && { country: data.country }),
         ...(data.phone !== undefined && { phone: data.phone || null }),
         ...(data.email !== undefined && { email: data.email || null }),
-        ...(data.avatar !== undefined && { avatar: data.avatar || null }),
+        ...(data.avatar   !== undefined && { avatar:    data.avatar || null }),
+        ...(data.fcmToken !== undefined && { fcmToken: data.fcmToken || null }),
       },
     });
     return this.sanitizeUser(updated);

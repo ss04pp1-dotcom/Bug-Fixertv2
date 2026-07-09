@@ -13,6 +13,7 @@ import apiClient, { setUnauthenticatedHandler } from '@/lib/api';
 import { Config } from '@/constants/config';
 import { usePresenceTracking } from '@/hooks/usePresenceTracking';
 import { useDeepLink } from '@/hooks/useDeepLink';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
@@ -37,6 +38,8 @@ function AppGuards({ children }: { children: React.ReactNode }) {
   usePresenceTracking();
   // Handle incoming deep links (cold-start, foreground, post-login flush)
   useDeepLink();
+  // Register device for push notifications + foreground banner handler
+  usePushNotifications();
 
   useEffect(() => {
     // Register safe navigation handler now that router is mounted.
