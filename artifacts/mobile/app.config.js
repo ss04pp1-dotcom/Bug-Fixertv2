@@ -142,9 +142,9 @@ module.exports = {
       typedRoutes: true,
     },
     extra: {
-      apiUrl: 'https://livetv1.onrender.com',
-      wsUrl: 'wss://livetv1.onrender.com',
-      imageUrl: 'https://livetv1.onrender.com',
+      apiUrl: 'https://bug-fixertv24.onrender.com',
+      wsUrl: 'wss://bug-fixertv24.onrender.com',
+      imageUrl: 'https://bug-fixertv24.onrender.com',
       cdnUrl: '',
       eas: {
         projectId: '1abc2260-4d2e-4fb7-a146-65ba20b98991',
