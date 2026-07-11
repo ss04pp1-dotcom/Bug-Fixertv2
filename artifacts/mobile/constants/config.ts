@@ -8,7 +8,6 @@ import Constants from 'expo-constants';
 // @ts-ignore
 const SERVER_URL: string =
   process.env['EXPO_PUBLIC_API_URL'] ||
-  Constants.expoConfig?.extra?.apiUrl ||
   'https://bug-fixertv24.onrender.com';
 
 // WebSocket URL — derived automatically from SERVER_URL
