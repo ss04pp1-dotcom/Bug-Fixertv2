@@ -21,6 +21,7 @@ type State = 'available' | 'downloading' | 'done';
 
 export default function OtaUpdateBanner() {
   const [state, setState]    = useState<State | null>(null);
+  const [modalVisible, setModalVisible] = useState(true);
   const [progress, setProgress] = useState(0);
   const progressAnim         = useSharedValue(0);
   const pulseAnim            = useSharedValue(1);
@@ -97,20 +98,25 @@ export default function OtaUpdateBanner() {
       setState('done');
 
       reloadTimerRef.current = setTimeout(async () => {
-        try {
-          // Race reloadAsync against a 10-second timeout so the modal can
-          // never be stuck in 'done' state if the reload hangs indefinitely.
-          await Promise.race([
-            Updates.reloadAsync(),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('reloadAsync timed out')), 10_000),
-            ),
-          ]);
-        } catch (e: any) {
-          console.warn('[OTA] reloadAsync failed:', e?.message ?? e);
-          // reloadAsync failed — let the user retry instead of being stuck forever.
-          setState('available');
-        }
+        // Hide the Modal first — calling reloadAsync() from inside an active
+        // Modal on Android (New Architecture) causes a native crash.
+        setModalVisible(false);
+        // Wait one frame for the Modal to fully unmount before reloading.
+        setTimeout(async () => {
+          try {
+            await Promise.race([
+              Updates.reloadAsync(),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('reloadAsync timed out')), 10_000),
+              ),
+            ]);
+          } catch (e: any) {
+            console.warn('[OTA] reloadAsync failed:', e?.message ?? e);
+            // Reload failed — show the modal again so the user can retry.
+            setModalVisible(true);
+            setState('available');
+          }
+        }, 300);
       }, 1500);
     } catch (e: any) {
       console.warn('[OTA] fetchUpdate failed:', e?.message ?? e);
@@ -131,7 +137,7 @@ export default function OtaUpdateBanner() {
 
   return (
     <Modal
-      visible
+      visible={modalVisible}
       transparent
       animationType="fade"
       statusBarTranslucent
