@@ -128,6 +128,7 @@ module.exports = {
       './plugins/withMedia3Gradle',
       './plugins/withMedia3ProGuard',
       './plugins/withNetworkSecurityConfig',
+      './plugins/withExpoModulesProGuard',
     ],
     updates: {
       enabled: true,

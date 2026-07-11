@@ -1,0 +1,155 @@
+book.react.runtime.internal.bolts.Task$Companion.$r8$lambda$IPpysnehFwANEiW061YzapkMdoE(Task.kt:0)
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion$$ExternalSyntheticLambda4.run(D8$$SyntheticClass:0)
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1100)
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: 	at java.lang.Thread.run(Thread.java:1572)
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: Caused by: java.lang.ClassNotFoundException: expo.modules.kotlin.types.AnyTypeCache
+07-12 02:53:18.748 25874 25918 E AndroidRuntime: 	... 38 more
+07-12 02:53:18.756 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161563): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:18.770 25874 25918 I Process : Sending signal. PID: 25874 SIG: 9
+07-12 02:53:18.915  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@5ad9480
+07-12 02:53:18.915  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 02:53:18.915  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 02:53:18.915  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 02:53:18.915  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 02:53:18.915  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: com.android.launcher3, 0
+07-12 02:53:18.915  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 02:53:18.939  1970  3236 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=5
+07-12 02:53:19.309 19350 19350 V ImeFocusController: onWindowFocus: D0.y{b386965 VFED..CL. .F....ID 14,0-950,106 #7f0900c0 app:id/command aid=1073741824} softInputMode=STATE_UNSPECIFIED|ADJUST_RESIZE
+07-12 02:53:19.315  6767  6767 V InputMethod: unbindInput(): binding=InputBinding{android.os.BinderProxy@ad967cd / uid 10117 / pid 3726} ic=RemoteInputConnection{idHash=#f00f7cb}
+07-12 02:53:19.316  6767  6767 V InputMethod: bindInput(): binding=InputBinding{android.os.BinderProxy@2675574 / uid 10331 / pid 19350} ic=RemoteInputConnection{idHash=#9276ab9}
+07-12 02:53:19.317  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@c62fefe
+07-12 02:53:19.317  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 02:53:19.317  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 02:53:19.317  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 02:53:19.317  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 02:53:19.317  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 1073741824
+07-12 02:53:19.317  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 02:53:19.327 19350 19350 D InsetsController: Setting requestedVisibleTypes to -5121 (was -5129)
+07-12 02:53:19.331  6615 16259 I eokz    : (REDACTED) HDM. appOpsListener %s %s
+07-12 02:53:19.332  6615 16259 I eokz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+07-12 02:53:19.345 19350 19350 I ImeTracker: app.ladb.connect:71c3abb8: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT_BY_INSETS_API fromUser false
+07-12 02:53:19.346 19350 19350 D InsetsController: Setting requestedVisibleTypes to -5129 (was -5121)
+07-12 02:53:19.650  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = UserHistoryDictionary.en ; version = 1783225254 ; date = 1783803199
+07-12 02:53:19.663  3971  3971 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.libs.gmscorelogger.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+07-12 02:53:19.740 19350 19350 W binder:19350_8: type=1400 audit(0.0:1161587): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:19.748 19350 19350 W binder:19350_8: type=1400 audit(0.0:1161588): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:19.840 19350 19350 W binder:19350_8: type=1400 audit(0.0:1161589): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.238  1970  3455 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=1
+07-12 02:53:20.348  6615 16259 I eokz    : (REDACTED) HDM. appOpsListener %s %s
+07-12 02:53:20.348  6615 16259 I eokz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+07-12 02:53:20.503 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.520 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.526 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.536  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@64c265f
+07-12 02:53:20.536  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 02:53:20.536  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 02:53:20.536  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 02:53:20.536  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 02:53:20.536  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 0
+07-12 02:53:20.536  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 02:53:20.599 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.607 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.615 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.682 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.687 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.696 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.703 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.696 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161607): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.704 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161608): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.711 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.712 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161609): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.720 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161610): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.724 19350 19350 W binder:19350_3: type=1400 audit(0.0:1161611): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:20.776 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.781 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.786 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.794 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.801 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.811 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.825 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.875 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:20.880 19350 19425 E GPUAUX  : [AUX]GuiExtAuxCheckAuxPath:682: Null anb
+07-12 02:53:21.366  1970  2740 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=7
+07-12 02:53:21.826  3971  6773 I NullBinder: NullBinder for android.net.action.RECOMMEND_NETWORKS triggering remote TransactionTooLargeException due to Service without Chimera impl, calling uid: 1000, calling pid: 0
+07-12 02:53:21.826  3971  6773 W .gms.persistent: Large reply transaction of 1056768 bytes, interface descriptor , code 1
+07-12 02:53:21.838 16975 17096 D WM-WorkConstraintsTrack: NetworkRequestConstraintController onCapabilitiesChanged callback
+07-12 02:53:21.853  3971 22131 I NearbyMediums: Wifi changed new SSID: "SH"
+07-12 02:53:21.854  3971 22131 I NearbyMediums: WifiLanConnectivityInfo is not changed, skip notify.
+07-12 02:53:21.863  8400  8445 I NearbyMediums: Wifi changed new SSID: "SH"
+07-12 02:53:21.863  8400  8445 I NearbyMediums: WifiLanConnectivityInfo is not changed, skip notify.
+07-12 02:53:21.926 19350 19350 I AutofillManager: showAutofillDialog() return false due to improve fill dialog
+07-12 02:53:21.926 19350 19350 I ImeTracker: app.ladb.connect:5bd527e8: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser true
+07-12 02:53:21.927 19350 19350 D InsetsController: Setting requestedVisibleTypes to -5121 (was -5129)
+07-12 02:53:21.929  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@e9778ac
+07-12 02:53:21.929  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 02:53:21.929  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 02:53:21.929  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 02:53:21.929  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 02:53:21.929  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 1073741824
+07-12 02:53:21.929  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 02:53:21.933  6615 16259 I eokz    : (REDACTED) HDM. appOpsListener %s %s
+07-12 02:53:21.933  6615 16259 I eokz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+07-12 02:53:21.944  6767  6767 V InputMethod: showSoftInput()
+07-12 02:53:21.944  6767  6767 D InlineSuggestionSessionController: notifyShowInputRequested
+07-12 02:53:21.944  6767  6767 V InputMethodService: Showing window: showInput=true mShowInputRequested=false mViewsCreated=true mDecorViewVisible=false mWindowVisible=false mInputStarted=true mShowInputFlags=1
+07-12 02:53:21.944  6767  6767 V InputMethodService: showWindow: updating UI
+07-12 02:53:21.944  6767  6767 W InputMethodService: Window size has been changed. This may cause jankiness of resizing window: -1 -> -2
+07-12 02:53:21.945  6767  6767 V InputMethodService: CALL: onStartInputView
+07-12 02:53:21.945  6767  6767 D InlineSuggestionSessionController: notifyOnStartInputView
+07-12 02:53:21.957  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = UserHistoryDictionary.en ; version = 1783225254 ; date = 1783803199
+07-12 02:53:21.959  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram.en ; version = 1783803201 ; date = ?
+07-12 02:53:21.956 19350 19350 W binder:19350_5: type=1400 audit(0.0:1161631): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:21.975  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = main:en ; version = 54 ; date = 1351495318
+07-12 02:53:21.975  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = emoji:en ; version = 24 ; date = 1350485097
+07-12 02:53:21.972 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161632): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:22.009  6767  6767 I ridmik.keyboard: AssetManager2(0xb40000760b469e18) locale list changing from [en-US] to [und]
+07-12 02:53:22.009  6767  6767 I ridmik.keyboard: AssetManager2(0xb40000760b469e18) locale list changing from [und] to [en-US]
+07-12 02:53:22.012  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram. ; version = 1783803202 ; date = ?
+07-12 02:53:22.020  6767  6767 V InputMethodService: showWindow: draw decorView!
+07-12 02:53:22.020  6767  6767 V InputMethod: showSoftInput()
+07-12 02:53:22.020  6767  6767 D InlineSuggestionSessionController: notifyShowInputRequested
+07-12 02:53:22.020  6767  6767 V InputMethodService: Showing window: showInput=true mShowInputRequested=true mViewsCreated=true mDecorViewVisible=true mWindowVisible=true mInputStarted=true mShowInputFlags=1
+07-12 02:53:22.020  6767  6767 V InputMethodService: showWindow: updating UI
+07-12 02:53:22.021  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram.en ; version = 1783803202 ; date = ?
+07-12 02:53:22.022  6767  6767 V InputMethodService: showWindow: draw decorView!
+07-12 02:53:22.032  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = main:en ; version = 54 ; date = 1351495318
+07-12 02:53:22.032  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = emoji:en ; version = 24 ; date = 1350485097
+07-12 02:53:22.038  6767  6767 D ViewRootImpl: AppSizeAfterRelayout, size: Point(1080, 2290), rotation: ROTATION_0
+07-12 02:53:22.038  6767  6767 D BufferQueueConsumer: [](id:1a6f00000106,api:0,p:-1,c:6767) connect: controlledByApp=false
+07-12 02:53:22.038  6767  6767 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#262](f:0,a:0) constructor()
+07-12 02:53:22.038  6767  6767 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#262](f:0,a:0) update width=1080 height=2290 format=-2 mTransformHint=0
+07-12 02:53:22.040  6767  7671 W BLASTBufferQueue: Unable to open /proc/vivo_rsc/frame_set_priority: No such file or directory
+07-12 02:53:22.040  6767  7671 I BLASTBufferQueue: QoSAllocBuff Successful. Ret 0 
+07-12 02:53:22.044 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161633): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:22.051  6767  7671 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#262](f:0,a:1) acquireNextBufferLocked size=1080x2290 mFrameNumber=1 applyTransaction=true mTimestamp=27031512666687(auto) mPendingTransactions.size=0 graphicBufferId=29064043693932 transform=0
+07-12 02:53:22.060 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161634): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:22.088 11343 23418 D AdvertisingIdClient: AdvertisingIdClient already created.
+07-12 02:53:22.093 11343 23418 I AdvertisingIdClient: shouldSendLog 36549721
+07-12 02:53:22.093 11343 23418 I AdvertisingIdClient: GetInfoInternal elapse 5ms
+07-12 02:53:22.124 20509 20509 W adb     : type=1400 audit(0.0:1161635): avc:  denied  { read } for  comm=64657669636520706F6C6C name="usb" dev="tmpfs" ino=2028 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:usb_device:s0 tclass=dir permissive=0 app=app.ladb.connect
+07-12 02:53:22.170  3971 24350 I NetworkScheduler: (REDACTED) Error inserting %s
+07-12 02:53:22.341  3971 22131 I NearbySharing: Network state changed: NetworkState(isRestricted=false, isOnline=true, isCongested=false, isMetered=false, isWifiConnected=true)
+07-12 02:53:22.343  3971 14757 I NearbySharing: Network state changed: NetworkState(isRestricted=false, isOnline=true, isCongested=false, isMetered=false, isWifiConnected=true)
+07-12 02:53:22.392 19350 19350 D ViewRootImpl: AppSizeAfterRelayout, size: Point(1080, 1531), rotation: ROTATION_0
+07-12 02:53:22.393 19350 19350 D BLASTBufferQueue: [VRI[MainActivity,type=1]#6](f:0,a:5) update width=1080 height=1531 format=-1 mTransformHint=0
+07-12 02:53:22.415 19350 19425 D BLASTBufferQueue: [VRI[MainActivity,type=1]#6](f:0,a:6) producer disconnected before acquireNextBufferLocked
+07-12 02:53:22.712 11343 11343 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.ads.service.START xflg=0x4 pkg=com.google.android.gms }
+07-12 02:53:22.853  1970  3421 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=2
+07-12 02:53:22.988 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161651): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:23.004 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161652): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:23.020 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161653): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:23.136 20509 20509 W adb     : type=1400 audit(0.0:1161654): avc:  denied  { read } for  comm=64657669636520706F6C6C name="usb" dev="tmpfs" ino=2028 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:usb_device:s0 tclass=dir permissive=0 app=app.ladb.connect
+07-12 02:53:23.144 19350 19350 W binder:19350_6: type=1400 audit(0.0:1161655): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 02:53:23.195 19350 19350 I AutofillManager: showAutofillDialog() return false due to improve fill dialog
+07-12 02:53:23.196 19350 19350 I ImeTracker: app.ladb.connect:3f690d5d: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser true
+07-12 02:53:23.199 19350 19350 I ImeTracker: app.ladb.connect:3f690d5d: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+07-12 02:53:23.234 19350 19350 D ViewRootImpl: AppSizeAfterRelayout, size: Point(976, 128), rotation: ROTATION_0
+07-12 02:53:23.234 19350 19350 D BufferQueueConsumer: [](id:4b9600000012,api:0,p:-1,c:19350) connect: controlledByApp=false
+07-12 02:53:23.235 19350 19350 D BLASTBufferQueue: [VRI[PopupWindow:f7b0fc,type=1000]#14](f:0,a:0) constructor()
+07-12 02:53:23.235 19350 19350 D BLASTBufferQueue: [VRI[PopupWindow:f7b0fc,type=1000]#14](f:0,a:0) update width=976 height=128 format=-3 mTransformHint=0
+07-12 02:53:23.236 19350 19425 W BLASTBufferQueue: Unable to open /proc/vivo_rsc/frame_set_priority: No such file or directory
+07-12 02:53:23.236 19350 19425 I BLASTBufferQueue: QoSAllocBuff Successful. Ret 0 
+07-12 02:53:23.238 19350 19425 D BLASTBufferQueue: [VRI[PopupWindow:f7b0fc,type=1000]#14](f:0,a:1) acquireNextBufferLocked size=976x128 mFrameNumber=1 applyTransaction=true mTimestamp=27032699156610(auto) mPendingTransactions.size=0 graphicBufferId=83107617178188 transform=0
+ ^C
+/$
