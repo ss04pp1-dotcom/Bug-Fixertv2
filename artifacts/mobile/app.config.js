@@ -34,8 +34,8 @@ module.exports = {
           // Add your API server as an explicit HTTPS-only domain so NSAllowsArbitraryLoads=false
           // does not inadvertently block API calls on non-ATS code paths.
           NSExceptionDomains: {
-            "livetv1.onrender.com": {
-              NSI: false,
+            "bug-fixertv24.onrender.com": {
+              NSIncludesSubdomains: false,
               NSExceptionAllowsInsecureHTTPLoads: false,
               NSRequiresCertificateTransparency: false,
             },

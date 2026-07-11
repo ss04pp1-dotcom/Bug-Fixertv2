@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import apiClient from './api';
+import { Config } from '@/constants/config';
 
 // ─── Response helpers ─────────────────────────────────────────────────────────
 // API wraps all responses: { success, data, errors }
@@ -141,8 +141,7 @@ export const useCreateTicket = () => useMutation({
 export const useGeoCheck = () => useQuery({ queryKey: ['geo-check'], queryFn: () => apiClient.get('/geo-block/check/auto').then(unwrap), retry: false });
 
 // Force update — correct path is /force-update/check
-const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
-export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: APP_VERSION, platform: Platform.OS } }).then(unwrap), retry: false });
+export const useForceUpdate = () => useQuery({ queryKey: ['force-update'], queryFn: () => apiClient.get('/force-update/check', { params: { version: Config.APP_VERSION, platform: Platform.OS } }).then(unwrap), retry: false });
 
 // Feature flags
 export const useFeatureFlags = () => useQuery({ queryKey: ['feature-flags'], queryFn: () => apiClient.get('/feature-flags/enabled').then(unwrapList) });

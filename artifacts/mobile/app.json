@@ -3,12 +3,12 @@
     "name": "SOL TV",
     "slug": "sol-tv",
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "appVersion"
     },
     "updates": {
       "enabled": true,
-      "fallbackToCacheTimeout": 3000,
-      "checkAutomatically": "ON_LOAD"
+      "fallbackToCacheTimeout": 30000,
+      "checkAutomatically": "NEVER"
     }
   }
 }
