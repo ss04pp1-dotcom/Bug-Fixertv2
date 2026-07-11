@@ -18,20 +18,17 @@ function resolveBaseUrl(): string {
   // at the static asset host (Cloudflare Pages), not the API, so every request
   // 404s and the user sees a blank dashboard. Fail loudly in production so the
   // operator notices; in dev, default to localhost where the API usually runs.
-  return 'https://bug-fixertv2.onrender.com';
+  return 'https://bug-fixertv24.onrender.com';
 }
 
 function resolveWsUrl(): string {
   const raw = (process.env.NEXT_PUBLIC_WS_URL ?? '').replace(/\/+$/, '');
   if (raw) return raw;
-  // During SSR there is no window — return empty string so the WS client
-  // skips connection until the browser hydrates and the real URL is known.
-  // Never fall back to a hardcoded external URL: it leaks presence data to
-  // a third-party server when NEXT_PUBLIC_WS_URL is misconfigured.
-  if (typeof window === 'undefined') return '';
-  return window.location.origin
-    .replace(/^https/, 'wss')
-    .replace(/^http/, 'ws');
+  // Derive WS URL from the API base URL — they share the same server.
+  // Never fall back to window.location.origin: admin is hosted on Cloudflare
+  // Pages (a different domain), so that would point at the wrong server.
+  const base = resolveBaseUrl();
+  return base.replace(/^https/, 'wss').replace(/^http/, 'ws');
 }
 
 export const API_CONFIG = {

@@ -53,9 +53,17 @@ function buildOriginMatchers(raw: string): Array<string | RegExp> {
       // Deny-by-default when CORS_ORIGIN is unset, mirroring the REST API's
       // posture in src/main.ts — an empty allowlist must reject every
       // browser-originated handshake, not silently allow all origins.
+      // Native clients (React Native / mobile) never send an Origin header.
+      // Checking CORS against matchers for origin-less requests is meaningless —
+      // only browsers enforce CORS. Allow origin-less connections unconditionally
+      // so mobile apps can connect even when CORS_ORIGIN is not set.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
       const allowed = process.env.CORS_ORIGIN || '';
       const matchers = buildOriginMatchers(allowed);
-      const isAllowed = matchers.length > 0 && (!origin || matchers.some((m) => (typeof m === 'string' ? m === origin : m.test(origin))));
+      const isAllowed = matchers.length > 0 && matchers.some((m) => (typeof m === 'string' ? m === origin : m.test(origin)));
       if (isAllowed) {
         callback(null, true);
       } else {
