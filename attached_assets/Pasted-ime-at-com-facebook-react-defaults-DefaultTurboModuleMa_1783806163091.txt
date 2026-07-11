@@ -1,0 +1,143 @@
+ime: 	at com.facebook.react.defaults.DefaultTurboModuleManagerDelegate$Builder.build(DefaultTurboModuleManagerDelegate.kt:62)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.defaults.DefaultTurboModuleManagerDelegate$Builder.build(DefaultTurboModuleManagerDelegate.kt:42)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.ReactPackageTurboModuleManagerDelegate$Builder.build(ReactPackageTurboModuleManagerDelegate.kt:241)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.ReactInstance.<init>(ReactInstance.kt:168)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.ReactHostImpl.getOrCreateReactInstanceTask$lambda$41$lambda$38(ReactHostImpl.kt:920)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.ReactHostImpl.$r8$lambda$LQY77bFECGrnkUqd7Ku55sJ721A(ReactHostImpl.kt:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.ReactHostImpl$$ExternalSyntheticLambda11.then(D8$$SyntheticClass:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.completeImmediately$lambda$3(Task.kt:356)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.$r8$lambda$b7MTC0ufkn_2TjF4BGcNqGR9qK0(Task.kt:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion$$ExternalSyntheticLambda3.run(D8$$SyntheticClass:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Executors$ImmediateExecutor.execute(Executors.kt:41)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.completeImmediately(Task.kt:354)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.access$completeImmediately(Task.kt:250)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task.continueWith(Task.kt:132)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task.continueWith$default(Task.kt:117)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task.onSuccess$lambda$12(Task.kt:174)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task.$r8$lambda$l0wwo5AvbHxlwfI1R7CH_codxoo(Task.kt:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$$ExternalSyntheticLambda2.then(D8$$SyntheticClass:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.completeAfterTask$lambda$5(Task.kt:390)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion.$r8$lambda$IPpysnehFwANEiW061YzapkMdoE(Task.kt:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at com.facebook.react.runtime.internal.bolts.Task$Companion$$ExternalSyntheticLambda4.run(D8$$SyntheticClass:0)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1100)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	at java.lang.Thread.run(Thread.java:1572)
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: Caused by: java.lang.ClassNotFoundException: expo.modules.kotlin.types.AnyTypeCache
+07-12 03:42:03.981  8166  8228 E AndroidRuntime: 	... 38 more
+07-12 03:42:03.996 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346342): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:04.072  3971 23601 I NearbySharing: Network state changed: NetworkState(isRestricted=false, isOnline=true, isCongested=false, isMetered=false, isWifiConnected=true)
+07-12 03:42:04.077  3971 23601 I NearbySharing: Network state changed: NetworkState(isRestricted=false, isOnline=true, isCongested=false, isMetered=false, isWifiConnected=true)
+07-12 03:42:04.167  1970  3299 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=9
+07-12 03:42:04.206 19350 19350 V ImeFocusController: onWindowFocus: D0.y{fc30b19 VFED..CL. .F....ID 14,0-950,106 #7f0900c0 app:id/command aid=1073741824} softInputMode=STATE_UNSPECIFIED|ADJUST_RESIZE
+07-12 03:42:04.209  6767  6767 V InputMethod: unbindInput(): binding=InputBinding{android.os.BinderProxy@b880a8a / uid 10117 / pid 3726} ic=RemoteInputConnection{idHash=#125d285}
+07-12 03:42:04.209  6767  6767 V InputMethod: bindInput(): binding=InputBinding{android.os.BinderProxy@54055f6 / uid 10331 / pid 19350} ic=RemoteInputConnection{idHash=#38828a6}
+07-12 03:42:04.209  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@3c012e7
+07-12 03:42:04.209  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 03:42:04.209  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 03:42:04.210  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 03:42:04.210  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 03:42:04.210  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 1073741824
+07-12 03:42:04.210  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 03:42:04.710 19350 19350 W Choreographer: Frame time is 0.174173 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+07-12 03:42:04.749  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@4349e94
+07-12 03:42:04.749  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 03:42:04.749  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 03:42:04.749  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 03:42:04.749  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 03:42:04.749  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 0
+07-12 03:42:04.749  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 03:42:04.840 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346355): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:04.880 20509 20509 W adb     : type=1400 audit(0.0:1346356): avc:  denied  { read } for  comm=64657669636520706F6C6C name="usb" dev="tmpfs" ino=2028 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:usb_device:s0 tclass=dir permissive=0 app=app.ladb.connect
+07-12 03:42:04.924 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346357): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.024 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346358): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.040 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346359): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.584 19350 19350 I AutofillManager: showAutofillDialog() return false due to improve fill dialog
+07-12 03:42:05.585 19350 19350 I ImeTracker: app.ladb.connect:9976fc22: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser true
+07-12 03:42:05.586 19350 19350 D InsetsController: Setting requestedVisibleTypes to -5121 (was -5129)
+07-12 03:42:05.590  6767  6767 V InputMethod: startInput(): editor=android.view.inputmethod.EditorInfo@d30cd3d
+07-12 03:42:05.590  6767  6767 V InputMethodService: CALL: doFinishInput
+07-12 03:42:05.590  6767  6767 D InlineSuggestionSessionController: notifyOnFinishInput
+07-12 03:42:05.590  6767  6767 V InputMethodService: CALL: onFinishInput
+07-12 03:42:05.590  6767  6767 V InputMethodService: finishStylusHandwriting()
+07-12 03:42:05.590  6767  6767 D InlineSuggestionSessionController: notifyOnStartInput: app.ladb.connect, 1073741824
+07-12 03:42:05.590  6767  6767 V InputMethodService: CALL: onStartInput
+07-12 03:42:05.594  6615 18078 I eokz    : (REDACTED) HDM. appOpsListener %s %s
+07-12 03:42:05.594  6615 18078 I eokz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+07-12 03:42:05.597  6767  6767 V InputMethod: showSoftInput()
+07-12 03:42:05.597  6767  6767 D InlineSuggestionSessionController: notifyShowInputRequested
+07-12 03:42:05.598  6767  6767 V InputMethodService: Showing window: showInput=true mShowInputRequested=false mViewsCreated=true mDecorViewVisible=false mWindowVisible=false mInputStarted=true mShowInputFlags=1
+07-12 03:42:05.598  6767  6767 V InputMethodService: showWindow: updating UI
+07-12 03:42:05.598  6767  6767 W InputMethodService: Window size has been changed. This may cause jankiness of resizing window: -1 -> -2
+07-12 03:42:05.599  6767  6767 V InputMethodService: CALL: onStartInputView
+07-12 03:42:05.599  6767  6767 D InlineSuggestionSessionController: notifyOnStartInputView
+07-12 03:42:05.615  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = UserHistoryDictionary.en ; version = 1783225254 ; date = 1783806117
+07-12 03:42:05.617  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram.en ; version = 1783806125 ; date = ?
+07-12 03:42:05.629  6767  6767 I ridmik.keyboard: AssetManager2(0xb40000760b469e18) locale list changing from [en-US] to [und]
+07-12 03:42:05.630  6767  6767 I ridmik.keyboard: AssetManager2(0xb40000760b469e18) locale list changing from [und] to [en-US]
+07-12 03:42:05.631  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = main:en ; version = 54 ; date = 1351495318
+07-12 03:42:05.631  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = emoji:en ; version = 24 ; date = 1350485097
+07-12 03:42:05.632  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram. ; version = 1783806125 ; date = ?
+07-12 03:42:05.636  6767  6767 V InputMethodService: showWindow: draw decorView!
+07-12 03:42:05.637  6767  6767 V InputMethod: showSoftInput()
+07-12 03:42:05.637  6767  6767 D InlineSuggestionSessionController: notifyShowInputRequested
+07-12 03:42:05.637  6767  6767 V InputMethodService: Showing window: showInput=true mShowInputRequested=true mViewsCreated=true mDecorViewVisible=true mWindowVisible=true mInputStarted=true mShowInputFlags=1
+07-12 03:42:05.637  6767  6767 V InputMethodService: showWindow: updating UI
+07-12 03:42:05.637  6767  6767 V InputMethodService: showWindow: draw decorView!
+07-12 03:42:05.639  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = userunigram.en ; version = 1783806125 ; date = ?
+07-12 03:42:05.648  6767  6767 D ViewRootImpl: AppSizeAfterRelayout, size: Point(1080, 2290), rotation: ROTATION_0
+07-12 03:42:05.649  6767  6767 D BufferQueueConsumer: [](id:1a6f00000112,api:0,p:-1,c:6767) connect: controlledByApp=false
+07-12 03:42:05.649  6767  6767 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#274](f:0,a:0) constructor()
+07-12 03:42:05.649  6767  6767 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#274](f:0,a:0) update width=1080 height=2290 format=-2 mTransformHint=0
+07-12 03:42:05.652  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = main:en ; version = 54 ; date = 1351495318
+07-12 03:42:05.652  6767  7624 I LatinIME:LogUtils: Dictionary info: dictionary = emoji:en ; version = 24 ; date = 1350485097
+07-12 03:42:05.652  6767  7671 W BLASTBufferQueue: Unable to open /proc/vivo_rsc/frame_set_priority: No such file or directory
+07-12 03:42:05.652  6767  7671 I BLASTBufferQueue: QoSAllocBuff Successful. Ret 0 
+07-12 03:42:05.664  6767  7671 D BLASTBufferQueue: [VRI[InputMethod,type=2011]#274](f:0,a:1) acquireNextBufferLocked size=1080x2290 mFrameNumber=1 applyTransaction=true mTimestamp=29955125285708(auto) mPendingTransactions.size=0 graphicBufferId=29064043694016 transform=0
+07-12 03:42:05.672  7863  7878 W GoogleCertificates: GoogleCertificates has been initialized already
+07-12 03:42:05.735  7863  8245 I gle.android.gms: AssetManager2(0xb40000760b461ad8) locale list changing from [] to [en-US]
+07-12 03:42:05.742  7863  8245 I FA-SVC  : App measurement initialized, version: 262434
+07-12 03:42:05.760  1970  3464 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=2
+07-12 03:42:05.802  3971  6378 I NetworkScheduler: (REDACTED) Error inserting %s
+07-12 03:42:05.856 19350 19350 W binder:19350_2: type=1400 audit(0.0:1346371): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.872 19350 19350 W binder:19350_2: type=1400 audit(0.0:1346372): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.884 20509 20509 W adb     : type=1400 audit(0.0:1346373): avc:  denied  { read } for  comm=64657669636520706F6C6C name="usb" dev="tmpfs" ino=2028 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:usb_device:s0 tclass=dir permissive=0 app=app.ladb.connect
+07-12 03:42:05.980 19350 19350 W binder:19350_2: type=1400 audit(0.0:1346374): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:05.992 19350 19350 W binder:19350_E: type=1400 audit(0.0:1346375): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:06.007 19350 19350 D ViewRootImpl: AppSizeAfterRelayout, size: Point(1080, 1531), rotation: ROTATION_0
+07-12 03:42:06.008 19350 19350 D BLASTBufferQueue: [VRI[MainActivity,type=1]#20](f:0,a:5) update width=1080 height=1531 format=-1 mTransformHint=0
+07-12 03:42:06.019 19350 19425 D BLASTBufferQueue: [VRI[MainActivity,type=1]#20](f:0,a:6) producer disconnected before acquireNextBufferLocked
+07-12 03:42:06.080 19350 19425 E BLASTBufferQueue: [VRI[MainActivity,type=1]#20](f:1,a:7) acquireNextBufferLocked: Can't acquire next buffer. Already acquired max frames 7 max:5 + 2
+07-12 03:42:06.735  7863  8245 I TracingHelper: (REDACTED) Mismatched RequestContext found for module %s. Module id from RequestContext is %s
+07-12 03:42:06.743  3971  3971 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.libs.gmscorelogger.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+07-12 03:42:06.748  7863  8245 D AdvertisingIdClient: Creating AdvertisingIdClient
+07-12 03:42:06.748  7863  8245 D AdvertisingIdClient: AdvertisingIdClient already created.
+07-12 03:42:06.748  7863  8245 D AdvertisingIdClient: AdvertisingIdClient is not bounded. Starting to bind it...
+07-12 03:42:06.755 19350 19350 I AutofillManager: showAutofillDialog() return false due to improve fill dialog
+07-12 03:42:06.755  3971  3971 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.common.telemetry.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+07-12 03:42:06.756 19350 19350 I ImeTracker: app.ladb.connect:4bcb5224: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser true
+07-12 03:42:06.756 19350 19350 I ImeTracker: app.ladb.connect:4bcb5224: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+07-12 03:42:06.765  7863  8245 D AdvertisingIdClient: AdvertisingIdClient is bounded
+07-12 03:42:06.777  7863  8245 I AdvertisingIdClient: shouldSendLog -1
+07-12 03:42:06.778  7863  8245 I AdvertisingIdClient: GetInfoInternal elapse 30ms
+07-12 03:42:06.782  7863  7863 I AdvertisingIdClient: getting error as 17: API: ClientTelemetry.API is not available on this device. Connection failed with: ConnectionResult{statusCode=API_DISABLED_FOR_CONNECTION, resolution=null, message=null, clientMethodKey=null}
+07-12 03:42:06.792  3971  3971 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.presencemanager.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+07-12 03:42:06.796  3971  3971 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.presencemanager.service.INTERNAL_IDENTITY dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+07-12 03:42:06.805  3971  6441 I NetworkScheduler: (REDACTED) Error inserting %s
+07-12 03:42:06.820  3971  6378 I NetworkScheduler: (REDACTED) Error inserting %s
+07-12 03:42:06.823 19350 19350 D ViewRootImpl: AppSizeAfterRelayout, size: Point(976, 128), rotation: ROTATION_0
+07-12 03:42:06.823 19350 19350 D BufferQueueConsumer: [](id:4b9600000024,api:0,p:-1,c:19350) connect: controlledByApp=false
+07-12 03:42:06.824 19350 19350 D BLASTBufferQueue: [VRI[PopupWindow:4b37a1a,type=1000]#30](f:0,a:0) constructor()
+07-12 03:42:06.824 19350 19350 D BLASTBufferQueue: [VRI[PopupWindow:4b37a1a,type=1000]#30](f:0,a:0) update width=976 height=128 format=-3 mTransformHint=0
+07-12 03:42:06.825 19350 19425 W BLASTBufferQueue: Unable to open /proc/vivo_rsc/frame_set_priority: No such file or directory
+07-12 03:42:06.825 19350 19425 I BLASTBufferQueue: QoSAllocBuff Successful. Ret 0 
+07-12 03:42:06.827 19350 19425 D BLASTBufferQueue: [VRI[PopupWindow:4b37a1a,type=1000]#30](f:0,a:1) acquireNextBufferLocked size=976x128 mFrameNumber=1 applyTransaction=true mTimestamp=29956288504477(auto) mPendingTransactions.size=0 graphicBufferId=83107617178424 transform=0
+07-12 03:42:06.827  1970  2738 D BatteryStatsService: noteFpsPipe  : POWER_ID_FPS_PIPE initFps=2,fpsPipe=5
+07-12 03:42:06.896 20509 20509 W adb     : type=1400 audit(0.0:1346395): avc:  denied  { read } for  comm=64657669636520706F6C6C name="usb" dev="tmpfs" ino=2028 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:usb_device:s0 tclass=dir permissive=0 app=app.ladb.connect
+07-12 03:42:06.924 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346396): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:06.940 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346397): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:07.008 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346398): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:07.020 19350 19350 W binder:19350_5: type=1400 audit(0.0:1346399): avc:  denied  { ioctl } for  path="/proc/fas/render" dev="proc" ino=4026532944 ioctlcmd=0x6609 scontext=u:r:untrusted_app:s0:c75,c257,c512,c768 tcontext=u:object_r:proc_fas:s0 tclass=file permissive=0 app=app.ladb.connect
+07-12 03:42:07.286  6090  8257 W libc    : Access denied finding property "persist.vivo.ltw.enabled"
+07-12 03:42:07.290  6090  8257 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+ ^C
+/$
