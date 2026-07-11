@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/lib/auth-store';
 import { SocketService } from '@/services/socket.service';
+import { Config } from '@/constants/config';
 
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30s — well within server's 90s timeout
 
@@ -67,10 +68,34 @@ export function usePresenceTracking() {
           return;
         }
 
-        socket.on('connect',    startHbRef.current);
+        socket.on('connect', () => {
+          startHbRef.current();
+
+          // Send rich identity info so admin sees name, device, version
+          // instead of just email and 'unknown'.
+          const { user } = useAuthStore.getState();
+          socket.emit('presence:identify', {
+            displayName: user?.name || user?.email || 'Unknown',
+            avatarUrl:   user?.avatar,
+            deviceType:  Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'unknown',
+            appVersion:  Config.APP_VERSION.toString(),
+            platform:    Platform.OS,
+          });
+        });
         socket.on('disconnect', stopHbRef.current);
 
-        if (socket.connected) startHeartbeat();
+        if (socket.connected) {
+          startHeartbeat();
+          // Already connected — identify immediately.
+          const { user } = useAuthStore.getState();
+          socket.emit('presence:identify', {
+            displayName: user?.name || user?.email || 'Unknown',
+            avatarUrl:   user?.avatar,
+            deviceType:  Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'unknown',
+            appVersion:  Config.APP_VERSION.toString(),
+            platform:    Platform.OS,
+          });
+        }
       } catch (err) {
         if (__DEV__) console.warn('[Presence] Socket connect failed:', err);
       }

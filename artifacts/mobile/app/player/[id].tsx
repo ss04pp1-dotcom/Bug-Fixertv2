@@ -28,6 +28,7 @@ import { AdBanner } from '@/components/AdBanner';
 import { AdRewarded } from '@/components/AdRewarded';
 import { VastPlayer } from '@/components/VastPlayer';
 import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
+import { SocketService } from '@/services/socket.service';
 
 const C = {
   bg: '#050510', card: '#111827', primary: '#8B5CF6',
@@ -270,11 +271,15 @@ export default function PlayerScreen() {
       const { mode, enterTop } = useGlobalPlayer.getState();
       if (mode === 'mini') enterTop();
 
+      // Tell admin live-users page what the user is watching
+      SocketService.startWatching({ type: cType, id, title: contentTitle, screen: 'player' });
+
       return () => {
         const { mode: m, enterMini } = useGlobalPlayer.getState();
         if (m === 'top' || m === 'fullscreen') enterMini();
+        SocketService.stopWatching('home');
       };
-    }, [])
+    }, [id, cType, contentTitle])
   );
 
   // ── When episode changes, reload stream (the open effect will fire again) ──

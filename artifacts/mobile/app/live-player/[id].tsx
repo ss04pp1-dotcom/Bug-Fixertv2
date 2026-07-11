@@ -31,6 +31,7 @@ import { AdBanner } from '@/components/AdBanner';
 import { VastPlayer } from '@/components/VastPlayer';
 import { useGlobalAdConfig } from '@/hooks/useGlobalAdConfig';
 import { useChannelAdGate } from '@/hooks/useChannelAdGate';
+import { SocketService } from '@/services/socket.service';
 
 // ── Related channel card (3-col grid, white logo circle + onError fallback) ──
 function RelatedCard({ item, onPress }: { item: any; onPress: () => void }) {
@@ -371,11 +372,15 @@ export default function LivePlayerScreen() {
       const { mode, enterTop } = useGlobalPlayer.getState();
       if (mode === 'mini') enterTop();
 
+      // Tell admin live-users page the user is watching live TV
+      SocketService.startWatching({ type: 'live', id, title: contentTitle, screen: 'live-player' });
+
       return () => {
         const { mode: m, enterMini } = useGlobalPlayer.getState();
         if (m === 'top' || m === 'fullscreen') enterMini();
+        SocketService.stopWatching('home');
       };
-    }, [])
+    }, [id, contentTitle])
   );
 
   // ── Global ad engine — drives VAST pre-roll + Smartlink on channel switches ─

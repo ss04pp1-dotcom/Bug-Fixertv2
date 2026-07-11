@@ -84,4 +84,29 @@ export const SocketService = {
   leaveChannel: (channelId: string) => {
     socket?.emit('leave_channel', { channelId });
   },
+
+  /** Call when user starts watching content — updates admin live-users page. */
+  startWatching: (opts: {
+    type: 'live' | 'movie' | 'series';
+    id: string;
+    title: string;
+    screen: string;
+  }) => {
+    socket?.emit('presence:heartbeat', {
+      currentScreen:  opts.screen,
+      watchingType:   opts.type,
+      watchingId:     opts.id,
+      watchingTitle:  opts.title,
+    });
+  },
+
+  /** Call when user stops watching (leaves player screen). */
+  stopWatching: (screen = 'app') => {
+    socket?.emit('presence:heartbeat', {
+      currentScreen:  screen,
+      watchingType:   undefined,
+      watchingId:     undefined,
+      watchingTitle:  undefined,
+    });
+  },
 };
